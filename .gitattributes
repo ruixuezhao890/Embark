@@ -1,0 +1,25 @@
+# 换行统一：仓库里一律存 LF，工作树按下面的规则落地
+#
+# 背景：Windows 上 core.autocrlf=true 会让每次提交都刷 LF→CRLF 警告，而 ubuntu 上的 CI
+# 拿到的是 LF —— 没有这份文件时两边看到的行尾不一致。这里显式定死，避免争议。
+#
+# 文本文件：自动识别，统一 LF
+* text=auto eol=lf
+
+# Windows 原生脚本/工程文件仍用 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制：不做任何转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.7z binary
+*.xlsx binary
+*.docx binary
