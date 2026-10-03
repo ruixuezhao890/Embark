@@ -1,0 +1,281 @@
+# Embark v1 Spec —— 嵌入式通用框架脚手架
+
+**状态**：v1 已定稿（2026-10-03 起草；同日用户拍板 §16.4 的两处设计选择与依赖形态，见 §16.4）
+**相关**：[GLOSSARY.md](../../GLOSSARY.md)、ADR [0001 单一 UI 任务与逻辑模块式 App](../../docs/adr/0001-single-ui-task-logic-apps.md)、[0002 HAL 只抽象到芯片能力粒度](../../docs/adr/0002-hal-capability-granularity.md)、[0003 内核零动态分配、禁用异常与 RTTI](../../docs/adr/0003-no-heap-no-exceptions.md)
+
+---
+
+## 1. 目标
+
+给嵌入式项目一个可直接复用的骨架：应用逻辑写成若干 App，由唯一的 UI 任务驱动；换硬件只换 HAL 后端，应用代码不动。
+
+v1 必须做到：
+
+1. 同一份应用与内核源码，在**宿主（PC 仿真）**与 **ESP32-S3 真机**两个目标上都能构建运行。
+2. App 有明确契约：统一接口、编译期注册、前后台机制、生命周期钩子、后台策略。
+3. HAL 覆盖 v1 能力清单，接口里没有任何一颗芯片的寄存器/引脚细节。
+4. 内核零动态分配、无异常/RTTI，内存需求编译期可确定。
+5. 一条本机就能跑通的验证路径：宿主窗口跑 demo + 自动化测试 + CI 双目标构建。
+
+## 2. 非目标（v1 明确不做）
+
+- 网络、OTA、Wi-Fi 配网（只在 HAL 里留出将来能挂的位置）。
+- 设备驱动与传感器抽象（App 需要具体外设时自己在平台侧实现，见 ADR-0002）。
+- App 的动态注册、热插拔、后台淘汰回收。
+- LVGL 9.x；多 UI 任务。
+- 堆分配、异常、RTTI 的全平台放开（仅宿主允许开关）。
+- 第二颗 MCU 的真实后端（接口按"它一定会来"设计，但不实现）。
+
+## 3. 平台矩阵
+
+| 目标 | 环境 | 显示/输入后端 | 持久化 | 日志后端 | 构建 |
+| --- | --- | --- | --- | --- | --- |
+| `host-sim` | Windows + MinGW-w64 GCC 15.1 | SDL2 窗口/事件 | 宿主文件 | stdout | CMake + Ninja |
+| `esp32s3` | ESP32-S3（Touch-LCD-2.8 参考板） | ST7789 + 触摸（I2C） | NVS | UART0 | ESP-IDF 5.4（先 `export.ps1`） |
+
+宿主侧也跑 FreeRTOS（复用 `lvgl_template_laste` 已验证的 kernel + Windows port），为的是**让两个目标的任务模型完全一致**——同一份内核代码在两端走同一条调度路径，行为差异只来自 HAL 后端。
+
+## 4. 架构分层
+
+```
+App（应用模块：纯逻辑，不是任务）
+  ↓ 只通过框架服务交互
+内核（App 调度、前台/后台、事件循环、消息总线、时间基准、日志门面）
+  ↓ 只依赖接口
+HAL（芯片能力：显示 / 输入 / 时间 / 持久化 / 日志后端 / 系统控制）
+  ↓ 编译期选定实现
+平台后端（platform/host · platform/esp32）
+```
+
+硬规则：
+
+- App 之间**禁止互相 include**，只能通过框架消息交流。
+- App 不 include 任何平台后端头文件；HAL 能力由框架在 `onCreate` 时注入。
+- 内核不 include 平台后端头文件；后端在编译期由 CMake target 选定。
+
+## 5. App 契约
+
+一个类实现 `embark::App`，在编译期静态注册（零堆；注册顺序即默认前台 App）。
+
+**接口草案**（实现时可微调，但钩子集合不再增加）：
+
+```cpp
+namespace embark {
+
+class App {
+public:
+    virtual const char* name() const = 0;
+    virtual void onCreate(Framework& fw) = 0;          // 装配期，一次
+    virtual void onEnter() = 0;                        // 成为前台
+    virtual void onPause() = 0;                        // 离开前台（框架只通知，不碰 UI）
+    virtual void onResume() = 0;                       // 再次成为前台
+    virtual void onBackgroundTick(uint32_t now_ms) {}  // 后台节拍，必须轻量
+    virtual void onMessage(const Message& msg) {}      // 框架投递的消息
+    virtual void onExit() = 0;                         // 退出（v1 只在关机路径触发）
+};
+
+}  // namespace embark
+```
+
+- **前后台语义**：前台 = 同时持有输入焦点 + 渲染权 + 事件循环权，全局至多一个。切换**只能由框架执行**，App 通过 `requestSwitch(id)` 请求，切换决策与时机由框架负责。
+- **UI 生命周期自决**：框架只发 `onPause` / `onResume`，不创建、不销毁、不隐藏 App 的 LVGL 对象。
+- **后台策略**（per-App 配置）：`Suspend`（完全不跑）/ `Tick(period_ms)`（按周期跑 `onBackgroundTick`，`period_ms == 0` 等价于 Suspend）/ `OwnTask`（申请自己的 FreeRTOS 任务，栈深与优先级由 App 配置）。
+- **常驻**：v1 不淘汰任何 App，全部常驻内存。
+
+## 6. 执行模型
+
+- 全局唯一 UI 任务承载：输入事件处理 → 前台 App 回调 → `lv_timer_handler()` → 后台 tick 调度 → 消息派发。**它是全工程唯一允许操作 LVGL 与调用 `lv_timer_handler()` 的地方。**
+- 循环节拍目标 5 ms 一跳（与既有两代框架一致），空闲时 `vTaskDelay` 让出；不忙等。
+- 后台 tick 在 UI 任务里执行，因此**必须轻量**；周期由 `etl::callback_timer<MAX_TIMERS>` 按 per-App 配置驱动（见 §7）。
+- 逃生舱：`OwnTask` 策略的 App 由框架创建自己的任务，框架保证任务名唯一、启动时机在 `onCreate` 之后、消息经队列进出。
+- 硬约束：前台 App 的所有回调**不得阻塞**；任何阻塞或长耗时工作必须走 `OwnTask`。
+
+## 7. 消息与事件（直接用 ETL 现成设施 + 一层薄封装）
+
+**结论：不自己造轮子。** 下表每一项都在本机 ETL 副本（`E:\01_Workspace\00_Active_projects\00_code\01_cpp_code\etl\include\etl\`，20.40.0）里逐文件核实过；这些都是 ETL 的老组件；但本机副本（20.40.0）与要锁的上游 20.49.0 差约 9 个小版本，**接入时要按 20.49.0 复核本节**（见本节末"版本风险"）。
+
+| 需求 | 用 ETL 的什么 | 核实到的关键事实 |
+| --- | --- | --- |
+| 消息本体 | `etl::message<ID>`（`message.h`） | 编译期 ID，可平凡拷贝 |
+| 显式订阅 / 派发 | `etl::message_router<TDerived, T1..T16>`（`message_router.h`） | 路由是**编译期 `switch (T::ID)`** → `on_receive(const T&)`，未命中走 `on_receive_unknown`；零存储、零堆 |
+| 一对多（多订阅者） | `etl::message_bus<MAX_ROUTERS>`（`message_bus.h:423`） | `etl::vector<etl::imessage_router*, MAX_ROUTERS_> router_list`；`bool subscribe(etl::imessage_router&)` / `void unsubscribe(id)` / `void unsubscribe(router&)`；只收 `is_consumer() == true` 的路由器；满时走断言；**同步派发，本身不带队列** |
+| 丢最旧的环形缓冲 | `etl::circular_buffer<T, SIZE>`（`circular_buffer.h:1113`） | **ETL 原生就是"满时覆盖最旧"**：注释原文 `/// If the buffer is filled then the oldest item is overwritten.`（`:906` / `:930`），`void push(...)` 无返回值。全库唯一自带该语义的容器 —— 丢弃逻辑不用自己写 |
+| 跨任务 / 中断队列 | `queue_spsc_locked` / `queue_spsc_atomic` / `queue_spsc_isr` | `bool push(...)`，**满时返回 false（丢新元素，不阻塞、不覆盖旧值）**；三者的锁来源分别是"注入的 `etl::ifunction<void>` 关/开中断对"、"无锁（`etl::atomic` 读写索引）"、"模板参数 `TAccess::lock()/unlock()`" |
+| 后台节拍 | `etl::callback_timer<MAX_TIMERS>`（`callback_timer.h:818`） | `ETL_STATIC_ASSERT(MAX_TIMERS_ <= 254)`；`bool start(etl::timer::id::type, bool immediate)`；单任务模型下由 UI 任务循环喂 tick |
+| 串行化用的锁 | `etl::mutex`（`etl/mutex/` 下已有 `mutex_freertos.h`、`mutex_std.h`、`mutex_gcc_sync.h`、`mutex_cmsis_os2.h` 等后端） | 平台后端现成，不用自己发明 |
+
+**唯一必须包一层的地方（两个反差点）**：① 朴素的 `etl::queue::push()` 返回 `void`，满时断言还包在 `#if defined(ETL_CHECK_PUSH_POP)` 之内（`queue.h:311-318`）——不定义该宏就**什么都不检查**，往满队列里 push 会直接写在 `in` 位置并推进游标（新元素被塞到"最旧"位，语义崩坏）。② 四个 SPSC 队列的 `push` 虽然返回 false，但**丢的是新元素**，不是最旧。所以框架提供 `embark::MessageQueue`，只做三件事：
+
+- 存储用 `etl::circular_buffer<T, SIZE>`（**丢弃由它自己做**，语义就是"满时覆盖最旧"）；跨任务时外加 `etl::mutex` + `etl::lock_guard`（单生产者单消费者），中断路径用 `circular_buffer_ext`（`volatile` 索引）或 `queue_spsc_isr`；
+- 溢出计数：`push` **之前**查一次 `full()`，满了就 `++overflow_count` 并打一条 WARN；
+- 容量是编译期常量；**任何路径都不阻塞 UI 任务。**
+
+其余口径：
+
+- App 在 `onCreate` 里声明订阅的消息类型；App 之间只走消息，禁止互相 include。
+- **同任务内直接派发**（`receive()` 同步进入 `on_receive`）；只有跨任务才入队，队列是单生产者单消费者。
+- 消息载荷必须是定长、可平凡拷贝的数据（ETL 定容容器 / `etl::span`），**不允许携带堆指针**。
+- **日志串行化**：上游 elog 没有任何锁 → 框架在 sink 外面挂一层（真机用 `etl::mutex`，宿主按配置不加锁）；App 只走 `ELOG_*` 宏；中断上下文不许打日志（v1 不提供中断日志缓冲）。
+- **已确认的硬约束（写代码前必须处理）**：`etl::callback_timer` 与 `etl::message_timer` 强制二选一宏（`ETL_CALLBACK_TIMER_USE_ATOMIC_LOCK` / `ETL_CALLBACK_TIMER_USE_INTERRUPT_LOCK`，`message_timer` 是完全平行的一套），`profiles/*.h` 里**一个默认值都没有**，不定义就是硬 `#error`（`callback_timer.h:54` / `:58`）；选 INTERRUPT_LOCK 还要自定 `ETL_CALLBACK_TIMER_DISABLE_INTERRUPTS` / `..._ENABLE_INTERRUPTS`（`:70`）。这些宏放进框架的 `config/`。
+- 待实测（接入时确认，不猜）：`etl::mutex` / `etl::atomic` 的宏开关与后端选择（`ETL_HAS_MUTEX` 按 OS 与编译器分派，`ETL_HAS_ATOMIC` 同）；`message_bus` 同一 message id 挂多个订阅者时的派发顺序。
+- **版本风险**：本机副本是 20.40.0，要锁的上游是 20.49.0（差约 9 个小版本），且 20.39.4 → 20.40.0 之间已发生过破坏性变更（`queue::emplace` 返回值 `void` → `reference`、`message_packet` 的非虚消息支持、`error_handler.h` 新增 `ETL_USE_ASSERT_FUNCTION`）→ **接入时先拉 20.49.0 复核本节再定稿。**
+
+## 8. HAL 接口清单（v1）
+
+| 能力 | 接口要点 | 宿主后端 | 目标后端 |
+| --- | --- | --- | --- |
+| 显示输出 | init / 分辨率 / 区域刷新 / 背光 | SDL2 窗口 + 纹理 | ST7789（esp_lcd） |
+| 输入 | 事件读取（按键、触摸坐标） | SDL2 事件 | 触摸 I2C + 按键 GPIO |
+| 时间 | 单调毫秒时基 + 延时 | chrono / SDL | esp_timer |
+| 持久化 | 小对象键值读写（长度有上限） | 宿主文件 | NVS |
+| 日志后端 | sink 的写出函数 | stdout | UART0 |
+| 系统控制 | 重启、栈/堆水位查询、看门狗喂狗 | 空实现 + 日志 | `esp_restart` 等 |
+| 总线（最薄） | I2C/SPI 的 raw 字节读写 | 无（或空实现） | ESP-IDF 驱动 |
+
+- 接口形态：**纯虚抽象类**（运行期多态、好替换好打桩），后端在**编译期**由 CMake target 选定，运行期不做任何注册/查表。
+- 测试时链 fake 后端，接口不变。
+- 引脚、总线参数、屏幕型号一律走平台后端的编译期配置，**不进 HAL 接口**。
+
+## 9. 错误处理
+
+- 可失败操作统一返回 `etl::expected<T, embark::Error>`（无返回值时返回 `embark::Error`）。
+- 编程错误（不可能发生）用 `EMBARK_ASSERT`；release 下的行为是**尽力写最后一条日志 → halt**，不静默继续。
+- 致命错误统一走 `embark::fatal(reason)`，由平台后端决定重启还是进安全态。
+- 容量不足的边界行为：整条丢弃 + 计数（日志行、消息队列一致），不产生半条数据。
+
+## 10. 内存与语言子集
+
+- 内核：零动态分配；容器一律 ETL 定容版；`-fno-exceptions -fno-rtti`。
+- App 层默认同规则；宿主仿真可用编译开关放开（开关名实现时定）。
+- LVGL：allocator 由框架显式配置（真机静态池、宿主堆），并要求 UI 对象总量有上限；`lv_conf.h` 由本仓库自持（以 `lvgl_template_laste` 的宿主配置为起点改）。
+- 每个容器的容量上限必须是**代码里可查的常量**，集中放在 `config/`。
+
+## 11. 目录结构与构建
+
+```
+embark/
+├─ CMakeLists.txt                 顶层：host / esp32 两个 target
+├─ include/embark/                公开头（App、Framework、HAL、Message、Error）
+├─ src/                           内核实现
+├─ platform/host/                 宿主后端（SDL2 + 宿主 FreeRTOS port）
+├─ platform/esp32/                ESP32-S3 后端（IDF 组件形式）
+├─ app/                           v1 自带示例 App（demo 用）
+├─ tests/                         doctest 测试
+├─ config/                        lv_conf.h、容量上限、平台开关
+├─ third_party/{efmt-elog,etl}/   submodule（锁 commit / tag）
+└─ docs/                          使用文档（入口 docs/README.md）
+```
+
+- include 约定：内部一律写 `<middleware/efmt/...>` 与 `<middleware/etl/...>`；`middleware/` 视图在**构建目录里生成**（Windows 用 junction），源码树保持干净；**绝不把 `etl/` 目录本身加进 include 路径**（同名 `string.h` 会遮蔽标准头）。
+- ETL 用上游的 `etl::etl` INTERFACE target；efmt/elog 上游没有 CMake，由我们包一层 `embark_efmt`（INTERFACE）。
+- 命名：类型 PascalCase、函数/变量 snake_case、文件名 snake_case、宏 `EMBARK_*`、命名空间 `embark`。
+
+## 12. 依赖与版本
+
+| 依赖 | 版本策略 | 引入方式 |
+| --- | --- | --- |
+| efmt-elog（EFmt + ELog） | 锁 **commit SHA**（上游无 tag、无版本声明） | submodule → `embark_efmt` |
+| ETLCPP/etl | **开工先锁 20.40.0**（本机已逐条核实）；拉到上游 20.49.0 并按 §16.3 复核通过后再切 | submodule（锁 commit）→ `etl::etl` |
+| LVGL | 8.3.x，固定一个小补丁版 | submodule；`lv_conf.h` 自持 |
+| FreeRTOS | 真机用 ESP-IDF 5.4 自带；宿主用 kernel + Windows port | 平台侧 |
+
+许可证 **MIT**；版本从 `0.1.0` 起、在 `main` 上打 tag，API 稳定前不承诺兼容。
+
+## 13. 测试与 CI
+
+- 测试框架 **doctest**（单头、编译快、无堆友好）。
+- 宿主测试覆盖：前台切换、后台 tick 周期、消息溢出策略、日志门面、错误路径（`expected`）、App 注册表顺序。
+- CI（GitHub Actions）三个 job：`host build + test`（ubuntu）、`esp32 build`（espressif/idf 容器，只编不烧）、`clang-format --dry-run`（仅 CI 跑；本机无 clang-format，不强制）。
+- UI 不做无头截图测试，靠宿主窗口人工验。
+
+## 14. 验收标准（v1 完成的定义）
+
+1. 宿主构建后能跑出 SDL 窗口，demo 里有 **≥2 个 App**，可切换前台，后台 tick 可观测（日志/计数）。
+2. 宿主测试全绿（见 §13 覆盖点）。
+3. ESP32-S3 目标 `idf.py build` 通过；烧写后能显示 demo 的第一屏。
+4. 内核与 App 无动态分配：宿主构建下用分配 hook 统计为 0（或等价的审计方式）。
+5. **换后端不动 App**：切到 esp32 后端时，`app/` 与 `include/embark/` 一行不改。
+6. 文档到位：根 `README.md` + `docs/README.md` 索引 + 一条新手最短路径（跑起来 → 敲起来 → 改起来）。
+
+## 15. 未决项与风险
+
+- efmt-elog 无 tag、无版本约束 → 只能锁 SHA；上游 API 变动只在"主动更新 + 编译"时才会暴露。
+- 上游 elog 的 `basic_string_stream` 万能 `operator<<` 兜底可能静默接受错误参数——接入时实测确认。
+- ETL 本机副本（20.40.0 / 20.39.4）都旧于上游 20.49.0（差约 9 个小版本），而 20.39.4 → 20.40.0 之间已发生过破坏性变更（`queue::emplace` 返回值 `void` → `reference`、`message_packet` 的非虚消息支持、`error_handler.h` 新增 `ETL_USE_ASSERT_FUNCTION`）→ 接入时以 20.49.0 实测为准，先复核 spec §7；若要完全离线构建，可改为 vendor 本机 20.40.0（未定）。
+- ESP32-S3 具体板型（Touch-LCD-2.8 还是 devkit 接线）与触摸控制器型号：**已决定推迟**到做 esp32 后端时确认（宿主那条线完全不依赖它，见 `issues/11-esp32s3-backend.md`）。
+- 宿主 FreeRTOS port 来自 `lvgl_template_laste`，需确认在 GCC 15.1 上仍可编译（原工程是 MSVC/MinGW 混合配置）。
+- LVGL 8.3.x 的具体补丁版号在接入时敲定。
+
+## 16. ETL 可复用组件清单（开工前定稿，避免边写边改）
+
+对本机 ETL **20.40.0**（`E:\01_Workspace\00_Active_projects\00_code\01_cpp_code\etl`，208 个顶层头 + `atomic/ mutex/ private/ profiles/ generators/` 子目录）逐族过了一遍，判据三条，缺一不用：
+
+1. **零堆**：容量由模板参数在编译期给定，不依赖 `new`/`malloc`（ETL 的 `memory_model.h` 区分静态/动态内存模型，本项目一律静态）。
+2. **无异常**：不依赖 `throw`，出错走错误处理函数或断言，与 `-fno-exceptions` 一致。
+3. **可静态配置**：锁、原子、时钟等外部依赖通过宏或模板参数注入，平台侧能给得起。
+
+### 16.1 结论总表
+
+| 族 | 拟结论 | 代表组件 | 核实状态 |
+| --- | --- | --- | --- |
+| 定容容器 | 直接复用 | `etl::vector`、`etl::array`、`etl::string<N>`、`etl::map`/`multimap`、`etl::flat_map`/`flat_set`、`etl::deque`、`etl::priority_queue`、`etl::intrusive_list`/`intrusive_queue`/`intrusive_stack`、`etl::multi_vector`、`etl::indirect_vector`、`etl::bitset` | **已逐字核实**：`vector.h:1204-1205`（`template <typename T, const size_t MAX_SIZE_> class vector : public etl::ivector<T>`，注释即「最大元素数」）、`string.h:62-67`（注释「uses a fixed size buffer」）、`deque.h:2367-2374`（**坑：注释写明 `The deque allocates one more element than the specified maximum size.`**）、`flat_map.h:1128`、`priority_queue.h:460`、`intrusive_list.h:454`、`indirect_vector.h:1336`；`reference_flat_*` 存引用、对象须自持生命周期，v1 不用 |
+| 错误与类型 | 直接复用 + 一层薄壳 | `etl::expected<T,E>`、`etl::unexpected<E>`、`expected<void,E>` 特化、`etl::optional`、`etl::variant`、`etl::result`、`etl::error_handler`、`etl::integral_limits` | **expected.h 已逐字核实**（:241 / :103 / :760，整体在 `#if ETL_USING_CPP17` :231 内）→ §9 写法不用改；**但 `value()`（:471-498 四个重载）没有任何断言**，直接 `return etl::get<Value_Type>(storage)`，只有 `operator->`（:672/:684）与 `operator*`（:696）在 `#if ETL_IS_DEBUG_BUILD`（:674/:686/:698）内断言 `expected_invalid` → 取错值是未定义行为，**必须由我们的 `embark::Result` 包装自己断言**；`operator bool` 在 20.40.0 带 `ETL_EXPLICIT`（:524），`if (r)` 可用、`bool b = r;` 编译不过 |
+| 内存 / 池 | 薄封装 | `etl::pool`、`etl::generic_pool`、`etl::variant_pool`、`etl::imemory_block_allocator` + 固定块实现、`etl::memory_model` | **已逐字核实**：`pool.h:53`（`class pool : public etl::generic_pool<sizeof(T), etl::alignment_of<T>::value, VSize>`）、`generic_pool.h:55`、`pool_ext` / `generic_pool_ext`（缓冲由外部提供）、`variant_pool.h:67/:196`；只用定长对象池，LVGL 侧仍用 LVGL 自己的静态池 |
+| 消息 / 事件 | 直接复用 + 一层薄壳 | `etl::message<ID>`、`etl::message_router`、`etl::message_bus`、`etl::message_packet`、`etl::message_timer`、`etl::message_broker`、`etl::message_router_registry` | **前五项已逐字核实**（见 §7）；**新发现已核**：`message_broker.h:46`（`class message_broker : public etl::imessage_router`，内嵌 `subscription_node` :51 / `subscription` :99）、`message_router_registry.h:74` 与 `:508`（按名索引路由的注册表，带 forward 迭代器 :87/:177）、`message_packet.h:72` + 16 个按类型数展开的特化；`reference_counted_message*`、`shared_message` 需要池，v1 不用。**未处理消息不会断言**：`message_router` 类型表全不中时走 `default:`（:614-624）或类型不匹配的 `receive` 重载（:637-646），都转调 `static_cast<TDerived*>(this)->on_receive_unknown(msg)`（全文件 34 处）→ 框架必须覆写它做 WARN + 计数，否则消息静默消失 |
+| 环形缓冲与队列 | 直接复用 | `etl::circular_buffer<T,N>`（**原生丢最旧**）、`etl::queue_spsc_locked` / `queue_spsc_atomic` / `queue_spsc_isr` / `queue_mpmc_mutex`（满时返回 false、丢新元素） | **已逐字核实**（见 §7）；`etl::queue` 不用（满时不检查，除非定义 `ETL_CHECK_PUSH_POP`） |
+| 定时与调度 | 直接复用（宏必须给） | `etl::callback_timer`（+ `_locked`/`_atomic`/`_interrupt`）、`etl::message_timer`、`etl::callback_service`、`etl::timer` | **callback_timer.h 强制宏已核实**（:54/:58/:70）；**其余已核**：`scheduler.h:228`（`class ischeduler`）、`scheduler.h:357`（`class scheduler : public etl::ischeduler, protected TSchedulerPolicy`——策略式）、`task.h:58`、`callback_service.h:49`（单类，无接口）；`timer.h` 只是 id/state 辅助头，不是实现。另见 §16.4 |
+| 状态机 / 回调 | 直接复用 | `etl::state_chart<TObject,TParameter>`、`etl::fsm`、`etl::hfsm`、`etl::delegate`、`etl::observer`、`etl::function`、`etl::callback` | **已逐字核实**：`state_chart.h:237/:430/:620/:874`（状态表用成员函数指针）；**`fsm.h:343`：`class fsm : public etl::imessage_router`——ETL 的 FSM 本身就是消息路由，可以直接当订阅者挂到 `message_bus` 上**；`ifsm_state` :215、`fsm_state` :561/:639、`hfsm.h:41`、`observer.h:356`、`function.h` 的 8 个变体（`function`/`_mp`/`_mv`/`_imp`/`_imv`/`_fp`/`_fv`）、`delegate.h` 是转发头（实体在 `private/delegate_cpp11.h`） |
+| 同步 | 直接复用（宏必须给） | `etl::mutex` + `etl::lock_guard`（后端按平台分派到 freertos/std/gcc_sync/cmsis_os2…）、`etl::atomic` | **分派规则已核实**：`mutex.h:34-54` 依次判 `ETL_TARGET_OS_CMSIS_OS2` → cmsis、`ETL_TARGET_OS_FREERTOS` → freertos、`ETL_USING_STL && ETL_USING_CPP11` → std、`ETL_COMPILER_ARM5..8` → arm、`ETL_COMPILER_GCC` → gcc_sync、`ETL_COMPILER_CLANG` → clang_sync，全不中则 `ETL_HAS_MUTEX 0`（`lock_guard` 在 :69）；`ETL_HAS_ATOMIC` 由 `platform.h:422-437` 派生（`ETL_NO_ATOMICS` / Cortex-M0(+) / `__STDC_NO_ATOMICS__` → 0；否则 ARM5-8、GCC、CLANG 或 CPP11+STL → 1，ESP32-S3 与宿主 GCC 都走 `atomic_gcc_sync.h`） |
+| 校验 / 工具 | 直接复用 | `etl::crc8_*`/`crc16`/`crc32`/`crc64` 全家、`etl::checksum`、`etl::frame_check_sequence`、`etl::fnv_1`、`etl::murmur3`、`etl::jenkins`、`etl::pearson`、`etl::bloom_filter`、`etl::base64`、`etl::bit_stream`、`etl::byte_stream`、`etl::endianness`、`etl::mem_cast`、`etl::enum_type`、`etl::flags`、`etl::cyclic_value`、`etl::debounce`、`etl::to_string`、`etl::string_stream`、`etl::string_view`、`etl::version` | **部分已核**：`crc16.h:47` / `crc32.h:47`（`class crc16_t : public etl::crc_type<etl::private_crc::crc16_parameters, Table_Size>`，表大小可调）、`checksum.h` 五种（`checksum`/`bsd_checksum`/`xor_checksum`/`xor_rotate_checksum`/`parity_checksum`，全部基于 `frame_check_sequence` 策略）、`debounce.h:434`（`class debounce : public private_debounce::debounce4`，另有 `debounce2/3`）、`version.h:41-52`（`ETL_VERSION_MAJOR 20 / MINOR 40 / PATCH 0` + `ETL_VERSION_VALUE`）；`enum_type`/`flags`/`cyclic_value`/`string_view`/`to_string` 只确认头文件在（低风险，用前扫一眼即可）。配置持久化的 CRC（§8）、HAL 值类型包装（`enum_type`/`flags`）、按键去抖（`debounce`）计划直接用 |
+
+> 核实方式：本节凡标「已逐字核实」的，都是我打开头文件读到的逐字声明 + 行号（子代理报告与此不一致时一律以文件为准——已发生过两次：`message_bus` 的 `subscribe` 返回类型、`queue::push` 的返回值）。**本轮签名级核实已完成，"待核"项全部核完或注明为低风险项，本节冻结**；等 §16.3 的 20.49.0 复核跑完再看是否要改。
+
+### 16.2 必须给的宏（不给就编译不过或行为不达预期）
+
+| 宏 | 出处 | 说明 |
+| --- | --- | --- |
+| `ETL_USING_CPP17` | `platform.h` 按 `__cplusplus` 派生 | `etl::expected` 全部在该宏门内（`expected.h:231`）；C++17 目标天然满足，spec §9 依赖它 |
+| `ETL_CALLBACK_TIMER_USE_ATOMIC_LOCK` **或** `ETL_CALLBACK_TIMER_USE_INTERRUPT_LOCK` | `callback_timer.h` | 二选一，否则 `#error`（:54、:58）；选 INTERRUPT 版还要自定 `ETL_CALLBACK_TIMER_DISABLE_INTERRUPTS` / `..._ENABLE_INTERRUPTS`（:70） |
+| `ETL_MESSAGE_TIMER_USE_ATOMIC_LOCK` **或** `..._INTERRUPT_LOCK` | `message_timer.h` | 同上；`profiles/*.h` 里没有任何默认值，8 处引用全在该头内 |
+| `ETL_TARGET_OS_FREERTOS` | **我们自己定义**（ETL 全库只消费不定义；自带 profiles 给的都是 `ETL_TARGET_OS_NONE/WINDOWS/LINUX`） | `mutex.h:37` 的分支键。不给就会落进 `ETL_COMPILER_GCC` → `mutex_gcc_sync.h`（靠 `__sync_*`），Cortex-M 上不可用。宿主（FreeRTOS Windows port）与 ESP32 两个目标都要给 |
+| `ETL_HAS_MUTEX` / `ETL_HAS_ATOMIC` | 由 `mutex.h:34-54` / `platform.h:422-437` 派生 | 用 `etl::mutex`、`etl::atomic`、`queue_mpmc_mutex` 的前提；派生规则见 §16.1「同步」行 |
+| `ETL_CHECK_PUSH_POP` | `vector.h`(9 处)/`deque.h`(18)/`list.h`(18)/`stack.h`(9)/`queue.h`(9)/`forward_list.h`/`intrusive_*`/`indirect_vector.h`/`private/pvoidvector.h`（全库 82 处） | **不是只给 queue 用的**：它守着 `push_back`/`pop_back`/`push`/`pop` 的满空检查。不定义，往满容器写入既无断言也无日志 → 直接写坏内存。**建议定义**（配合下面 `ETL_LOG_ERRORS` 的处理策略） |
+| `ETL_LOG_ERRORS` | `error_handler.h:46` | **`class etl::error_handler` 只在定义了它（或 `ETL_IN_UNIT_TEST`）时才存在**。不定义：debug 走 `assert()`（:347）、release 下 `ETL_ASSERT` 直接空展开（:356），ETL 内部护栏全部失效。**必须定义**；再把 `error_handler::set_callback`（:84）接到我们自己的致命通道——`ETL_LOG_ERRORS` 分支里 `ETL_ASSERT` 只是 `etl::error_handler::error(e)` 回调（:339），**不中断执行**，要「最后一条日志 + halt」就得由我们的回调来做（§9）；需要返回值的位置用 `ETL_ASSERT_OR_RETURN`（:340） |
+| `ETL_USE_ASSERT_FUNCTION` / `ETL_THROW_EXCEPTIONS` | `error_handler.h:311` / `platform.h:236-240` | **两个都不要定义**：前者把断言交给 `etl::set_assert_function` 且优先级高于 `ETL_LOG_ERRORS`；后者让 `ETL_ASSERT` 走 `throw`（内核禁异常）。我们要的就是 `error_handler.h:338-345` 那条分支 |
+| `ETL_ISTRING_REPAIR_ENABLE` / `ETL_IVECTOR_REPAIR_ENABLE` / `ETL_IDEQUE_REPAIR_ENABLE` / `ETL_ICIRCULAR_BUFFER_REPAIR_ENABLE` | `platform.h:204-232` | 容器对象被 `memcpy` 到别处（跨任务传对象、放共享内存）后修复内部指针。**Embark 跨任务只传 POD 负载或引用，不搬容器** → 不定义；将来若真要搬，必须打开 |
+| `ETL_MESSAGE_ID_TYPE` / `ETL_FSM_STATE_ID_TYPE` | `message_types.h:39-43` / `fsm.h:74-77` | 默认都是 `uint_least8_t`。v1 保持默认（消息类型 < 255、状态数 < 255） |
+| 平台 profile | `profiles/cpp17.h` / `profiles/auto.h` | **没有 ESP32/Xtensa/RISC-V 专用 profile**（35 个 profile 里最近的是 `gcc_generic.h`/`cpp17.h`）→ 选 `cpp17.h` 或 `auto.h`，上面这些 `ETL_TARGET_OS_*`、定时器宏由我们自己补 |
+| `ETL_NO_EXCEPTIONS` / `ETL_NO_STL` 等 | `platform.h` | 按目标设置；内核代码两端编译选项必须一致，宿主不得悄悄用上 STL |
+
+### 16.3 版本差异（已核实的 A/B）
+
+- A = 本机 20.40.0（`…\01_cpp_code\etl\include\etl`），B = `…\01_Archives\lvgl_template_laste\framework\utils\etl` 20.39.4。
+- **文件级差异（我实测：剥掉 30 行版本横幅后逐文件比对）**：A 独有 10 个（`function_traits.h`、`singleton_base.h`、`type_list.h`、`uncopyable.h` + `experimental/` 5 个 + `deprecated/factory.h`），B 独有 0 个；同名文件中**实质不同 48 个**（含 `atomic/atomic_gcc_sync.h`、`private/delegate_cpp11.h`、`private/bitset_*.h`、`generators/*` 等子目录）。上一版这里写「只有 6 个文件有差异」是错的，已按实测更正。
+- 其中对清单有实质影响的 6 处：`expected.h`（`operator bool` 加 `ETL_EXPLICIT` + `ETL_NOEXCEPT`；`value()` 仍无断言——我已核实）、`error_handler.h`（A 新增 `ETL_USE_ASSERT_FUNCTION` 档——我已核实 :311）、`queue.h`（`emplace` 返回 `reference`）、`optional.h`（`emplace` 返回 `T&`）、`span.h`/`array_view.h`/`memory.h`（改用 `etl::to_address`，空 span 更正确）、`ipool.h`（A 才把 free-list 指针写入逻辑放出来并新增 `max_item_size()` → **B 的对象池是残缺的**）；`string.h` 另加 `operator=(string_view)`。**结论不变：用 A（20.40.0）。**
+- **20.49.0 复核清单（拿到新版本后逐条核，别猜）**：① `expected` 是否新增 `and_then`/`or_else`/`transform`；② `expected::value()` 是否仍无断言；③ 是否新增 `bitmap`；④ 是否新增 `interrupt_guard`；⑤ `mutex/` 或 `profiles/` 是否新增 ESP-IDF/FreeRTOS 后端并自带 `ETL_TARGET_OS_FREERTOS`；⑥ `task` 接口是否变化；⑦ `queue::push` 是否仍返回 void、`ETL_CHECK_PUSH_POP` 是否仍在；⑧ `message_bus` 是否新增 `publish`；⑨ `delegate` 存储是否变化；⑩ `pool`/`ipool` free-list 是否又被改；⑪ `ETL_VERSION_VALUE` 编码是否仍是 `major*10000+minor*100+patch`；⑫ `expected<void,E>` 的 API 是否增删。
+- 上游 20.49.0 本机没有 → **先用 20.40.0 开发**（依赖锁 SHA），开工前跑一次「拉到 20.49.0 + 编译 + 本节复核」，再决定最终锁哪个版本（见 §15）。
+- `version.h:41-52` 给了 `ETL_VERSION_MAJOR/MINOR/PATCH`、`ETL_VERSION`、`ETL_VERSION_VALUE` → 框架里加一条 `static_assert(ETL_VERSION_MAJOR == 20 && ETL_VERSION_MINOR == 40, "Embark v1 按 ETL 20.40.0 核实过，换版本请重跑 §16 复核")`：版本被悄悄换掉时直接编译报错，比"人记得"可靠。
+
+### 16.4 两处设计选择 + 依赖形态（2026-10-03 用户已拍板）
+
+1. **后台节拍怎么驱动 → 定 A**：框架定时器（`etl::callback_timer<MAX_TIMERS>`）+ `onBackgroundTick(now_ms)`，前后台全由唯一 UI 任务驱动。否决 B（`etl::scheduler` + `etl::task`）：会给框架塞进第二套调度语义，且「App 前后台」与 ETL 的「任务请求工作」不是一回事。
+2. **App / UI 内部状态 → 定「不绑范式」**：`embark::App` 基类不规定状态怎么表达。框架把 `etl::state_chart<TObject, TParameter>` 当推荐工具、在 demo 里示范一次；需要「收消息即切状态」的 App 自己用 `etl::fsm`（`fsm.h:343` 的 `fsm` 本身继承 `etl::imessage_router`，可直接挂 `message_bus`，与 §7 无缝）。否决 B/C 作为强制约定：那会让每个小 App 都被迫声明一堆状态类。
+3. **依赖形态 → 定「先按 20.40.0 开写」**：`third_party/` 用 git submodule 锁 commit（先 20.40.0，本机已逐条核实）；把「拉 20.49.0 → 编译 → 按 §16.3 的 12 条复核」立为**第 0 个 issue**（见 `issues/01-etl-version-verify.md`），出结论后再决定最终锁哪个版本；离线构建需要时再改 vendor。
+
+### 16.5 ETL 没给、必须自写
+
+| 需要的东西 | 结论 | 说明 |
+| --- | --- | --- |
+| 临界区 RAII（`interrupt_guard`） | **自写** | 全库无此物（`mutex.h:69` 只有依赖 `etl::mutex` 的 `lock_guard<TMutex>`）。ESP32 包 `portENTER_CRITICAL`/`portEXIT_CRITICAL`，宿主用 `std::mutex`（或单线程时空实现） |
+| 位图（`bitmap`） | **自写** | 全库无 `bitmap`，只有编译期位宽的 `etl::bitset`（`private/bitset_new.h`） |
+| 总线发布语义（`publish`） | **自写** | `message_bus` 只有 `subscribe`（已核实：全文件无 `publish`）→ 框架提供 `embark::Bus::publish()`，遍历订阅者调 `receive()` |
+| 日志与格式化 | 用 efmt + elog | ETL 只有 `to_string`（数字→定容字符串）与 `format_spec`，无 printf 语义、无日志 |
+| 任务/线程/时钟/HAL/UI/配置存储 | 自备 | `etl::task` + `etl::scheduler` 只是**合作式调度骨架**（无栈、无线程、无系统调用）；RTOS 任务、时基、HAL 后端、LVGL、NVS/文件存储都由 Embark 提供 |
+| `etl::ifunction` 的头文件 | 注意 | **没有 `ifunction.h`**，`ifunction` 在 `function.h`（:52 / :71）里 |
+| 宿主/设备统一构建 | 自备 | ETL 只有头文件与 profile 宏，不含任何构建脚本；两 target 的宏必须在我们的 `platform_config.h` 里集中给定 |
+
+### 16.6 第二轮复核（20.40.0 ↔ 20.39.4）记下的三个反直觉点
+
+1. **定容容器没有堆版本**：全库 `std::allocator`/`malloc`/`operator new` 零命中，容量一律是编译期模板参数（需要运行期容量时用 `_ext` 族 + 调用方提供缓冲）。所以「不小心用 ETL 分配堆内存」这件事不存在，**唯一的坑是容量必须编译期确定**。
+2. **`etl::memory_model` 与堆无关**：它只决定 `size_type` 宽度（`memory_model.h:49-73`，SMALL→`uint_least8_t` … HUGE→`uint_least64_t`）。别当成「内存模型开关」。
+3. **`etl::task` 不是 RTOS 任务**：`task.h:82/:87` 只有 `task_request_work()` / `task_process_work()`，由 `etl::scheduler` 轮询驱动，无栈无线程 —— 它只能当「后台节拍的一种可选实现」（见 16.4 第 1 条），替代不了 FreeRTOS 任务。

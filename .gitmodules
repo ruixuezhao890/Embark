@@ -1,0 +1,9 @@
+[submodule "third_party/etl"]
+	path = third_party/etl
+	url = https://github.com/ETLCPP/etl.git
+[submodule "third_party/efmt-elog"]
+	path = third_party/efmt-elog
+	url = https://github.com/ruixuezhao890/efmt-elog.git
+[submodule "third_party/doctest"]
+	path = third_party/doctest
+	url = https://github.com/doctest/doctest.git
