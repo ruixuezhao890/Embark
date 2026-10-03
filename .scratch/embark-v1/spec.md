@@ -57,35 +57,47 @@ HAL（芯片能力：显示 / 输入 / 时间 / 持久化 / 日志后端 / 系�
 
 一个类实现 `embark::App`，在编译期静态注册（零堆；注册顺序即默认前台 App）。
 
-**接口草案**（实现时可微调，但钩子集合不再增加）：
+**接口**（=`include/embark/app.h`，issue 06 落地）：
 
 ```cpp
 namespace embark {
 
+enum class BackgroundPolicy : std::uint8_t { suspend = 0, tick = 1, own_task = 2 };
+
+struct AppSettings {
+    BackgroundPolicy background = BackgroundPolicy::suspend;  // 默认：完全不跑
+    std::uint32_t period_ms = 0;                              // Tick 策略的周期
+    std::uint16_t task_stack_words = 0;                       // OwnTask 的栈深（字）
+    std::uint8_t task_priority = 0;                           // OwnTask 的优先级
+};
+
 class App {
 public:
+    virtual ~App() = default;
     virtual const char* name() const = 0;
     virtual void onCreate(Framework& fw) = 0;          // 装配期，一次
     virtual void onEnter() = 0;                        // 成为前台
     virtual void onPause() = 0;                        // 离开前台（框架只通知，不碰 UI）
     virtual void onResume() = 0;                       // 再次成为前台
-    virtual void onBackgroundTick(uint32_t now_ms) {}  // 后台节拍，必须轻量
-    virtual void onMessage(const Message& msg) {}      // 框架投递的消息
     virtual void onExit() = 0;                         // 退出（v1 只在关机路径触发）
+    // 以下有默认实现：
+    virtual void onBackgroundTick(std::uint32_t now_ms) {}  // 后台节拍，必须轻量
+    virtual void onMessage(const Message& msg) {}           // 框架投递的消息
+    virtual AppSettings settings() const;                   // 后台策略等 per-App 配置
 };
 
 }  // namespace embark
 ```
 
-- **前后台语义**：前台 = 同时持有输入焦点 + 渲染权 + 事件循环权，全局至多一个。切换**只能由框架执行**，App 通过 `requestSwitch(id)` 请求，切换决策与时机由框架负责。
+- **前后台语义**：前台 = 同时持有输入焦点 + 渲染权 + 事件循环权，全局至多一个。切换**只能由框架执行**，App 通过 `request_switch(id)` 请求，切换决策与时机由框架负责（框架只登记请求，在 `step()` 的循环边界生效：旧前台 `onPause` → 新前台首次 `onEnter` / 再次 `onResume`）。
 - **UI 生命周期自决**：框架只发 `onPause` / `onResume`，不创建、不销毁、不隐藏 App 的 LVGL 对象。
-- **后台策略**（per-App 配置）：`Suspend`（完全不跑）/ `Tick(period_ms)`（按周期跑 `onBackgroundTick`，`period_ms == 0` 等价于 Suspend）/ `OwnTask`（申请自己的 FreeRTOS 任务，栈深与优先级由 App 配置）。
+- **后台策略**（per-App 配置，`settings()` 返回）：`suspend`（完全不跑）/ `tick(period_ms)`（按周期跑 `onBackgroundTick`，`period_ms == 0` 等价于 suspend）/ `own_task`（申请自己的 FreeRTOS 任务，栈深与优先级由 App 配置）。
 - **常驻**：v1 不淘汰任何 App，全部常驻内存。
 
 ## 6. 执行模型
 
-- 全局唯一 UI 任务承载：输入事件处理 → 前台 App 回调 → `lv_timer_handler()` → 后台 tick 调度 → 消息派发。**它是全工程唯一允许操作 LVGL 与调用 `lv_timer_handler()` 的地方。**
-- issue 05 阶段还没有 UI 任务（任务在 06 落地），宿主演示的 main 循环就是这条链路的**临时唯一执行者**：`LvglPort::tick()` → `pump_input()`（抽干 HAL 输入队列）→ `lv_timer_handler()`。`LvglPort` 自己不注册任何 LVGL 定时器、不起线程，所以换成真任务时只需要把这三行的调用点搬进任务循环。
+- 全局唯一 UI 任务承载：输入事件处理 → 前台 App 回调 → `lv_timer_handler()` → 后台 tick 调度 → 消息派发。**它是全工程唯一允许操作 LVGL 与调用 `lv_timer_handler()` 的地方**（issue 06 落地：`start_ui_task()` + `ui_main` 任务循环，`lv_timer_handler` 的唯一调用点在 `LvglUiPort::process()`）。
+- 宿主 main 是任务跳板：`main` 只做参数解析、启动 UI 任务（静态分配，2048 字栈）并进入 `vTaskStartScheduler()`（永不返回）；收尾走 `exit_process(code)`（`std::_Exit`，不跑静态析构 —— 主线程卡在模拟中断循环里，`exit()` 会 join 挂死）。
 - 循环节拍目标 5 ms 一跳（与既有两代框架一致），空闲时 `vTaskDelay` 让出；不忙等。（宿主上这一拍的实际墙钟约 2×，tick 语义不变，见 §3。）
 - 后台 tick 在 UI 任务里执行，因此**必须轻量**；周期由 `etl::callback_timer<MAX_TIMERS>` 按 per-App 配置驱动（见 §7）。
 - 逃生舱：`OwnTask` 策略的 App 由框架创建自己的任务，框架保证任务名唯一、启动时机在 `onCreate` 之后、消息经队列进出。

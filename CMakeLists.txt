@@ -51,14 +51,17 @@ embark_create_middleware_view("${CMAKE_BINARY_DIR}/include/middleware")
 target_include_directories(embark_build_options INTERFACE "${CMAKE_BINARY_DIR}/include")
 
 # 平台是否已经提供 FreeRTOS 头文件：决定 config/embark_config.h 是否定义 ETL_TARGET_OS_FREERTOS。
-# 宿主 FreeRTOS Windows port 落地（issues/02、06）之前为 OFF —— 定义它会让 <etl/atomic.h> /
-# <etl/callback_timer.h> 去 include FreeRTOS.h，见 config/embark_config.h 里的实测链条。
-# ESP32-S3 后端（issues/11）由 IDF 侧传 ON。
+# 宿主 FreeRTOS Windows port 已在 issues/02、06 落地 —— 默认 ON（etl/atomic.h、etl/callback_timer.h
+# 会去 include FreeRTOS.h，见 config/embark_config.h 里的实测链条）；关掉它 = 退回 ETL 无 OS 模式。
+# ESP32-S3 后端（issues/11）由 IDF 侧传 ON（语义相同：平台提供 FreeRTOS 头文件）。
 # 用 option() 而不是 CACHE STRING：字符串形式的 ON 进了 #if 会被静默当成 0，
 # 只有 $<BOOL:...> 转出来的 1/0 才是 config/embark_config.h 期望的东西。
-option(EMBARK_PLATFORM_HAS_FREERTOS "平台是否提供 FreeRTOS 头文件" OFF)
+option(EMBARK_PLATFORM_HAS_FREERTOS "平台是否提供 FreeRTOS 头文件" ON)
 target_compile_definitions(embark_build_options INTERFACE
         EMBARK_PLATFORM_HAS_FREERTOS=$<BOOL:${EMBARK_PLATFORM_HAS_FREERTOS}>)
+
+# FreeRTOS 内核编译目标（被 embark_platform_host 链接）；依赖上面的 option，必须放它后面。
+include(embark_freertos)
 
 if(MSVC)
   target_compile_options(embark_build_options INTERFACE

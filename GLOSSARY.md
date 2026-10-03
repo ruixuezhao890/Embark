@@ -23,8 +23,22 @@ _Avoid_: 挂起的任务、休眠任务
 _Avoid_: 优先级、调度策略
 
 **UI Task（UI 任务）**：
-全局唯一的 FreeRTOS 任务，承载前台 App 的事件循环与全部 UI 渲染。
+全局唯一的 FreeRTOS 任务，承载前台 App 的事件循环与全部 UI 渲染；宿主上由 `start_ui_task()` 静态创建（TCB 与栈都在 BSS），5 ms 一跳。
 _Avoid_: 主任务、GUI 线程、主循环
+
+**App registry（App 注册表）**：
+编译期静态数组（`embark::app_registry<Apps...>()`），注册顺序即默认前台顺序；每个可执行文件用 `EMBARK_APP_TABLE(...)` 声明一次全局注册表。零堆。
+_Avoid_: 动态注册、插件表
+
+**App contract（App 契约）**：
+`embark::App` 的七个钩子（`onCreate`/`onEnter`/`onPause`/`onResume`/`onExit` + 后台 tick/消息，后两者可默认）与 `settings()`（后台策略）；切换只能经 `request_switch(id)` 请求，由框架在 step 边界执行。
+_Avoid_: 生命周期回调、状态机
+
+**UI port（UI 端口）**：
+`IUiPort` 把"渲染/输入泵/LVGL 处理/关窗/收尾"封装成唯一 UI 任务循环的固定阶段（tick → pump_input → process）；宿主实现 = `LvglUiPort`（`lv_timer_handler` 的唯一调用点），测试实现 = `FakeUiPort`。
+_Avoid_: 渲染循环、驱动包装
+
+**Middleware view（middleware 视图）**：
 
 **HAL（芯片能力抽象层）**：
 向 App 暴露芯片能力（显示、输入、时间、持久化、日志后端、系统控制）；不承担逐外设驱动。

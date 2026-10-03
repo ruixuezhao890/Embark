@@ -48,8 +48,10 @@ static_assert(ETL_VERSION_MAJOR == 20 && ETL_VERSION_MINOR == 49,
  * 也就是说：只要平台还没有 FreeRTOS 的头文件，就连 callback_timer 都编不过。
  *
  * 所以这里按平台能力开关，而不是无条件定义：
- *   宿主：FreeRTOS Windows port 接进来（issues/02、06）之前为 0；
- *   真机与 port 落地后的宿主：由顶层 CMake 传 EMBARK_PLATFORM_HAS_FREERTOS=1。
+ *   宿主：FreeRTOS Windows port 已接入（issues/06），顶层 CMake 默认传
+ *     EMBARK_PLATFORM_HAS_FREERTOS=1 —— 于是 ETL 走 mutex_freertos.h（纯静态 API）；
+ *   真机（issue 11）：IDF 侧同样传 1；
+ *   个别不需要 OS 的构建（如单测环境想退回无 OS 模式）：显式传 0。
  */
 #ifndef EMBARK_PLATFORM_HAS_FREERTOS
 #define EMBARK_PLATFORM_HAS_FREERTOS 0

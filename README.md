@@ -15,7 +15,9 @@
 v0.1.0 进行中：构建系统、依赖与配置注入已就位；HAL 七个能力的接口、宿主的**七个后端**
 （时间 / 持久化 / 日志 sink / 系统控制 / 总线 / SDL2 显示 / SDL2 输入）与测试用假后端已落地；
 LVGL 8.3.11 已接入（宿主可跑出窗口、点击有响应、关窗干净退出）。
-**还没做**：App 内核（唯一 UI 任务、前台切换、消息与后台 tick）与 ESP32-S3 后端 —— 按
+**已完成**：App 内核（App 契约 + 编译期注册表 + 唯一 UI 任务 + 前后台切换，宿主 FreeRTOS
+V10.6.2 静态接入、零动态分配），宿主 UI 演示里两个 App 互切前台、输入焦点随之切换。
+**还没做**：消息派发与后台 tick（issue 07）与 ESP32-S3 后端 —— 按
 `.scratch/embark-v1/issues/` 里的工单继续。规格书见 `.scratch/embark-v1/spec.md`。
 
 ## 宿主构建
@@ -53,22 +55,32 @@ ctest --test-dir build --output-on-failure
 ./build/platform/host/embark_host_ui          # Windows: .\build\platform\host\embark_host_ui.exe
 ```
 
-窗口是 320×240 的 LVGL 界面按 `--scale`（默认 2）放大显示，里面有计数标签和一个按钮。
-命令行开关：
+窗口是 320×240 的 LVGL 界面按 `--scale`（默认 2）放大显示。运行在唯一 UI 任务里
+（FreeRTOS 静态任务，5 ms 一跳）：UI 端口 → 输入泵 → 循环边界的前台切换 → `lv_timer_handler()`。
+默认前台是 `CounterApp`（计数按钮），`SwitchApp` 是第二个 App —— 按钮互切前台，
+输入焦点跟着 App 走。命令行开关：
 
 | 开关 | 作用 |
 | --- | --- |
 | `--frames N` | 跑满 N 帧就退出（默认 0 = 一直跑到关窗） |
 | `--click [X,Y]` | 第 20 帧合成一次点击（默认点按钮中心 160,170；走 SDL 真事件队列）；按钮没被触发则退出码 2 |
+| `--switch` | 合成两次点击验证前台切换（第 30/32 帧点"切到 App 2"，第 50/52 帧点"返回 App 1"）；钩子序或切换次数不对则退出码 2 |
 | `--screenshot FILE` | 最后一帧存成 BMP |
 | `--quit-at N` | 第 N 帧合成关窗事件（等价于点窗口 ×，用来验收"干净退出"） |
 | `--scale S` / `--delay MS` | 窗口放大倍数（默认 2）/ 每帧让出的毫秒数（默认 5） |
 | `--help` | 用法 |
 
-一条最短的自动验收（退出码 0 + 日志里 `按钮点击：第 1 次`）：
+最短的自动验收（退出码 0 + 日志里 `按钮点击：第 1 次`）：
 
 ```sh
 ./build/platform/host/embark_host_ui --frames 60 --click
+```
+
+前台切换验收（退出码 0 + 日志里 `切换 2 次`、两个 App 的 enter/resume 计数符合
+"首次 onEnter、之后 onResume"）：
+
+```sh
+./build/platform/host/embark_host_ui --frames 80 --switch
 ```
 
 ## 目录
@@ -76,13 +88,13 @@ ctest --test-dir build --output-on-failure
 | 路径 | 放什么 |
 | --- | --- |
 | `include/embark/` | 框架公开头文件（上层只依赖这里，见 spec §11） |
-| `src/` | 内核实现 |
-| `platform/host/` | 宿主后端（SDL2 显示/输入、LVGL 端口、宿主文件存储；宿主 FreeRTOS port 待并入） |
+| `src/` | 内核实现（Framework、日志、错误等） |
+| `platform/host/` | 宿主后端（SDL2 显示/输入、LVGL 端口、宿主文件存储、FreeRTOS 配置与 UI 任务、演示 App） |
 | `platform/esp32/` | ESP32-S3 后端（以 ESP-IDF 组件形式接入） |
 | `app/` | 自带示例 App |
-| `tests/` | 宿主单元测试（doctest）：`tests/hal/` 按能力分文件，`tests/fakes/` 是 HAL 假后端，`tests/detail/` 是内部工具 |
+| `tests/` | 宿主单元测试（doctest）：`tests/hal/` 按能力分文件，`tests/fakes/` 是 HAL 假后端，`tests/detail/` 是内部工具，`tests/kernel/` 是 App 注册表与 Framework 契约测试 |
 | `config/` | 编译期宏、`lv_conf.h` 与固定容量上限（单一事实来源） |
-| `cmake/` | 构建辅助（`middleware/` 视图生成、SDL2 探测与运行时拷贝） |
+| `cmake/` | 构建辅助（`middleware/` 视图生成、SDL2 探测与运行时拷贝、FreeRTOS 内核目标） |
 | `third_party/` | 依赖（submodule） |
 | `docs/` | 文档（完整文档见 issue 12；ADR 在 `docs/adr/`） |
 | `.scratch/` | 规格书与 issue 追踪（随仓库提交） |

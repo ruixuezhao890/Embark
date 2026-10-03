@@ -8,6 +8,7 @@
 #define EMBARK_LIMITS_H
 
 #include <cstddef>
+#include <cstdint>
 
 namespace embark {
 
@@ -48,6 +49,18 @@ inline constexpr std::size_t lvgl_alloc_budget_bytes = 256 * 1024;
 // LVGL 端口的输入中转队列：UI 循环每帧把 HAL 输入抽干塞进来，LVGL 的 read_cb 再一个个取。
 // 满了丢最旧并计数（与消息队列同一条纪律：宁可丢输入，不阻塞渲染）。
 inline constexpr std::size_t lvgl_input_queue_depth = 16;
+
+// --- 唯一 UI 任务（issues/06）--------------------------------------------------
+// 全工程只有一个 UI 任务（spec §6，宿主 = FreeRTOS 静态任务，真机同构）。
+// 栈深单位是 StackType_t 字（宿主 4 字节）：2048 字 = 8 KB。留给 LVGL 回调 +
+// 前台 App 逻辑；实测占用看宿主演示的栈高水位输出（uxTaskGetStackHighWaterMark），
+// 真机按 SRAM 预算调（issue 11）。
+inline constexpr std::size_t ui_task_stack_words = 2048;
+// 优先级：高于内核空闲任务与其它系统任务即可；真机按中断/任务布局重排（issue 11）。
+inline constexpr std::uint8_t ui_task_priority = 5;
+// UI 循环的节拍（spec §6）：5 ms 一跳，空闲 vTaskDelay 让出、绝不忙等。
+// 宿主墙钟约 2×（实测，见 spec §3），tick 语义不变。
+inline constexpr std::uint32_t ui_loop_period_ms = 5;
 
 // --- 测试替身的容量（tests/fakes/）-------------------------------------------
 // 只是替身的缓冲上限，真机后端不读它；集中放这里是为了"容量都查得到"这条规矩不破例。

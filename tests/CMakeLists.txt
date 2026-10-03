@@ -19,7 +19,9 @@ add_executable(embark_tests
         hal/test_log_sink.cpp
         hal/test_persistence.cpp
         hal/test_system.cpp
-        hal/test_time.cpp)
+        hal/test_time.cpp
+        kernel/test_app_registry.cpp
+        kernel/test_framework.cpp)
 
 # 测试内部用 "fakes/fakes.h" 这种从 tests/ 起算的相对包含。
 target_include_directories(embark_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")

@@ -1,22 +1,27 @@
 /**
- * 宿主 · LVGL 界面演示（issues/05）
+ * 宿主 · UI 演示可执行文件（issues/06）
  *
- * 这个可执行文件是"宿主真的有屏"的证据：SDL2 窗口 + RGB565 纹理 + LVGL 8.3.11，
- * 走向 HAL（IDisplay/IInput）而不是直接调 SDL —— 于是它与真机跑的是同一条链路。
+ * 从 issue 06 起，这个程序是"唯一 UI 任务"的第一个真实例子：
+ *   进程入口 main 只做两件事 —— 起 UI 任务（FreeRTOS 静态任务）+ 进调度器；
+ *   真正的启动与主循环全在 ui_main 里（= 那个唯一 UI 任务）：
+ *     HAL（SDL 窗口在创建它的线程上泵事件）→ UI 端口（唯一允许调 lv_timer_handler()
+ *     的地方）→ Framework（App 注册表 + 前台切换）→ 事件循环。
  *
- * 无人值守验收用的开关（会自动退出，不需要人去点窗口）：
+ * 无人值守验收开关（会自动退出，不需要人去点窗口）：
  *   --frames N        跑 N 帧后退出（默认 0 = 一直跑到关窗）
- *   --click           在第 20 帧合成一次鼠标点击（走 SDL_PushEvent → 真事件队列 → 输入后端）
- *   --click X,Y       指定面板坐标（默认点按钮中心）
+ *   --click [X,Y]     在第 20 帧合成一次鼠标点击（走 SDL_PushEvent → 真事件队列 → 输入后端）
+ *   --switch          合成两次点击验证前台切换：帧 30/32 点"Switch to app 2"，
+ *                     帧 50/52 点"Back to app 1"（同一坐标，两个前台 App 各中一个按钮）
  *   --screenshot FILE 最后一帧把窗口内容存成 BMP（用 Python/Pillow 转 PNG 便于查看）
  *   --scale S         窗口放大倍数（默认 2）
  *   --delay MS        每帧间隔（默认 5）
+ *   --quit-at N       第 N 帧推一个关窗事件（验收「关窗干净退出」用）
  *   --help            打印用法
  *
  * 界面文案是英文：LVGL 内置字体只有 Montserrat（无中文字形），中文文案要配自定义字体，
  * 那是 issue 12 的事。日志照旧是中文。
  *
- * 退出码：0 = 正常；1 = 后端起不来；2 = 用 --click 点了但按钮没响应（验收判据）。
+ * 退出码：0 = 正常；1 = 后端起不来；2 = 验收失败（点了但按钮没响应 / 切换钩子序不对）。
  */
 #include <cstdio>
 #include <cstdlib>
@@ -25,32 +30,30 @@
 #include <SDL.h>
 #include <lvgl.h>
 
-#include <embark/diagnostics.h>
 #include <embark/error.h>
-#include <embark/hal/context.h>
+#include <embark/framework.h>
+#include <embark/log.h>
 #include <embark_limits.h>
-#include <middleware/elog/elog.hpp>
 
+#include "demo_apps.h"
 #include "host_context.h"
 #include "host_display.h"
 #include "host_input.h"
 #include "host_lvgl_mem.h"
 #include "lvgl_port.h"
+#include "lvgl_ui_port.h"
+#include "ui_task.h"
 
 namespace {
 
-// 按钮几何：合成点击的默认目标就是它中心（面板坐标系）。
-constexpr int button_x = 110;
-constexpr int button_y = 150;
-constexpr int button_width = 100;
-constexpr int button_height = 40;
-constexpr int button_center_x = button_x + button_width / 2;
-constexpr int button_center_y = button_y + button_height / 2;
-
-/// 合成点击的帧号：先移动+按下，隔两帧再抬起 ——
-/// 让 LVGL 分两个读周期处理，点一下就是完整的一次"按下 → 抬起"。
+// 合成点击的帧号：先移动+按下，隔两帧再抬起 ——
+// 让 LVGL 分两个读周期处理，点一下就是完整的一次"按下 → 抬起"。
 constexpr int click_move_frame = 20;
 constexpr int click_release_frame = click_move_frame + 2;
+constexpr int switch_move_frame = 30;    // "Switch to app 2"（counter 屏幕上，见 demo_apps.h）
+constexpr int switch_release_frame = switch_move_frame + 2;
+constexpr int back_move_frame = 50;      // "Back to app 1"（switch 屏幕上，同一个坐标点）
+constexpr int back_release_frame = back_move_frame + 2;
 
 struct Options {
   int frames = 0;
@@ -58,9 +61,10 @@ struct Options {
   int delay_ms = 5;
   const char* screenshot = nullptr;
   bool click = false;
-  int click_x = button_center_x;
-  int click_y = button_center_y;
+  int click_x = embark::platform::host::demo_click_center_x;
+  int click_y = embark::platform::host::demo_click_center_y;
   int quit_at = 0;  ///< >0 时在第 N 帧推一个 SDL_QUIT（等价于用户点窗口的关闭按钮）
+  bool switch_mode = false;
 };
 
 void print_usage() {
@@ -68,12 +72,13 @@ void print_usage() {
       "用法：embark_host_ui [选项]\n"
       "  --frames N         跑 N 帧后退出（默认 0：一直跑到关窗）\n"
       "  --click [X,Y]      合成一次鼠标点击（默认点按钮中心 %d,%d）\n"
+      "  --switch           合成两次点击验证前台切换（counter→switch→counter）\n"
       "  --quit-at N        第 N 帧推一个关窗事件（验收「关窗干净退出」用）\n"
       "  --screenshot FILE  最后一帧存 BMP 截图\n"
       "  --scale S          窗口放大倍数（默认 2）\n"
       "  --delay MS         每帧间隔毫秒（默认 5）\n"
       "  --help             显示本帮助\n",
-      button_center_x, button_center_y);
+      embark::platform::host::demo_click_center_x, embark::platform::host::demo_click_center_y);
 }
 
 /// 解析 "X,Y"（失败就用默认值）。
@@ -105,6 +110,8 @@ Options parse_options(int argc, char** argv) {
       if (index + 1 < argc && argv[index + 1][0] != '-') {
         parse_point(argv[++index], options.click_x, options.click_y);
       }
+    } else if (std::strcmp(arg, "--switch") == 0) {
+      options.switch_mode = true;
     } else if (std::strcmp(arg, "--help") == 0 || std::strcmp(arg, "-h") == 0) {
       print_usage();
       std::exit(0);
@@ -117,48 +124,6 @@ Options parse_options(int argc, char** argv) {
     options.delay_ms = 0;
   }
   return options;
-}
-
-lv_obj_t* g_counter_label = nullptr;
-int g_clicks = 0;
-
-void on_button_clicked(lv_event_t* event) {
-  (void)event;
-  ++g_clicks;
-  if (g_counter_label != nullptr) {
-    lv_label_set_text_fmt(g_counter_label, "Clicks: %d", g_clicks);
-  }
-  ELOG_INFO("按钮点击：第 {} 次", g_clicks);
-}
-
-/// 界面：标题 + 提示 + 计数 + 一个按钮。尺寸都在 config/embark_limits.h 里定死。
-void build_ui() {
-  lv_obj_t* screen = lv_scr_act();
-  lv_obj_set_style_bg_color(screen, lv_color_make(0x12, 0x18, 0x20), LV_PART_MAIN);
-
-  lv_obj_t* title = lv_label_create(screen);
-  lv_label_set_text(title, "Embark host UI");
-  lv_obj_set_style_text_color(title, lv_color_make(0xf0, 0xf4, 0xf8), LV_PART_MAIN);
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 20);
-
-  lv_obj_t* hint = lv_label_create(screen);
-  lv_label_set_text(hint, "SDL2 + LVGL 8.3.11 via HAL");
-  lv_obj_set_style_text_color(hint, lv_color_make(0x8a, 0x9a, 0xaa), LV_PART_MAIN);
-  lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, 44);
-
-  g_counter_label = lv_label_create(screen);
-  lv_label_set_text(g_counter_label, "Clicks: 0");
-  lv_obj_set_style_text_color(g_counter_label, lv_color_make(0x6c, 0xd4, 0xff), LV_PART_MAIN);
-  lv_obj_align(g_counter_label, LV_ALIGN_TOP_MID, 0, 80);
-
-  lv_obj_t* button = lv_btn_create(screen);
-  lv_obj_set_size(button, button_width, button_height);
-  lv_obj_align(button, LV_ALIGN_TOP_LEFT, button_x, button_y);
-  lv_obj_add_event_cb(button, on_button_clicked, LV_EVENT_CLICKED, nullptr);
-
-  lv_obj_t* button_label = lv_label_create(button);
-  lv_label_set_text(button_label, "Click me");
-  lv_obj_center(button_label);
 }
 
 // --- 合成输入：走 SDL 自己的事件队列，等于把"人在窗口上点了一下"喂给整条链路 ---
@@ -210,64 +175,85 @@ bool save_screenshot(embark::platform::host::HostDisplay& display, const char* p
 
 }  // namespace
 
-int main(int argc, char** argv) {
-  std::setvbuf(stdout, nullptr, _IONBF, 0);  // 重定向到文件时也能看到进度
+namespace embark::platform::host {
 
-  const Options options = parse_options(argc, argv);
+// 整个可执行文件只出现一次的 App 注册表：CounterApp 是默认前台，SwitchApp 待命。
+EMBARK_APP_TABLE(CounterApp, SwitchApp)
 
-  embark::platform::host::HostHal& hal = embark::platform::host::HostHal::instance();
-  embark::platform::host::HostDisplay display(static_cast<std::uint8_t>(options.scale), "Embark 宿主 UI");
-  embark::platform::host::HostInput input(hal.time(), display);
+}  // namespace embark::platform::host
+
+using embark::Error;
+using embark::Framework;
+
+namespace hp = embark::platform::host;
+
+/// 唯一 UI 任务。SDL 的窗口与事件泵要求同线程，LVGL 只允许一条线上跑，
+/// 所以 HAL 初始化、UI 端口、App 前台、事件循环全都在这一个任务里（spec §6）。
+void ui_main(void* argument) noexcept {
+  const Options* options = static_cast<const Options*>(argument);
+
+  hp::HostHal& hal = hp::HostHal::instance();
+  hp::HostDisplay display(static_cast<std::uint8_t>(options->scale), "Embark 宿主 UI");
+  hp::HostInput input(hal.time(), display);
   hal.attach_display(display);
   hal.attach_input(input);
 
-  const embark::Error hal_error = hal.init();
-  if (hal_error != embark::Error::none) {
+  if (const Error hal_error = hal.init(); hal_error != Error::none) {
     std::fprintf(stderr, "HAL 初始化失败：%s\n", embark::to_string(hal_error));
-    return 1;
+    hp::exit_process(1);
   }
   ELOG_INFO("HAL 就绪：显示 {}×{}，输入 {}，持久化 {}",
             static_cast<int>(display.info().width), static_cast<int>(display.info().height),
             input.is_ready() ? "就绪" : "未就绪", hal.storage_path());
 
-  embark::platform::host::LvglPort port(hal.context());
-  const embark::Error lvgl_error = port.init();
-  if (lvgl_error != embark::Error::none) {
-    std::fprintf(stderr, "LVGL 端口初始化失败：%s\n", embark::to_string(lvgl_error));
-    return 1;
+  hp::LvglUiPort ui_port(hal.context(), display, input);
+  Framework framework(hal.context(), hp::embark_apps(), &ui_port);
+  if (const Error boot_error = framework.boot(); boot_error != Error::none) {
+    std::fprintf(stderr, "框架启动失败：%s\n", embark::to_string(boot_error));
+    hp::exit_process(1);
   }
-
-  build_ui();
   // LVGL_VERSION_* 是整数宏（third_party/lvgl/lvgl.h:16-18），拼字符串要逐个占位。
-  ELOG_INFO("界面已创建：LVGL {}.{}.{}，绘制缓冲 {} 行，LVGL 堆预算 {} 字节", LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR,
+  ELOG_INFO("框架就绪：{} 个 App，默认前台 {}；LVGL {}.{}.{}，绘制缓冲 {} 行，LVGL 堆预算 {} 字节",
+            framework.apps().size(), framework.apps().at(0)->name(), LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR,
             LVGL_VERSION_PATCH, static_cast<int>(embark::lvgl_draw_buf_lines), embark::lvgl_alloc_budget_bytes);
 
   int frames_run = 0;
-  bool screenshot_done = (options.screenshot == nullptr);
-  bool quit_by_window = false;
+  bool screenshot_done = (options->screenshot == nullptr);
 
   for (;;) {
-    port.tick();
-    port.pump_input();
-    lv_timer_handler();  // issue 05：LVGL 只被这条主循环调用；issue 06 起由唯一的 UI 任务调用
+    // 一帧 = UI 端口喂时间 → 喂输入 → （框架在边界执行前台切换）→ LVGL 渲染
+    framework.step();
     ++frames_run;
 
-    if (input.quit_requested()) {
-      quit_by_window = true;
+    if (framework.exit_requested()) {
       ELOG_INFO("收到关窗请求：第 {} 帧，开始收尾", frames_run);
       break;
     }
 
-    if (options.click) {
+    if (options->click) {
       if (frames_run == click_move_frame) {
-        ELOG_INFO("合成点击：移动 + 按下 ({},{})", options.click_x, options.click_y);
-        push_motion_and_press(options.scale, options.click_x, options.click_y);
+        ELOG_INFO("合成点击：移动 + 按下 ({},{})", options->click_x, options->click_y);
+        push_motion_and_press(options->scale, options->click_x, options->click_y);
       } else if (frames_run == click_release_frame) {
-        push_release(options.scale, options.click_x, options.click_y);
+        push_release(options->scale, options->click_x, options->click_y);
       }
     }
 
-    if (options.quit_at > 0 && frames_run == options.quit_at) {
+    if (options->switch_mode) {
+      if (frames_run == switch_move_frame) {
+        ELOG_INFO("合成点击：切换按钮 ({},{})", hp::demo_switch_center_x, hp::demo_switch_center_y);
+        push_motion_and_press(options->scale, hp::demo_switch_center_x, hp::demo_switch_center_y);
+      } else if (frames_run == switch_release_frame) {
+        push_release(options->scale, hp::demo_switch_center_x, hp::demo_switch_center_y);
+      } else if (frames_run == back_move_frame) {
+        ELOG_INFO("合成点击：返回按钮 ({},{})", hp::demo_click_center_x, hp::demo_click_center_y);
+        push_motion_and_press(options->scale, hp::demo_click_center_x, hp::demo_click_center_y);
+      } else if (frames_run == back_release_frame) {
+        push_release(options->scale, hp::demo_click_center_x, hp::demo_click_center_y);
+      }
+    }
+
+    if (options->quit_at > 0 && frames_run == options->quit_at) {
       // 等价于用户点窗口右上角的 ×：SDL_QUIT 进事件队列，由输入后端认出来再置 quit_requested_
       // （下一帧的 pump_input 会读走它）—— 验收「关窗干净退出」走的就是这条路径。
       SDL_Event quit{};
@@ -275,33 +261,71 @@ int main(int argc, char** argv) {
       SDL_PushEvent(&quit);
     }
 
-    if (options.frames > 0 && frames_run >= options.frames) {
+    if (options->frames > 0 && frames_run >= options->frames) {
       if (!screenshot_done) {
         screenshot_done = true;
-        if (save_screenshot(display, options.screenshot)) {
-          ELOG_INFO("截图已保存：{}", options.screenshot);
+        if (save_screenshot(display, options->screenshot)) {
+          ELOG_INFO("截图已保存：{}", options->screenshot);
         }
       }
-      ELOG_INFO("跑满 {} 帧，正常退出", options.frames);
+      ELOG_INFO("跑满 {} 帧，正常退出", options->frames);
       break;
     }
 
-    if (options.delay_ms > 0) {
-      SDL_Delay(static_cast<Uint32>(options.delay_ms));
+    hp::ui_loop_delay(static_cast<std::uint32_t>(options->delay_ms));
+  }
+
+  const hp::CounterApp& counter = *static_cast<const hp::CounterApp*>(framework.app(0));
+  const hp::SwitchApp& switch_app = *static_cast<const hp::SwitchApp*>(framework.app(1));
+
+  ELOG_INFO("统计：帧 {}，刷新 {} 次（{} 字节），Present {} 次，前台 {}（切换 {} 次），点击 {} 次，"
+            "counter 前台 enter {}/resume {}，switch 前台 enter {}/resume {}，丢输入 {}，忽略按键 {}，UI 任务栈余量 {} 字",
+            frames_run, ui_port.port().refreshes(), ui_port.port().flush_bytes(), display.presents(),
+            framework.apps().at(framework.foreground())->name(), framework.switches(), counter.clicks(),
+            counter.enters(), counter.resumes(), switch_app.enters(), switch_app.resumes(),
+            ui_port.port().dropped_input_events(), ui_port.port().ignored_key_events(),
+            static_cast<unsigned long>(uxTaskGetStackHighWaterMark(nullptr)));
+  ELOG_INFO("LVGL 堆：分配 {} 次，峰值 {} 字节，退出前未回收 {} 字节（预算 {}）", hp::lvgl_allocations(),
+            hp::lvgl_peak_bytes(), hp::lvgl_outstanding_bytes(), embark::lvgl_alloc_budget_bytes);
+
+  int exit_code = 0;
+  if (options->click && counter.clicks() == 0) {
+    std::fprintf(stderr, "合成点击没有触发按钮回调（验收失败）\n");
+    exit_code = 2;
+  }
+  if (exit_code == 0 && options->switch_mode) {
+    // 切换验收：counter→switch→counter 恰好 2 次；onEnter 只在第一次，切回走 onResume。
+    const bool hooks_ok = framework.switches() == 2U && counter.enters() == 1U && counter.resumes() == 1U &&
+                          switch_app.enters() == 1U && switch_app.resumes() == 0U;
+    if (!hooks_ok) {
+      std::fprintf(stderr,
+                   "前台切换验收失败：切换 %u 次（期望 2），counter enter %u/resume %u（期望 1/1），"
+                   "switch enter %u/resume %u（期望 1/0）\n",
+                   framework.switches(), counter.enters(), counter.resumes(), switch_app.enters(),
+                   switch_app.resumes());
+      exit_code = 2;
     }
   }
 
-  ELOG_INFO("统计：帧 {}，刷新 {} 次（{} 字节），Present {} 次，按钮点击 {} 次，丢输入 {}，忽略按键 {}", frames_run,
-            port.refreshes(), port.flush_bytes(), display.presents(), g_clicks, port.dropped_input_events(),
-            port.ignored_key_events());
-  ELOG_INFO("LVGL 堆：分配 {} 次，峰值 {} 字节，退出前未回收 {} 字节（预算 {}）", embark::platform::host::lvgl_allocations(),
-            embark::platform::host::lvgl_peak_bytes(), embark::platform::host::lvgl_outstanding_bytes(),
-            embark::lvgl_alloc_budget_bytes);
+  framework.shutdown();
+  hp::exit_process(exit_code);
+}
 
-  if (options.click && g_clicks == 0) {
-    std::fprintf(stderr, "合成点击没有触发按钮回调（验收失败）\n");
-    return 2;
+int main(int argc, char** argv) {
+  std::setvbuf(stdout, nullptr, _IONBF, 0);  // 重定向到文件时也能看到进度
+
+  Options options = parse_options(argc, argv);
+
+  ELOG_INFO("UI 任务启动：栈 {} 字（{} KB），优先级 {}，周期 {} ms", embark::ui_task_stack_words,
+            embark::ui_task_stack_words * 4 / 1024, static_cast<int>(embark::ui_task_priority),
+            embark::ui_loop_period_ms);
+
+  const Error task_error = hp::start_ui_task(&ui_main, &options);
+  if (task_error != Error::none) {
+    std::fprintf(stderr, "启动 UI 任务失败：%s\n", embark::to_string(task_error));
+    return 1;
   }
-  (void)quit_by_window;
-  return 0;
+
+  hp::start_scheduler();  // 永不返回（调度器把控制权交给 UI 任务；收尾走 exit_process）
+  return 0;               // 编译器路径：永远到不了
 }
