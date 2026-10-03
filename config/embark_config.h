@@ -14,11 +14,12 @@
 #define EMBARK_CONFIG_H
 
 /* --- ETL 版本锁定（spec §16.3）------------------------------------------- */
-/* 我们逐条核实过的是 20.40.0（见 .scratch/embark-v1/issues/01-etl-version-verify.md）。
- * 换版本必须先按 spec §16.3 的 12 条清单复核，复核完再改下面的数字。 */
+/* 仓库锁的 submodule 是 20.49.0；20.40.0 → 20.49.0 的升级已按 spec §16.3 的 12 条清单
+ * 复核完（见 .scratch/embark-v1/issues/01-etl-version-verify.md）。
+ * 再换版本必须重跑那 12 条，复核完再改下面的数字。 */
 #include <middleware/etl/version.h>
 
-static_assert(ETL_VERSION_MAJOR == 20 && ETL_VERSION_MINOR == 40,
+static_assert(ETL_VERSION_MAJOR == 20 && ETL_VERSION_MINOR == 49,
               "ETL 版本变了：先按 spec §16.3 的清单复核，再改 config/embark_config.h");
 
 /* --- 要定义的 ETL 宏 ----------------------------------------------------- */
@@ -27,9 +28,16 @@ static_assert(ETL_VERSION_MAJOR == 20 && ETL_VERSION_MINOR == 40,
  * 不定义时 ETL 默认 ETL_USING_STL=1（platform.h:89-95）。 */
 #define ETL_NO_STL 1
 
-/* 容器 push/pop 的边界检查 —— 全库 82 处，守着 vector/deque/list/stack/queue 等
- * （spec §16.2）。不定义就完全不检查：往满容器里写不会报错，会直接把内存写坏。 */
+/* 容器边界检查 —— 20.49.0 把它收拢成了三个开关，全在 error_handler.h:537-565：
+ *   ETL_CHECK_PUSH_POP         push/pop 的满/空检查（90 处调用点，覆盖 vector、deque、list、
+ *                              forward_list、stack、queue、priority_queue、intrusive 族、indirect_vector）
+ *   ETL_CHECK_INDEX_OPERATOR   operator[] 的下标检查（15 处：vector/array/span/string_view/…）
+ *   ETL_CHECK_EXTRA            其余前置条件（122 处：front/back 不能空、insert/erase 的迭代器区间合法…）
+ * 三个都不定义时，对应的宏展开成空 —— 往满容器里写既不报错也不记录，直接把内存写坏。
+ * v1 开前两个（直接对应内存安全）；ETL_CHECK_EXTRA 更严但面更大，暂时留着不定义，
+ * 哪天想连 front/back 空访问一起抓，把下面这行打开即可。 */
 #define ETL_CHECK_PUSH_POP 1
+#define ETL_CHECK_INDEX_OPERATOR 1
 
 /* 目标 OS：ETL 只靠这一个宏挑互斥实现（mutex.h:37）。ETL 自己没有任何地方定义它，
  * 不给就会落到 ETL_COMPILER_GCC → mutex_gcc_sync.h，所以最终必须由我们定义。

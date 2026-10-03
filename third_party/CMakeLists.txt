@@ -1,6 +1,6 @@
 # 第三方依赖（spec §12）：全部用 git submodule 引入并锁死版本。
 #
-#   etl         ETLCPP/etl 20.40.0        —— 定容容器、消息、状态机等（spec §16）
+#   etl         ETLCPP/etl 20.49.0        —— 定容容器、消息、状态机等（spec §16）
 #   efmt-elog   ruixuezhao890/efmt-elog   —— 格式化与日志（上游无版本号，锁 commit）
 #   doctest     doctest/doctest v2.4.11   —— 宿主单元测试（spec §13）
 #
@@ -27,5 +27,5 @@ add_library(embark_efmt INTERFACE)
 
 add_subdirectory(doctest)  # 作为子项目引入时，它自己的测试默认不建
 
-# 挂到公共编译选项上：所有 Embark 目标都能用 <middleware/...> 与 <elog/elog.hpp>
+# 挂到公共编译选项上：所有 Embark 目标都能用 <middleware/...>（唯一写法）
 target_link_libraries(embark_build_options INTERFACE etl::etl embark_efmt)

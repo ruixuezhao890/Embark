@@ -53,10 +53,9 @@ TEST_CASE("ETL 定容容器：容量固定、零堆") {
   CHECK(numbers.back() == 3);
 }
 
-TEST_CASE("ETL 版本符合 spec §16 的核实基线") {
-  CHECK(ETL_VERSION_MAJOR == 20);
-  CHECK(ETL_VERSION_MINOR == 40);
-}
+/* 这里原本还有一条「ETL 版本 == 20.40.0」的用例，已删：版本基线由
+ * config/embark_config.h 的 static_assert 守着（强制包含进每个 TU），编译期就拦下来，
+ * 运行期再抄一遍数字只会在换版本时制造第二处要改的地方（code-review 指出的重复）。 */
 
 TEST_CASE("elog + efmt 在测试目标里也能用") {
   e_log::logger* const logger =

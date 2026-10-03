@@ -26,7 +26,7 @@ Blocked by: —
 
 ## Answer
 
-**结论（建议）：把依赖从 20.40.0 升到 20.49.0 —— 12 条复核全部无回归，且拿到两处对我们直接有用的东西。**
+**结论（建议，已被采纳）：把依赖从 20.40.0 升到 20.49.0 —— 12 条复核全部无回归，且拿到两处对我们直接有用的东西。**（用户 2026-10-03 拍板升级，执行结果见文末第 7 节。）
 **本 issue 的核实动作没有改过依赖指针**（只读文件 + 在 `%TEMP%` 里编探针），仓库现在仍锁 20.40.0 = `c882a9c5004d546bb23bd0f758ae40cd57d1b063`；升版等用户点头，要换的清单见文末。
 
 > 历史更正（code-review 指出）：中间提交 `b47dbce` 曾把 submodule 指针记成 etl `4707b6b1`（= 20.49.0-7，`git submodule add` 当时的克隆 HEAD）与 doctest v2.5.0，`ccd1465` 已改回 20.40.0 / v2.4.11。**以 `ccd1465` 及之后的提交为准**，`b47dbce` 里的依赖指针不准。
@@ -101,3 +101,11 @@ g++ -std=c++17 -fno-exceptions -fno-rtti -Wall -Wextra -Wpedantic \
    - §12 / §15 的 ETL 行：从「先锁 20.40.0 / 20.49.0 待复核」改成「锁 20.49.0（已按 12 条复核）」。
 4. 改完重跑：本 issue 第 1 节的编译命令（对 20.49.0）+ `cmake -G Ninja -B build` + `ctest`。
 5. 若你决定**不升**（继续 20.40.0）：上面 1–2 项不做，其余"20.49.0 的优点"（`and_then`/IDF 布局）留到 issue 11 时再评估——代价是那时再复核一次 §16 表。
+
+### 7. 执行结果：已升到 20.49.0（2026-10-03，用户拍板「升到 20.49.0」）
+
+- `third_party/etl` 指针已换到 `7d604f2e4f7fa79ff49bf675c089656943f9171b`（`git -C third_party/etl describe --tags` = `20.49.0`），已 stage。
+- `config/embark_config.h`：static_assert 改 `MINOR == 49`，并**新增 `#define ETL_CHECK_INDEX_OPERATOR 1`**（20.49.0 的三个边界检查开关 `ETL_CHECK_PUSH_POP` / `ETL_CHECK_INDEX_OPERATOR` / `ETL_CHECK_EXTRA` 定义在 `error_handler.h:537-565`；v1 开前两个，第三个在注释里说明怎么开）。
+- 删掉 `tests/smoke/main.cpp` 里那条硬编码 `ETL_VERSION_MINOR == 40` 的用例：换版本时它必然失败，而它是版本守卫的第二份副本 —— 唯一守卫是 `config/embark_config.h` 的 static_assert（强制包含进每个 TU）。
+- spec 已按 20.49.0 重标行号：§7（`message_bus.h:409`、`circular_buffer.h:1198`/`:953`/`:977`、`callback_timer.h:828`/`:54`/`:58`/`:69/:70`、`queue.h:320/:335`、版本风险行改为「已消」）、§12 ETL 行、§15 风险行、§16.1 九行、§16.2（`expected.h:246`、`ETL_HAS_MUTEX`/`ETL_HAS_ATOMIC` 出处、`ETL_CHECK_PUSH_POP` 行重写、`ETL_LOG_ERRORS` 分支行号、`ETL_USE_ASSERT_FUNCTION`/`platform.h:287`、repair 宏 `platform.h:255-263`、message/fsm id 宏、profile 派生链）、§16.3（复核结论 + static_assert 行）、§16.4 第 3 条、§16.5（`mutex.h:72`、`function.h:53/:72`）、§16.6 第 3 条（`task.h:80/:85`）；`third_party/CMakeLists.txt` 注释里的版本号与 include 写法同步更正。
+- 复验（全绿）：`cmake -G Ninja -B build` + `cmake --build build`（6/6）+ `ctest` → `1/1 Passed 0.31 sec`；`embark_host.exe` 三行 elog、exit 0；探针 `%TEMP%\embark-etl-probe\probe.cpp` 改为走项目自身配置（`-include config/embark_config.h -I build/include -I third_party/etl/include`）→ exit 0。
