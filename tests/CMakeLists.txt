@@ -11,6 +11,7 @@
 
 add_executable(embark_tests
         smoke/main.cpp
+        detail/test_allocation_counter.cpp
         fakes/fakes.cpp
         hal/test_bus.cpp
         hal/test_display.cpp

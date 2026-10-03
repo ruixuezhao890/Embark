@@ -17,6 +17,11 @@
 #
 # 视图是映射不是拷贝：Windows 用目录 junction（普通权限即可），其它平台用符号链接，
 # 只在配置期建一次。
+#
+# 为什么 LVGL 不在这个视图里：视图存在的唯一理由是「上游头文件自己写死了
+# <middleware/...> 形式的互相引用」。LVGL 不是这样 —— 它按 lvgl.h 引入
+# （LV_LVGL_H_INCLUDE_SIMPLE=ON，include 根是 third_party/lvgl 仓库根），
+# 给它也造一条 junction 只会多出第二套写法。见 third_party/CMakeLists.txt。
 
 # 建视图。参数：视图根目录（例如 ${CMAKE_BINARY_DIR}/include/middleware）
 function(embark_create_middleware_view view_dir)

@@ -30,7 +30,7 @@ v1 必须做到：
 
 | 目标 | 环境 | 显示/输入后端 | 持久化 | 日志后端 | 构建 |
 | --- | --- | --- | --- | --- | --- |
-| `host-sim` | Windows + MinGW-w64 GCC 15.1 | SDL2 窗口/事件 | 宿主文件 | stdout | CMake + Ninja |
+| `host-sim` | Windows + MinGW-w64 GCC 15.1 | SDL2 窗口/事件 + LVGL 8.3.11 | 宿主文件 | stdout | CMake + Ninja |
 | `esp32s3` | ESP32-S3（Touch-LCD-2.8 参考板） | ST7789 + 触摸（I2C） | NVS | UART0 | ESP-IDF 5.4（先 `export.ps1`） |
 
 宿主侧也跑 FreeRTOS（复用 `lvgl_template_laste` 已验证的 kernel + Windows port），为的是**让两个目标的任务模型完全一致**——同一份内核代码在两端走同一条调度路径，行为差异只来自 HAL 后端。**2026-10-04 已在 MinGW-w64 GCC 15.1 上实测跑通**（FreeRTOS V10.6.2 + `MSVC-MingW` 端口，2 任务 + 队列 + 5000 tick 长跑，见 `issues/02`）：调度、延时、队列语义与真机一致，但**时间轴不一致**——该端口逐拍 `Sleep()` 产生 tick，1 tick 实测 **2.00 ms**（标称 1 ms，线性不漂移）；因此宿主验收一律以 tick 相对量为判据，不拿墙钟时长当判据。宿主也没有「停调度器」这一步：`vTaskEndScheduler()` 会让进程挂死，生命周期跟着进程走（见 `issues/02`）。
@@ -85,6 +85,7 @@ public:
 ## 6. 执行模型
 
 - 全局唯一 UI 任务承载：输入事件处理 → 前台 App 回调 → `lv_timer_handler()` → 后台 tick 调度 → 消息派发。**它是全工程唯一允许操作 LVGL 与调用 `lv_timer_handler()` 的地方。**
+- issue 05 阶段还没有 UI 任务（任务在 06 落地），宿主演示的 main 循环就是这条链路的**临时唯一执行者**：`LvglPort::tick()` → `pump_input()`（抽干 HAL 输入队列）→ `lv_timer_handler()`。`LvglPort` 自己不注册任何 LVGL 定时器、不起线程，所以换成真任务时只需要把这三行的调用点搬进任务循环。
 - 循环节拍目标 5 ms 一跳（与既有两代框架一致），空闲时 `vTaskDelay` 让出；不忙等。（宿主上这一拍的实际墙钟约 2×，tick 语义不变，见 §3。）
 - 后台 tick 在 UI 任务里执行，因此**必须轻量**；周期由 `etl::callback_timer<MAX_TIMERS>` 按 per-App 配置驱动（见 §7）。
 - 逃生舱：`OwnTask` 策略的 App 由框架创建自己的任务，框架保证任务名唯一、启动时机在 `onCreate` 之后、消息经队列进出。
@@ -136,7 +137,8 @@ public:
 - 测试时链 fake 后端，接口不变。
 - 引脚、总线参数、屏幕型号一律走平台后端的编译期配置，**不进 HAL 接口**。
 - 装配：上层只拿一个 `hal::Context`（`ITime&` / `IPersistence&` / `ILogSink&` / `ISystem&` / `IBus&` + 可空的 `IDisplay*` / `IInput*`），**每个平台一份实例** —— 宿主是 `HostHal::instance()`，测试自己就地搭 fake 聚合（`tests/fakes/fakes.h` 的 `FakeHal`）。内核不持有全局单例，宿主后端 target 只被可执行文件链接，测试只链 `embark::core` + fake（否则宿主与测试各自的 `embark::fatal` / `assert_failed` 定义会撞车）。
-- 本 issue 落地宿主的时间 / 持久化 / 日志 sink / 系统控制 / 总线五个基础后端；显示与输入在 issue 05（SDL2）补真后端，接口与 fake 先定死。
+- 宿主后端已全部到位：时间 / 持久化 / 日志 sink / 系统控制 / 总线五个基础后端在 issue 04 落地；显示（SDL2 窗口 + 纹理）与输入（SDL2 事件）在 **issue 05** 落地，并接上 LVGL 8.3.11。接口与 fake 在 issue 04 已定死，两批后端都只改 `platform/host/`，`include/embark/hal/` 一行未动。
+- 宿主显示/输入的定稿契约（细节见 `issues/05-host-display-input-lvgl.md` 的 `## Answer`）：**单一像素格式 RGB565**（`IDisplay::flush` 的数据是紧凑布局，pitch = 区域宽 × 2；别的格式返回 `unsupported`）；**指针事件 key 恒为 0、按键事件 key 非 0**（0..255，此时 x/y 只是"按键那一刻指针在哪"——宿主鼠标的 button 号不许占用 `key`，否则上层会把点击当键盘事件整条丢掉）；**退出信号由输入后端捎带**（`SDL_QUIT` / 窗口关闭 → `IInput` 的退出查询，因为 SDL 只有一个事件队列、泵在 `poll()` 里，UI 循环必须抽干队列）。
 
 ## 9. 错误处理
 
@@ -151,7 +153,7 @@ public:
 
 - 内核：零动态分配；容器一律 ETL 定容版；`-fno-exceptions -fno-rtti`。
 - App 层默认同规则；宿主仿真可用编译开关放开（开关名实现时定）。
-- LVGL：allocator 由框架显式配置（真机静态池、宿主堆），并要求 UI 对象总量有上限；`lv_conf.h` 由本仓库自持（以 `lvgl_template_laste` 的宿主配置为起点改）。
+- LVGL：**已按此配置落地（issue 05）**——`config/lv_conf.h` 由本仓库自持（锁 8.3.11，只钉影响内存/尺寸/构图/可观测性的项，其余交给 `lv_conf_internal.h` 的 `#ifndef` 默认）；`LV_MEM_CUSTOM 1` + 我们自己的 `embark_lvgl_alloc/free/realloc`（`platform/host/host_lvgl_mem.cpp`，真机换成静态池实现），**带记账与预算上限**（`config/embark_limits.h` 的 `lvgl_alloc_budget_bytes`，默认 256 KB；超预算或分配失败返回 nullptr，由 `LV_USE_ASSERT_MALLOC` 带分配点行号进 `embark::fatal`）。真机上"UI 对象总量有上限"仍待 issue 11 用实测数字定，宿主侧已有 `lvgl_outstanding_bytes()` / `lvgl_peak_bytes()` 两个观测点。两处硬约束：`lv_conf.h` 的头护栏必须叫 `LV_CONF_H`；`LV_ASSERT_HANDLER` 宏必须自带结尾分号（LVGL 的展开是裸语句）。
 - 每个容器的容量上限必须是**代码里可查的常量**，集中放在 `config/`。
 
 ## 11. 目录结构与构建
@@ -161,17 +163,17 @@ embark/
 ├─ CMakeLists.txt                 顶层：host / esp32 两个 target
 ├─ include/embark/                公开头（App、Framework、HAL、Message、Error）
 ├─ src/                           内核实现
-├─ platform/host/                 宿主后端（SDL2 + 宿主 FreeRTOS port）
+├─ platform/host/                 宿主后端（SDL2 显示/输入 + LVGL 端口 + 宿主 FreeRTOS port 待并入）
 ├─ platform/esp32/                ESP32-S3 后端（IDF 组件形式）
 ├─ app/                           v1 自带示例 App（demo 用）
-├─ tests/                         doctest 测试
-├─ config/                        lv_conf.h、容量上限、平台开关
-├─ third_party/{efmt-elog,etl,doctest}/   submodule（锁 commit / tag）
+├─ tests/                         doctest 测试（tests/hal/ 能力、tests/fakes/ 假后端、tests/detail/ 内部工具）
+├─ config/                        lv_conf.h + LVGL 钩子声明、容量上限、平台开关
+├─ third_party/{efmt-elog,etl,doctest,lvgl}/   submodule（锁 commit / tag）
 └─ docs/                          使用文档（入口 docs/README.md）
 ```
 
 - include 约定：内部一律写 `<middleware/efmt/...>`、`<middleware/elog/...>` 与 `<middleware/etl/...>`；efmt-elog 的**仓库根不作为 include 根**，所以没有 `<elog/elog.hpp>` 这种写法（要用 eserde/ecli 时，再给它们各加一条视图链接，而不是把仓库根整个摊开）。`middleware/` 视图在**构建目录里生成**（Windows 用 junction），实际路径是 `<build>/include/middleware/{etl,efmt,elog}`，**include 根给 `<build>/include`** —— 视图本身就叫 `middleware/`，include 根不能再指到它头上，否则 `<middleware/etl/version.h>` 会被解析成 `<build>/middleware/middleware/etl/version.h`（骨架第一次配置就是这么挂的）。源码树保持干净；**绝不把 `etl/` 目录本身加进 include 路径**（同名 `string.h` 会遮蔽标准头）。eserde / ecli 暂不接入。
-- ETL 用上游的 `etl::etl` INTERFACE target；efmt/elog 上游没有 CMake，由我们包一层 `embark_efmt`（INTERFACE）。
+- ETL 用上游的 `etl::etl` INTERFACE target；efmt/elog 上游没有 CMake，由我们包一层 `embark_efmt`（INTERFACE）。LVGL 上游自带 CMake：`LV_CONF_PATH` 指到 `config/lv_conf.h`（用 `CACHE PATH`，LVGL 用 `option()` 声明它，已有缓存值不会被覆盖），它在默认构建里会顺带建出空的 `lvgl_examples` / `lvgl_demos`，我们用 `EXCLUDE_FROM_ALL` 把它们挡在默认构建外；`embark_lvgl` 包一层（INTERFACE，链 `lvgl::lvgl`）。**LVGL 不进 `middleware/` 视图**：视图的唯一理由是满足上游写死的 `<middleware/...>` 互相引用，LVGL 按 `<lvgl.h>` 引入即可（再造 junction 只会多出第二套写法）。
 - 命名：类型 PascalCase、函数/变量 snake_case、文件名 snake_case、宏 `EMBARK_*`、命名空间 `embark`。
 
 ## 12. 依赖与版本
@@ -181,7 +183,7 @@ embark/
 | efmt-elog（EFmt + ELog） | 锁 **commit SHA**（上游无 tag、无版本声明） | submodule → `embark_efmt` |
 | ETLCPP/etl | **锁 20.49.0**（submodule `7d604f2e4f7fa79ff49bf675c089656943f9171b`；已按 §16.3 的 12 条复核：零回归 + `expected` 组合子 + `mutex_freertos.h` 认 ESP-IDF 布局，见 `issues/01`） | submodule（锁 commit）→ `etl::etl` |
 | doctest | v2.4.11（锁 tag/commit） | submodule → `doctest::doctest`（只进测试目标） |
-| LVGL | 8.3.x，固定一个小补丁版 | submodule；`lv_conf.h` 自持 |
+| LVGL | **锁 v8.3.11**（8.3 线最后补丁，submodule gitlink `74d0a816a440eea53e030c4f1af842a94f7ce3d3`） | submodule → `embark_lvgl`（INTERFACE 包 `lvgl::lvgl`）；`config/lv_conf.h` 自持，`LV_CONF_PATH` 指过去 |
 | FreeRTOS | 真机用 ESP-IDF 5.4 自带；宿主用 kernel + Windows port | 平台侧 |
 
 许可证 **MIT**；版本从 `0.1.0` 起、在 `main` 上打 tag，API 稳定前不承诺兼容。
@@ -191,10 +193,13 @@ embark/
 - 测试框架 **doctest**（单头、编译快、无堆友好）。
 - 宿主测试覆盖：前台切换、后台 tick 周期、消息溢出策略、日志门面、错误路径（`expected`）、App 注册表顺序。
 - HAL 能力测试（`tests/hal/`）：七个能力各一条成功 + 一条失败路径，用 `tests/fakes/` 的假后端；fake 与宿主持久化后端**共用 `include/embark/detail/kv_slot.h` 的同一套槽编解码**（magic `EKV1` / state / key_len / value_len / CRC32 / key[16] / value[64] = 92 字节），任何一方改格式，另一方的测试立刻红。
+- 内部工具测试（`tests/detail/`）：`AllocationCounter` 六个用例（累计与峰值、释放保留峰值、realloc 按差值、释放对不上夹 0、`over_budget` 严格大于、`reset` 清空）——LVGL allocator 的记账与预算就是靠它（`include/embark/detail/allocation_counter.h`，header-only）。
+- LVGL 端口不做单测（它必须是"一个进程一份"的全局状态），靠宿主可执行文件的自动验收开关覆盖；LCD 真机那条线在 issue 11。
 - 日志串行化层必须按**整行**工作：elog 的一条记录会分 3 次 `sink.write`（带颜色时）+ 1 次换行写（`elog.hpp:222/224`），逐次加锁挡不住交错；`LogSinkBinder` 攒成整行后一次 `write` + 一次 `flush`，并以 `lines_written()` / `bytes_written()` / `pending_bytes()` 暴露观测点（测试断言一条记录 = 后端一次 `write` = 一次 `flush`）。
 - 宿主时间轴：FreeRTOS Windows port 的 1 tick 实测 ≈ **2.00 ms**（`issues/02`），所以时间相关断言只认 tick 相对量（回调次数 / 周期 / 溢出计数），**不写墙钟时长断言**；确需墙钟的用例单独标 `host-timing` 并给放宽系数。
 - CI（GitHub Actions）三个 job：`host build + test`（ubuntu）、`esp32 build`（espressif/idf 容器，只编不烧）、`clang-format --dry-run`（仅 CI 跑；本机无 clang-format，不强制）。
-- UI 不做无头截图测试，靠宿主窗口人工验。
+- UI 不做 CI 里的无头截图测试，但宿主可执行文件自带**自动验收开关**（issue 05 起）：`--frames N`（跑满 N 帧即退）、`--screenshot FILE`（存 BMP，走 `SDL_RenderReadPixels`，须在 Present 之前读，否则后备缓冲内容未定义）、`--click [X,Y]`（用 `SDL_PushEvent` 把合成点击塞进 SDL 真事件队列，等于"人点了一下"；按钮没被触发则以退出码 2 失败）、`--quit-at N`（第 N 帧合成 `SDL_QUIT`，等价于点窗口 ×）。CI 仍只跑 `ctest`，窗口类验收在本机用这些开关做（截图证据见 `.scratch/embark-v1/evidence/`）。
+- 找不到 SDL2 时不失败：只跳过 `embark_host_ui` 目标并打一行 STATUS，内核 / 后端 / 测试照常构建（CI 的 ubuntu job 就是这样过的）。
 
 ## 14. 验收标准（v1 完成的定义）
 
@@ -212,7 +217,7 @@ embark/
 - **ETL 版本风险：已消（2026-10-03）**。本机副本（20.40.0 / 20.39.4）曾都旧于上游 20.49.0，现已按 §16.3 的 12 条对 20.49.0 逐条复核并把它锁成依赖（`issues/01-etl-version-verify.md`），spec §7 / §16 的行号与结论已同步。唯一仍开放的小项：完全离线构建时是否改为 vendor 本机 20.40.0 副本（不阻塞 v1，需要时再议）。
 - ESP32-S3 具体板型（Touch-LCD-2.8 还是 devkit 接线）与触摸控制器型号：**已决定推迟**到做 esp32 后端时确认（宿主那条线完全不依赖它，见 `issues/11-esp32s3-backend.md`）。
 - 宿主 FreeRTOS port 来自 `lvgl_template_laste`：**已在 GCC 15.1 上验证可编可跑（2026-10-04，见 `issues/02`）**，源码清单 / CMake 片段 / `FreeRTOSConfig.h` 必改项都在该 issue 的 `## Answer`，证据与探针源码留档在 `.scratch/embark-v1/spikes/02-host-freertos/`。残留两个小项（不阻塞）：① 该端口 tick 比墙钟慢约 2×（见 §3 / §13）；② vendor 进仓库后是否顺手消掉上游的 2 条严格警告（`queue.c:489`、`port.c:249`）。
-- LVGL 8.3.x 的具体补丁版号在接入时敲定。
+- LVGL 补丁版号：**已定 v8.3.11（2026-10-04，issue 05）**。8.3 线上游已停更，选它是因为它与既有两代工程（8.3.6 / 8.3.x）的 API 一致、且是 8.3 线最后的补丁；`LV_MEM_CUSTOM 1` 下上游**没有 `lv_deinit`**（`lv_obj.h:206-214` 的门是 `LV_ENABLE_GC || !LV_MEM_CUSTOM`），所以进程内 LVGL 只初始化一次、退出时靠 `lvgl_outstanding_bytes()` 观测是否有泄漏。
 
 ## 16. ETL 可复用组件清单（开工前定稿，避免边写边改）
 

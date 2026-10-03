@@ -30,9 +30,20 @@ class HostHal {
   HostHal& operator=(const HostHal&) = delete;
 
   /// 依次初始化各后端并装好默认 logger。返回第一个失败项；none = 全部就绪。
+  /// 顺序：log → storage → display → input（日志最先：后面每一步失败都要有出口；
+  /// 输入在显示之后：宿主输入后端要借显示的窗口/渲染器换算坐标）。
   [[nodiscard]] Error init() noexcept;
 
+  /// 挂上显示/输入后端（issues/05）。必须在 init() 之前调用 —— 装配点在 host 入口一处，
+  /// 与 hal::Context 的"引用成员、只造一份"是同一条纪律。
+  void attach_display(hal::IDisplay& display) noexcept { context_.display = &display; }
+  void attach_input(hal::IInput& input) noexcept { context_.input = &input; }
+
   [[nodiscard]] hal::Context& context() noexcept { return context_; }
+
+  /// HAL 时间轴。宿主输入后端拿它给事件打时间戳（HostInput 的构造参数），
+  /// LVGL 端口也用它推进 LVGL 的时钟（LvglPort::tick）。
+  [[nodiscard]] hal::ITime& time() noexcept { return time_; }
 
   [[nodiscard]] const char* storage_path() const noexcept { return storage_.path(); }
 

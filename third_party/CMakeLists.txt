@@ -3,6 +3,7 @@
 #   etl         ETLCPP/etl 20.49.0        —— 定容容器、消息、状态机等（spec §16）
 #   efmt-elog   ruixuezhao890/efmt-elog   —— 格式化与日志（上游无版本号，锁 commit）
 #   doctest     doctest/doctest v2.4.11   —— 宿主单元测试（spec §13）
+#   lvgl        lvgl/lvgl v8.3.11         —— GUI 库，宿主与目标共用（spec §10、issue 05）
 #
 # 依赖相关的编译期宏（ETL_NO_STL、ETL_TARGET_OS_FREERTOS 等）不在这里配，
 # 统一放在 config/embark_config.h —— 单一事实来源（spec §16.2）。
@@ -26,6 +27,40 @@ add_subdirectory(etl)      # 上游自带 CMake，导出 etl::etl；include 根 
 add_library(embark_efmt INTERFACE)
 
 add_subdirectory(doctest)  # 作为子项目引入时，它自己的测试默认不建
+
+# ---------------------------------------------------------------------------
+# LVGL 8.3.11（issue 05）：宿主（SDL2 窗口）与目标（ST7789）共用同一份 GUI 库与配置。
+#
+# 配置自持在 config/lv_conf.h，不依赖上游 examples/ 里的模板；LVGL 的写法是
+# #include "lvgl.h"（LV_LVGL_H_INCLUDE_SIMPLE），所以它不进 middleware/ 视图
+# （那个视图只为满足上游写死的 <middleware/...> 路径而存在，见 cmake/embark_middleware.cmake）。
+# 没有 FORCE：命令行 -DLV_CONF_PATH=... 已经有值时这里不覆盖它。
+# ---------------------------------------------------------------------------
+set(LV_CONF_PATH "${PROJECT_SOURCE_DIR}/config/lv_conf.h"
+    CACHE PATH "LVGL 配置文件路径（本工程自持：config/lv_conf.h）")
+
+# LVGL 自己的 install() 会触发 CMake 的开发者警告 CMP0177（安装路径归一化）。
+# 我们不用 install，但也不想让第三方在配置期刷警告：只对这个子目录把该策略设为 NEW。
+set(CMAKE_POLICY_DEFAULT_CMP0177 NEW)
+
+add_subdirectory(lvgl)     # 上游自带 CMake，导出 lvgl::lvgl；include 根 = third_party/lvgl
+
+# LVGL 是第三方全 C 代码且我们不改它：把我们自己的告警标准挡在它外面。
+if(MSVC)
+  target_compile_options(lvgl PRIVATE /w)
+else()
+  target_compile_options(lvgl PRIVATE -w)
+endif()
+
+# 上游无条件把 examples/ 与 demos/ 也建成静态库；我们的 lv_conf.h 已把
+# LV_BUILD_EXAMPLES / LV_USE_DEMO_* 全关（编成空翻译单元），这里让它们不进默认构建。
+# 将来要跑官方示例时，去掉这两行属性即可。
+if(TARGET lvgl_examples)
+  set_target_properties(lvgl_examples lvgl_demos PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
+
+add_library(embark_lvgl INTERFACE)
+target_link_libraries(embark_lvgl INTERFACE lvgl::lvgl)
 
 # 挂到公共编译选项上：所有 Embark 目标都能用 <middleware/...>（唯一写法）
 target_link_libraries(embark_build_options INTERFACE etl::etl embark_efmt)

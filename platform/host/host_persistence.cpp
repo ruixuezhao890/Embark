@@ -13,7 +13,7 @@
 namespace embark::platform::host {
 namespace {
 
-constexpr const char* kFileName = "embark_host_kv.bin";
+constexpr const char* file_name = "embark_host_kv.bin";
 
 /// 定路径：环境变量优先 → exe 同目录 → 当前目录（最后一条只是兜底）。
 void resolve_path(char* out, std::size_t capacity) noexcept {
@@ -30,13 +30,13 @@ void resolve_path(char* out, std::size_t capacity) noexcept {
     char* last_sep = std::strrchr(exe_path, '\\');
     if (last_sep != nullptr) {
       *(last_sep + 1) = '\0';  // 只留目录（含结尾分隔符）
-      std::snprintf(out, capacity, "%s%s", exe_path, kFileName);
+      std::snprintf(out, capacity, "%s%s", exe_path, file_name);
       return;
     }
   }
 #endif
 
-  std::snprintf(out, capacity, "%s", kFileName);
+  std::snprintf(out, capacity, "%s", file_name);
 }
 
 }  // namespace

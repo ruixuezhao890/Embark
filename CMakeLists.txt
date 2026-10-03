@@ -16,6 +16,7 @@ project(embark
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(embark_middleware)
+include(embark_sdl2)
 
 option(EMBARK_BUILD_HOST "构建宿主（PC 仿真）目标" ON)
 option(EMBARK_BUILD_TESTS "构建单元测试（doctest）" ON)

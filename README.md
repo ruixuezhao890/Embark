@@ -7,14 +7,16 @@
 - 语言与约束：C++17；内核零堆分配、`-fno-exceptions -fno-rtti`、容器只用 ETL 定容版
 - 硬件抽象：按"芯片功能被抽象出来给上层调用"的粒度，不暴露寄存器与引脚细节
 - 日志与格式化：[efmt-elog](https://github.com/ruixuezhao890/efmt-elog)（`<middleware/...>` 形式引用）
-- 容器与消息等基础设施：[ETL](https://github.com/ETLCPP/etl)
+- 容器与消息等基础设施：[ETL](https://github.com/ETLCPP/etl)（锁 20.49.0）
+- UI 与图形：[LVGL](https://github.com/lvgl/lvgl)（锁 v8.3.11；宿主走 SDL2 窗口，真机走 ST7789）
 
 ## 状态
 
-骨架 + HAL 阶段（v0.1.0）：构建系统、依赖、配置注入已就位，HAL 七个能力的接口、
-宿主基础后端（时间 / 持久化 / 日志 sink / 系统控制 / 总线）与测试用假后端已落地；
-显示与输入（SDL2）以及 App 内核按 `.scratch/embark-v1/issues/` 里的工单继续。
-规格书见 `.scratch/embark-v1/spec.md`。
+v0.1.0 进行中：构建系统、依赖与配置注入已就位；HAL 七个能力的接口、宿主的**七个后端**
+（时间 / 持久化 / 日志 sink / 系统控制 / 总线 / SDL2 显示 / SDL2 输入）与测试用假后端已落地；
+LVGL 8.3.11 已接入（宿主可跑出窗口、点击有响应、关窗干净退出）。
+**还没做**：App 内核（唯一 UI 任务、前台切换、消息与后台 tick）与 ESP32-S3 后端 —— 按
+`.scratch/embark-v1/issues/` 里的工单继续。规格书见 `.scratch/embark-v1/spec.md`。
 
 ## 宿主构建
 
@@ -42,18 +44,45 @@ ctest --test-dir build --output-on-failure
 要先清干净就把这个文件删掉，或设 `EMBARK_HOST_STORAGE=<路径>` 换个位置。自检每次会
 `boot_count` + 1，连跑两次数字应当递增 —— 这是"宿主持久化真的落到文件了"的最短证据。
 
+## 宿主 UI 演示（SDL2 + LVGL）
+
+需要本机有 SDL2（MinGW 发行版即可，`find_package(SDL2 CONFIG)` 找得到就编；找不到时只跳过
+这个目标，内核与测试照常构建）：
+
+```sh
+./build/platform/host/embark_host_ui          # Windows: .\build\platform\host\embark_host_ui.exe
+```
+
+窗口是 320×240 的 LVGL 界面按 `--scale`（默认 2）放大显示，里面有计数标签和一个按钮。
+命令行开关：
+
+| 开关 | 作用 |
+| --- | --- |
+| `--frames N` | 跑满 N 帧就退出（默认 0 = 一直跑到关窗） |
+| `--click [X,Y]` | 第 20 帧合成一次点击（默认点按钮中心 160,170；走 SDL 真事件队列）；按钮没被触发则退出码 2 |
+| `--screenshot FILE` | 最后一帧存成 BMP |
+| `--quit-at N` | 第 N 帧合成关窗事件（等价于点窗口 ×，用来验收"干净退出"） |
+| `--scale S` / `--delay MS` | 窗口放大倍数（默认 2）/ 每帧让出的毫秒数（默认 5） |
+| `--help` | 用法 |
+
+一条最短的自动验收（退出码 0 + 日志里 `按钮点击：第 1 次`）：
+
+```sh
+./build/platform/host/embark_host_ui --frames 60 --click
+```
+
 ## 目录
 
 | 路径 | 放什么 |
 | --- | --- |
 | `include/embark/` | 框架公开头文件（上层只依赖这里，见 spec §11） |
 | `src/` | 内核实现 |
-| `platform/host/` | 宿主后端（SDL 显示/输入、宿主 FreeRTOS port、LVGL 接入） |
+| `platform/host/` | 宿主后端（SDL2 显示/输入、LVGL 端口、宿主文件存储；宿主 FreeRTOS port 待并入） |
 | `platform/esp32/` | ESP32-S3 后端（以 ESP-IDF 组件形式接入） |
 | `app/` | 自带示例 App |
-| `tests/` | 宿主单元测试（doctest）：`tests/hal/` 按能力分文件，`tests/fakes/` 是 HAL 假后端 |
-| `config/` | 编译期宏与固定容量上限（单一事实来源） |
-| `cmake/` | 构建辅助（`middleware/` 视图生成） |
+| `tests/` | 宿主单元测试（doctest）：`tests/hal/` 按能力分文件，`tests/fakes/` 是 HAL 假后端，`tests/detail/` 是内部工具 |
+| `config/` | 编译期宏、`lv_conf.h` 与固定容量上限（单一事实来源） |
+| `cmake/` | 构建辅助（`middleware/` 视图生成、SDL2 探测与运行时拷贝） |
 | `third_party/` | 依赖（submodule） |
 | `docs/` | 文档（完整文档见 issue 12；ADR 在 `docs/adr/`） |
 | `.scratch/` | 规格书与 issue 追踪（随仓库提交） |

@@ -74,12 +74,17 @@ enum class InputEventKind : std::uint8_t {
   move,
 };
 
-/// 一次输入事件：按键走 key，触摸走 x/y，两者可以同带（宿主鼠标点击就是这种）。
+/// 一次输入事件。
+///
+/// 约定（issue 05 明确）：**指针事件的 key 恒为 0**（触摸、鼠标、触控板都是"按下/抬起/移动"），
+/// **按键事件的 key 非 0**（键号 0..255），此时 x/y 记的是"按键那一刻指针在哪"，仅供参考。
+/// 上层因此只看 key 就能把两类事件分开；宿主后端把鼠标与键盘事件都塞进同一支队列，
+/// 这条约定就是它们的交界（宿主鼠标的 button 号 v1 用不上，不占 key）。
 struct InputEvent {
   InputEventKind kind = InputEventKind::press;
   std::uint16_t x = 0;
   std::uint16_t y = 0;
-  std::uint8_t key = 0;            ///< 平台定义的按键号；v1 只要求 0..255
+  std::uint8_t key = 0;            ///< 0 = 指针事件；非 0 = 按键号
   std::uint32_t timestamp_ms = 0;  ///< 事件发生时刻（走 HAL 时间轴）
 };
 
