@@ -1,0 +1,37 @@
+-- The C compiler identification is GNU 15.1.0
+-- The CXX compiler identification is GNU 15.1.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: E:/mingw/x86_64-15.1.0-release-posix-seh-ucrt-rt_v12-rev0/mingw64/bin/gcc.exe - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: E:/mingw/x86_64-15.1.0-release-posix-seh-ucrt-rt_v12-rev0/mingw64/bin/g++.exe - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Configuring done (2.3s)
+-- Generating done (0.0s)
+-- Build files have been written to: C:/Users/ruixuezhao.LAPTOP-V8EB592S/AppData/Local/Temp/embark-freertos-spike/build-strict
+[1/14] Building C object CMakeFiles/freertos_kernel.dir/E_/01_Workspace/01_Archives/lvgl_template_laste/freertos_/kernel/list.c.obj
+[2/14] Building C object CMakeFiles/freertos_kernel.dir/E_/01_Workspace/01_Archives/lvgl_template_laste/freertos_/kernel/event_groups.c.obj
+[3/14] Building C object CMakeFiles/freertos_kernel.dir/E_/01_Workspace/01_Archives/lvgl_template_laste/freertos_/kernel/queue.c.obj
+E:/01_Workspace/01_Archives/lvgl_template_laste/freertos_/kernel/queue.c: In function 'xQueueGenericCreate':
+E:/01_Workspace/01_Archives/lvgl_template_laste/freertos_/kernel/queue.c:489:48: warning: comparison is always true due to limited range of data type [-Wtype-limits]
+  489 |             ( ( SIZE_MAX - sizeof( Queue_t ) ) >= ( uxQueueLength * uxItemSize ) ) )
+      |                                                ^~
+[4/14] Building C object CMakeFiles/freertos_kernel.dir/E_/01_Workspace/01_Archives/lvgl_template_laste/freertos_/kernel/timers.c.obj
+[5/14] Building C object CMakeFiles/freertos_kernel.dir/E_/01_Workspace/01_Archives/lvgl_template_laste/freertos_/kernel/tasks.c.obj
+[6/14] Building C object CMakeFiles/freertos_kernel.dir/hooks.c.obj
+[7/14] Building C object CMakeFiles/freertos_kernel.dir/E_/01_Workspace/01_Archives/lvgl_template_laste/freertos_/kernel/portable/MemMang/heap_4.c.obj
+[8/14] Building C object CMakeFiles/freertos_kernel.dir/E_/01_Workspace/01_Archives/lvgl_template_laste/freertos_/kernel/portable/MSVC-MingW/port.c.obj
+E:/01_Workspace/01_Archives/lvgl_template_laste/freertos_/kernel/portable/MSVC-MingW/port.c: In function 'pxPortInitialiseStack':
+E:/01_Workspace/01_Archives/lvgl_template_laste/freertos_/kernel/portable/MSVC-MingW/port.c:249:63: warning: cast between incompatible function types from 'TaskFunction_t' {aka 'void (*)(void *)'} to 'DWORD (*)(void *)' {aka 'long unsigned int (*)(void *)'} [-Wcast-function-type]
+  249 |     pxThreadState->pvThread = CreateThread( NULL, xStackSize, ( LPTHREAD_START_ROUTINE ) pxCode, pvParameters, CREATE_SUSPENDED | STACK_SIZE_PARAM_IS_A_RESERVATION, NULL );
+      |                                                               ^
+[9/14] Building C object CMakeFiles/freertos_kernel.dir/E_/01_Workspace/01_Archives/lvgl_template_laste/freertos_/kernel/stream_buffer.c.obj
+[10/14] Linking C static library libfreertos_kernel.a
+[11/14] Building CXX object CMakeFiles/sleepprobe.dir/sleepprobe.cpp.obj
+[12/14] Building CXX object CMakeFiles/spike.dir/main.cpp.obj
+[13/14] Linking CXX executable sleepprobe.exe
+[14/14] Linking CXX executable spike.exe

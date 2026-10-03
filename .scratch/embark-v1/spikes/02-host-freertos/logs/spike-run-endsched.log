@@ -1,0 +1,5 @@
+[spike] FreeRTOS V10.6.2 | heap_4 | tick 1000 Hz | shutdown=vTaskEndScheduler (对照组)
+[spike] heap before scheduler: 81288 bytes free
+[spike] ticks=1000 ui_loops=500 produced=200 consumed=200 queue_full=0 heap_free=81288
+[spike] wall clock for 1000 ticks = 1998 ms
+[spike] RESULT: FAIL

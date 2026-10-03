@@ -33,7 +33,7 @@ v1 必须做到：
 | `host-sim` | Windows + MinGW-w64 GCC 15.1 | SDL2 窗口/事件 | 宿主文件 | stdout | CMake + Ninja |
 | `esp32s3` | ESP32-S3（Touch-LCD-2.8 参考板） | ST7789 + 触摸（I2C） | NVS | UART0 | ESP-IDF 5.4（先 `export.ps1`） |
 
-宿主侧也跑 FreeRTOS（复用 `lvgl_template_laste` 已验证的 kernel + Windows port），为的是**让两个目标的任务模型完全一致**——同一份内核代码在两端走同一条调度路径，行为差异只来自 HAL 后端。
+宿主侧也跑 FreeRTOS（复用 `lvgl_template_laste` 已验证的 kernel + Windows port），为的是**让两个目标的任务模型完全一致**——同一份内核代码在两端走同一条调度路径，行为差异只来自 HAL 后端。**2026-10-04 已在 MinGW-w64 GCC 15.1 上实测跑通**（FreeRTOS V10.6.2 + `MSVC-MingW` 端口，2 任务 + 队列 + 5000 tick 长跑，见 `issues/02`）：调度、延时、队列语义与真机一致，但**时间轴不一致**——该端口逐拍 `Sleep()` 产生 tick，1 tick 实测 **2.00 ms**（标称 1 ms，线性不漂移）；因此宿主验收一律以 tick 相对量为判据，不拿墙钟时长当判据。宿主也没有「停调度器」这一步：`vTaskEndScheduler()` 会让进程挂死，生命周期跟着进程走（见 `issues/02`）。
 
 ## 4. 架构分层
 
@@ -85,7 +85,7 @@ public:
 ## 6. 执行模型
 
 - 全局唯一 UI 任务承载：输入事件处理 → 前台 App 回调 → `lv_timer_handler()` → 后台 tick 调度 → 消息派发。**它是全工程唯一允许操作 LVGL 与调用 `lv_timer_handler()` 的地方。**
-- 循环节拍目标 5 ms 一跳（与既有两代框架一致），空闲时 `vTaskDelay` 让出；不忙等。
+- 循环节拍目标 5 ms 一跳（与既有两代框架一致），空闲时 `vTaskDelay` 让出；不忙等。（宿主上这一拍的实际墙钟约 2×，tick 语义不变，见 §3。）
 - 后台 tick 在 UI 任务里执行，因此**必须轻量**；周期由 `etl::callback_timer<MAX_TIMERS>` 按 per-App 配置驱动（见 §7）。
 - 逃生舱：`OwnTask` 策略的 App 由框架创建自己的任务，框架保证任务名唯一、启动时机在 `onCreate` 之后、消息经队列进出。
 - 硬约束：前台 App 的所有回调**不得阻塞**；任何阻塞或长耗时工作必须走 `OwnTask`。
@@ -186,13 +186,14 @@ embark/
 
 - 测试框架 **doctest**（单头、编译快、无堆友好）。
 - 宿主测试覆盖：前台切换、后台 tick 周期、消息溢出策略、日志门面、错误路径（`expected`）、App 注册表顺序。
+- 宿主时间轴：FreeRTOS Windows port 的 1 tick 实测 ≈ **2.00 ms**（`issues/02`），所以时间相关断言只认 tick 相对量（回调次数 / 周期 / 溢出计数），**不写墙钟时长断言**；确需墙钟的用例单独标 `host-timing` 并给放宽系数。
 - CI（GitHub Actions）三个 job：`host build + test`（ubuntu）、`esp32 build`（espressif/idf 容器，只编不烧）、`clang-format --dry-run`（仅 CI 跑；本机无 clang-format，不强制）。
 - UI 不做无头截图测试，靠宿主窗口人工验。
 
 ## 14. 验收标准（v1 完成的定义）
 
 1. 宿主构建后能跑出 SDL 窗口，demo 里有 **≥2 个 App**，可切换前台，后台 tick 可观测（日志/计数）。
-2. 宿主测试全绿（见 §13 覆盖点）。
+2. 宿主测试全绿（见 §13 覆盖点；时间相关断言只认 tick 相对量）。
 3. ESP32-S3 目标 `idf.py build` 通过；烧写后能显示 demo 的第一屏。
 4. 内核与 App 无动态分配：宿主构建下用分配 hook 统计为 0（或等价的审计方式）。
 5. **换后端不动 App**：切到 esp32 后端时，`app/` 与 `include/embark/` 一行不改。
@@ -204,7 +205,7 @@ embark/
 - 上游 elog 的 `basic_string_stream` 万能 `operator<<` 兜底可能静默接受错误参数——接入时实测确认。
 - **ETL 版本风险：已消（2026-10-03）**。本机副本（20.40.0 / 20.39.4）曾都旧于上游 20.49.0，现已按 §16.3 的 12 条对 20.49.0 逐条复核并把它锁成依赖（`issues/01-etl-version-verify.md`），spec §7 / §16 的行号与结论已同步。唯一仍开放的小项：完全离线构建时是否改为 vendor 本机 20.40.0 副本（不阻塞 v1，需要时再议）。
 - ESP32-S3 具体板型（Touch-LCD-2.8 还是 devkit 接线）与触摸控制器型号：**已决定推迟**到做 esp32 后端时确认（宿主那条线完全不依赖它，见 `issues/11-esp32s3-backend.md`）。
-- 宿主 FreeRTOS port 来自 `lvgl_template_laste`，需确认在 GCC 15.1 上仍可编译（原工程是 MSVC/MinGW 混合配置）。
+- 宿主 FreeRTOS port 来自 `lvgl_template_laste`：**已在 GCC 15.1 上验证可编可跑（2026-10-04，见 `issues/02`）**，源码清单 / CMake 片段 / `FreeRTOSConfig.h` 必改项都在该 issue 的 `## Answer`，证据与探针源码留档在 `.scratch/embark-v1/spikes/02-host-freertos/`。残留两个小项（不阻塞）：① 该端口 tick 比墙钟慢约 2×（见 §3 / §13）；② vendor 进仓库后是否顺手消掉上游的 2 条严格警告（`queue.c:489`、`port.c:249`）。
 - LVGL 8.3.x 的具体补丁版号在接入时敲定。
 
 ## 16. ETL 可复用组件清单（开工前定稿，避免边写边改）

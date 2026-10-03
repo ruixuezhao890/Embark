@@ -1,0 +1,8 @@
+[probe] timeGetDevCaps: wPeriodMin=1 ms wPeriodMax=1000000 ms
+[probe] Sleep(1)  default resolution : 15.68 ms
+[probe] Sleep(2)  default resolution : 15.70 ms
+[probe] Sleep(10) default resolution : 15.69 ms
+[probe] after timeBeginPeriod(1):
+[probe] Sleep(1)  : 1.99 ms
+[probe] Sleep(2)  : 2.92 ms
+[probe] Sleep(1)+Sleep(1) 组合 : 3.99 ms (应约等于两次 Sleep(1))
