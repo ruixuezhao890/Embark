@@ -135,10 +135,14 @@ public:
 - 接口形态：**纯虚抽象类**（运行期多态、好替换好打桩），后端在**编译期**由 CMake target 选定，运行期不做任何注册/查表。
 - 测试时链 fake 后端，接口不变。
 - 引脚、总线参数、屏幕型号一律走平台后端的编译期配置，**不进 HAL 接口**。
+- 装配：上层只拿一个 `hal::Context`（`ITime&` / `IPersistence&` / `ILogSink&` / `ISystem&` / `IBus&` + 可空的 `IDisplay*` / `IInput*`），**每个平台一份实例** —— 宿主是 `HostHal::instance()`，测试自己就地搭 fake 聚合（`tests/fakes/fakes.h` 的 `FakeHal`）。内核不持有全局单例，宿主后端 target 只被可执行文件链接，测试只链 `embark::core` + fake（否则宿主与测试各自的 `embark::fatal` / `assert_failed` 定义会撞车）。
+- 本 issue 落地宿主的时间 / 持久化 / 日志 sink / 系统控制 / 总线五个基础后端；显示与输入在 issue 05（SDL2）补真后端，接口与 fake 先定死。
 
 ## 9. 错误处理
 
 - 可失败操作统一返回 `etl::expected<T, embark::Error>`（无返回值时返回 `embark::Error`）。
+- 错误取值集合在 `include/embark/error.h` 定稿（10 个：`none` / `not_ready` / `invalid_argument` / `not_found` / `no_space` / `io_failure` / `timeout` / `unsupported` / `corrupt_data` / `busy`）。**ETL 的 `expected` 不接受裸 `Error`**，构造失败值要写 `embark::unexpected(Error::x)`（`error.h` 里的助手）。映射约定：参数非法 → `invalid_argument`；没 init 就用 → `not_ready`；键/条目不存在 → `not_found`；容量不够或目标缓冲太小 → `no_space`；落盘/总线 IO 失败 → `io_failure`；数据校验不过（magic / 长度 / CRC）→ `corrupt_data`；功能在该后端上不存在 → `unsupported`。
+- 没有 `Error` 返回语义的能力（`ISystem` 的重启 / 喂狗 / 水位、`ISystem::fatal`）失败路径一律走 `embark::fatal` 上报，不假装成功；测试侧用 `FakeSystem` + 测试版 `embark::fatal` 符号（记录 + abort）覆盖这些路径。
 - 编程错误（不可能发生）用 `EMBARK_ASSERT`；release 下的行为是**尽力写最后一条日志 → halt**，不静默继续。
 - 致命错误统一走 `embark::fatal(reason)`，由平台后端决定重启还是进安全态。
 - 容量不足的边界行为：整条丢弃 + 计数（日志行、消息队列一致），不产生半条数据。
@@ -186,6 +190,8 @@ embark/
 
 - 测试框架 **doctest**（单头、编译快、无堆友好）。
 - 宿主测试覆盖：前台切换、后台 tick 周期、消息溢出策略、日志门面、错误路径（`expected`）、App 注册表顺序。
+- HAL 能力测试（`tests/hal/`）：七个能力各一条成功 + 一条失败路径，用 `tests/fakes/` 的假后端；fake 与宿主持久化后端**共用 `include/embark/detail/kv_slot.h` 的同一套槽编解码**（magic `EKV1` / state / key_len / value_len / CRC32 / key[16] / value[64] = 92 字节），任何一方改格式，另一方的测试立刻红。
+- 日志串行化层必须按**整行**工作：elog 的一条记录会分 3 次 `sink.write`（带颜色时）+ 1 次换行写（`elog.hpp:222/224`），逐次加锁挡不住交错；`LogSinkBinder` 攒成整行后一次 `write` + 一次 `flush`，并以 `lines_written()` / `bytes_written()` / `pending_bytes()` 暴露观测点（测试断言一条记录 = 后端一次 `write` = 一次 `flush`）。
 - 宿主时间轴：FreeRTOS Windows port 的 1 tick 实测 ≈ **2.00 ms**（`issues/02`），所以时间相关断言只认 tick 相对量（回调次数 / 周期 / 溢出计数），**不写墙钟时长断言**；确需墙钟的用例单独标 `host-timing` 并给放宽系数。
 - CI（GitHub Actions）三个 job：`host build + test`（ubuntu）、`esp32 build`（espressif/idf 容器，只编不烧）、`clang-format --dry-run`（仅 CI 跑；本机无 clang-format，不强制）。
 - UI 不做无头截图测试，靠宿主窗口人工验。

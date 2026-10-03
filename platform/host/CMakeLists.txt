@@ -1,16 +1,27 @@
-# 宿主后端（PC 仿真）
+# 宿主平台（spec §11）：HAL 的 Windows 实现 + 宿主可执行文件
 #
-# 目标形状：SDL2 显示/输入 + 宿主 FreeRTOS port + LVGL（spec §12、§14）。
-# 骨架期只有平台占位目标与入口可执行文件；真正的后端实现按 issues/02、05、06 补。
+# 这个库【不】链 embark_kernel_flags：平台后端允许用宿主的标准库（fstream / thread /
+# chrono），-fno-exceptions 只约束内核与 app 那条线。反过来，它必须定义
+# embark::assert_failed / embark::fatal（host_system.cpp），链接期唯一。
+#
+# 显示与输入后端（SDL2 + LVGL）按 issues/05 加进来。
 
-add_library(embark_platform_host INTERFACE)
+add_library(embark_platform_host STATIC
+        host_bus.cpp
+        host_context.cpp
+        host_log_sink.cpp
+        host_persistence.cpp
+        host_system.cpp
+        host_time.cpp)
+
 add_library(embark::platform_host ALIAS embark_platform_host)
-target_link_libraries(embark_platform_host INTERFACE embark_build_options)
 
-# 宿主可执行文件：内核 + app + 本平台后端，保持内核语言子集（无异常、无 RTTI）
+target_link_libraries(embark_platform_host PUBLIC embark::core)
+
 add_executable(embark_host main.cpp)
-target_link_libraries(embark_host PRIVATE
-        embark::core
-        embark::platform_host
-        embark::apps
-        embark::kernel_flags)
+
+target_link_libraries(embark_host
+        PRIVATE embark::core
+                embark::platform_host
+                embark::apps
+                embark::kernel_flags)

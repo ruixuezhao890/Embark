@@ -68,6 +68,17 @@ static_assert(ETL_VERSION_MAJOR == 20 && ETL_VERSION_MINOR == 49,
 #define ETL_CALLBACK_TIMER_USE_ATOMIC_LOCK 1
 #define ETL_MESSAGE_TIMER_USE_ATOMIC_LOCK 1
 
+/* --- 框架开关（非 ETL）--------------------------------------------------- */
+
+/* 日志串行化：上游 elog 的 sink 没有任何锁（spec §7），多任务同时打日志会把两行搅在一起。
+ * 框架在"把 sink 接到 elog"的那一层加锁（include/embark/log.h 的 LogSinkBinder）：
+ *   1 = 用 etl::mutex + etl::lock_guard（真机；要求平台已经提供 FreeRTOS 头文件）
+ *   0 = 不加锁（宿主：单线程产出日志，加了只是白付一次原子操作）
+ * 中断上下文不许打日志（spec §7），所以这层锁永远不处于中断里。 */
+#ifndef EMBARK_LOG_SERIALIZE
+#define EMBARK_LOG_SERIALIZE 0
+#endif
+
 /* --- 明确不要定义的（列出来是为了拦住以后"顺手加上"）--------------------- */
 /* ETL_USE_ASSERT_FUNCTION —— 会把 ETL_ASSERT 换成调 assert()，而我们要走自己的回调；
  * ETL_THROW_EXCEPTIONS    —— 内核编不了异常（spec §10），默认就是 0；

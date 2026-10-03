@@ -1,8 +1,11 @@
 # Embark 内核（spec §9/§10：零堆、无异常、无 RTTI）
 #
-# 骨架期只有版本信息这一支；UI 任务、App 注册表、消息、定时器按 issues/06、07 补。
+# 现在有：版本信息、错误码表、日志装配（issues/04）。
+# UI 任务、App 注册表、消息、定时器按 issues/06、07 补。
 
 add_library(embark_core STATIC
+        embark/error.cpp
+        embark/log.cpp
         embark/version.cpp)
 
 add_library(embark::core ALIAS embark_core)

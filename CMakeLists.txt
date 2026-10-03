@@ -43,6 +43,9 @@ endif()
 add_library(embark_build_options INTERFACE)
 target_compile_features(embark_build_options INTERFACE cxx_std_17)
 
+# config/ 作为 include 根：容量上限等集中在那里，写 <embark_limits.h> 即可（spec §10）。
+target_include_directories(embark_build_options INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/config")
+
 embark_create_middleware_view("${CMAKE_BINARY_DIR}/include/middleware")
 target_include_directories(embark_build_options INTERFACE "${CMAKE_BINARY_DIR}/include")
 

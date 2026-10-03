@@ -11,8 +11,10 @@
 
 ## 状态
 
-骨架阶段（v0.1.0）：构建系统、依赖、配置注入已就位，框架功能按
-`.scratch/embark-v1/issues/` 里的工单逐项落地。规格书见 `.scratch/embark-v1/spec.md`。
+骨架 + HAL 阶段（v0.1.0）：构建系统、依赖、配置注入已就位，HAL 七个能力的接口、
+宿主基础后端（时间 / 持久化 / 日志 sink / 系统控制 / 总线）与测试用假后端已落地；
+显示与输入（SDL2）以及 App 内核按 `.scratch/embark-v1/issues/` 里的工单继续。
+规格书见 `.scratch/embark-v1/spec.md`。
 
 ## 宿主构建
 
@@ -30,11 +32,15 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-跑宿主骨架可执行文件（打印版本 + 校验依赖链路）：
+跑宿主可执行文件（打印版本，并走一遍 HAL 自检：时间 / 持久化 / 总线 / 系统）：
 
 ```sh
 ./build/platform/host/embark_host              # Windows: .\build\platform\host\embark_host.exe
 ```
+
+持久化后端默认把键值写到 exe 同目录的 `embark_host_kv.bin`（32 槽 × 92 字节 = 2944 字节）；
+要先清干净就把这个文件删掉，或设 `EMBARK_HOST_STORAGE=<路径>` 换个位置。自检每次会
+`boot_count` + 1，连跑两次数字应当递增 —— 这是"宿主持久化真的落到文件了"的最短证据。
 
 ## 目录
 
@@ -45,7 +51,7 @@ ctest --test-dir build --output-on-failure
 | `platform/host/` | 宿主后端（SDL 显示/输入、宿主 FreeRTOS port、LVGL 接入） |
 | `platform/esp32/` | ESP32-S3 后端（以 ESP-IDF 组件形式接入） |
 | `app/` | 自带示例 App |
-| `tests/` | 宿主单元测试（doctest） |
+| `tests/` | 宿主单元测试（doctest）：`tests/hal/` 按能力分文件，`tests/fakes/` 是 HAL 假后端 |
 | `config/` | 编译期宏与固定容量上限（单一事实来源） |
 | `cmake/` | 构建辅助（`middleware/` 视图生成） |
 | `third_party/` | 依赖（submodule） |
