@@ -9,19 +9,19 @@
  *
  * 输出规矩（沿用 efmt-elog 仓库的约定）：文本格式化一律用 efmt，文本输出一律用 elog。
  */
-#include <elog/elog.hpp>
 #include <embark/version.h>
+#include <middleware/elog/elog.hpp>
 #include <middleware/etl/vector.h>
 
 namespace {
 
-constexpr const char* kLoggerName = "embark";
+constexpr const char* logger_name = "embark";
 
 }  // namespace
 
 int main() {
   e_log::logger* const logger =
-          e_log::create_logger(kLoggerName, e_log::stdout_sink(), e_log::level::debug);
+          e_log::create_logger(logger_name, e_log::stdout_sink(), e_log::level::debug);
   if (logger == nullptr) {
     return 1;  // 日志建不起来，后面就没有出口了
   }

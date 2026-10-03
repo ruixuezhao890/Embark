@@ -21,9 +21,6 @@ option(EMBARK_BUILD_HOST "构建宿主（PC 仿真）目标" ON)
 option(EMBARK_BUILD_TESTS "构建单元测试（doctest）" ON)
 option(EMBARK_BUILD_ESP32 "构建 ESP32-S3 目标（尚未实现，见 issues/11）" OFF)
 
-if(EMBARK_BUILD_ESP32)
-  message(FATAL_ERROR "ESP32-S3 目标还没实现，见 .scratch/embark-v1/issues/11-esp32s3-backend.md")
-endif()
 if(NOT EMBARK_BUILD_HOST)
   message(FATAL_ERROR "v1 目前只有宿主目标，EMBARK_BUILD_HOST 必须为 ON")
 endif()
@@ -44,19 +41,20 @@ endif()
 #   * ETL 等编译期宏统一由 config/embark_config.h 强制注入（-include，见 spec §16.2）
 #   * middleware/ 视图只在构建目录里生成（spec §11）
 add_library(embark_build_options INTERFACE)
-add_library(embark::build_options ALIAS embark_build_options)
 target_compile_features(embark_build_options INTERFACE cxx_std_17)
 
 embark_create_middleware_view("${CMAKE_BINARY_DIR}/include/middleware")
 target_include_directories(embark_build_options INTERFACE "${CMAKE_BINARY_DIR}/include")
 
 # 平台是否已经提供 FreeRTOS 头文件：决定 config/embark_config.h 是否定义 ETL_TARGET_OS_FREERTOS。
-# 宿主 FreeRTOS Windows port 落地（issues/02、06）之前为 0 —— 定义它会让 <etl/atomic.h> /
+# 宿主 FreeRTOS Windows port 落地（issues/02、06）之前为 OFF —— 定义它会让 <etl/atomic.h> /
 # <etl/callback_timer.h> 去 include FreeRTOS.h，见 config/embark_config.h 里的实测链条。
-# ESP32-S3 后端（issues/11）由 IDF 侧传 1。
-set(EMBARK_PLATFORM_HAS_FREERTOS 0 CACHE STRING "平台是否提供 FreeRTOS 头文件（0/1）")
+# ESP32-S3 后端（issues/11）由 IDF 侧传 ON。
+# 用 option() 而不是 CACHE STRING：字符串形式的 ON 进了 #if 会被静默当成 0，
+# 只有 $<BOOL:...> 转出来的 1/0 才是 config/embark_config.h 期望的东西。
+option(EMBARK_PLATFORM_HAS_FREERTOS "平台是否提供 FreeRTOS 头文件" OFF)
 target_compile_definitions(embark_build_options INTERFACE
-        EMBARK_PLATFORM_HAS_FREERTOS=${EMBARK_PLATFORM_HAS_FREERTOS})
+        EMBARK_PLATFORM_HAS_FREERTOS=$<BOOL:${EMBARK_PLATFORM_HAS_FREERTOS}>)
 
 if(MSVC)
   target_compile_options(embark_build_options INTERFACE
@@ -84,6 +82,9 @@ set(EMBARK_PLATFORM_NAME "host")
 
 add_subdirectory(src)
 add_subdirectory(platform/host)
+if(EMBARK_BUILD_ESP32)
+  add_subdirectory(platform/esp32)   # 目前整份文件就是一句 FATAL_ERROR，见 issues/11
+endif()
 add_subdirectory(app)
 
 if(EMBARK_BUILD_TESTS)

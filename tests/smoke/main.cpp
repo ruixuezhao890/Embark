@@ -10,17 +10,30 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
-#include <elog/elog.hpp>
 #include <embark/version.h>
 #include <middleware/efmt/core/format.hpp>
+#include <middleware/elog/elog.hpp>
 #include <middleware/etl/string_view.h>
 #include <middleware/etl/vector.h>
 #include <middleware/etl/version.h>
 
-TEST_CASE("版本字符串由构建系统给出") {
+TEST_CASE("版本字符串由构建系统注入") {
   const etl::string_view version(embark::version_string());
-  CHECK_FALSE(version.empty());
-  CHECK(version == etl::string_view(EMBARK_VERSION_STRING));
+
+  // 兜底值说明 CMake 的编译定义没传进来（见 src/embark/version.cpp）
+  CHECK(version != etl::string_view("0.0.0-unknown"));
+
+  // 形如 0.1.0：只由数字与点组成、恰好两个点 —— 免得断言里再抄一份版本号
+  int dots = 0;
+  for (const char c : version) {
+    if (c == '.') {
+      ++dots;
+    } else {
+      CHECK(c >= '0');
+      CHECK(c <= '9');
+    }
+  }
+  CHECK(dots == 2);
 }
 
 TEST_CASE("平台名不是兜底值") {

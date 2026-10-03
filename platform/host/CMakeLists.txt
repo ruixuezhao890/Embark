@@ -6,11 +6,11 @@
 add_library(embark_platform_host INTERFACE)
 add_library(embark::platform_host ALIAS embark_platform_host)
 target_link_libraries(embark_platform_host INTERFACE embark_build_options)
-target_compile_definitions(embark_platform_host INTERFACE EMBARK_PLATFORM_HOST=1)
 
-# 宿主可执行文件：内核 + 本平台后端，保持内核语言子集（无异常、无 RTTI）
+# 宿主可执行文件：内核 + app + 本平台后端，保持内核语言子集（无异常、无 RTTI）
 add_executable(embark_host main.cpp)
 target_link_libraries(embark_host PRIVATE
         embark::core
         embark::platform_host
+        embark::apps
         embark::kernel_flags)

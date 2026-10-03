@@ -33,7 +33,7 @@ ctest --test-dir build --output-on-failure
 跑宿主骨架可执行文件（打印版本 + 校验依赖链路）：
 
 ```sh
-./build/embark_host        # Windows: .\build\embark_host.exe
+./build/platform/host/embark_host              # Windows: .\build\platform\host\embark_host.exe
 ```
 
 ## 目录

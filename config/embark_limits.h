@@ -12,13 +12,13 @@
 namespace embark {
 
 // App 总数（静态注册表；注册顺序 = 默认前台顺序）
-inline constexpr std::size_t kMaxApps = 8;
+inline constexpr std::size_t max_apps = 8;
 
-// 框架定时器数量（后台节拍用 etl::callback_timer<kMaxBackgroundTimers>）
-inline constexpr std::size_t kMaxBackgroundTimers = 8;
+// 框架定时器数量（后台节拍用 etl::callback_timer<max_background_timers>）
+inline constexpr std::size_t max_background_timers = 8;
 
 // 一条消息队列的深度（跨任务单生产者单消费者）
-inline constexpr std::size_t kMessageQueueDepth = 16;
+inline constexpr std::size_t message_queue_depth = 16;
 
 }  // namespace embark
 

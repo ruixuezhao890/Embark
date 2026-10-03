@@ -162,11 +162,11 @@ embark/
 ├─ app/                           v1 自带示例 App（demo 用）
 ├─ tests/                         doctest 测试
 ├─ config/                        lv_conf.h、容量上限、平台开关
-├─ third_party/{efmt-elog,etl}/   submodule（锁 commit / tag）
+├─ third_party/{efmt-elog,etl,doctest}/   submodule（锁 commit / tag）
 └─ docs/                          使用文档（入口 docs/README.md）
 ```
 
-- include 约定：内部一律写 `<middleware/efmt/...>` 与 `<middleware/etl/...>`；`middleware/` 视图在**构建目录里生成**（Windows 用 junction），源码树保持干净；**绝不把 `etl/` 目录本身加进 include 路径**（同名 `string.h` 会遮蔽标准头）。
+- include 约定：内部一律写 `<middleware/efmt/...>`、`<middleware/elog/...>` 与 `<middleware/etl/...>`；efmt-elog 的**仓库根不作为 include 根**，所以没有 `<elog/elog.hpp>` 这种写法（要用 eserde/ecli 时，再给它们各加一条视图链接，而不是把仓库根整个摊开）。`middleware/` 视图在**构建目录里生成**（Windows 用 junction），实际路径是 `<build>/include/middleware/{etl,efmt,elog}`，**include 根给 `<build>/include`** —— 视图本身就叫 `middleware/`，include 根不能再指到它头上，否则 `<middleware/etl/version.h>` 会被解析成 `<build>/middleware/middleware/etl/version.h`（骨架第一次配置就是这么挂的）。源码树保持干净；**绝不把 `etl/` 目录本身加进 include 路径**（同名 `string.h` 会遮蔽标准头）。eserde / ecli 暂不接入。
 - ETL 用上游的 `etl::etl` INTERFACE target；efmt/elog 上游没有 CMake，由我们包一层 `embark_efmt`（INTERFACE）。
 - 命名：类型 PascalCase、函数/变量 snake_case、文件名 snake_case、宏 `EMBARK_*`、命名空间 `embark`。
 
@@ -175,7 +175,8 @@ embark/
 | 依赖 | 版本策略 | 引入方式 |
 | --- | --- | --- |
 | efmt-elog（EFmt + ELog） | 锁 **commit SHA**（上游无 tag、无版本声明） | submodule → `embark_efmt` |
-| ETLCPP/etl | **开工先锁 20.40.0**（本机已逐条核实）；拉到上游 20.49.0 并按 §16.3 复核通过后再切 | submodule（锁 commit）→ `etl::etl` |
+| ETLCPP/etl | **现在锁 20.40.0**（本机已逐条核实）；20.49.0 已按 §16.3 复核完（12 条零回归，见 issues/01），**是否切换等用户点头** | submodule（锁 commit）→ `etl::etl` |
+| doctest | v2.4.11（锁 tag/commit） | submodule → `doctest::doctest`（只进测试目标） |
 | LVGL | 8.3.x，固定一个小补丁版 | submodule；`lv_conf.h` 自持 |
 | FreeRTOS | 真机用 ESP-IDF 5.4 自带；宿主用 kernel + Windows port | 平台侧 |
 
@@ -237,14 +238,14 @@ embark/
 | `ETL_USING_CPP17` | `platform.h` 按 `__cplusplus` 派生 | `etl::expected` 全部在该宏门内（`expected.h:231`）；C++17 目标天然满足，spec §9 依赖它 |
 | `ETL_CALLBACK_TIMER_USE_ATOMIC_LOCK` **或** `ETL_CALLBACK_TIMER_USE_INTERRUPT_LOCK` | `callback_timer.h` | 二选一，否则 `#error`（:54、:58）；选 INTERRUPT 版还要自定 `ETL_CALLBACK_TIMER_DISABLE_INTERRUPTS` / `..._ENABLE_INTERRUPTS`（:70） |
 | `ETL_MESSAGE_TIMER_USE_ATOMIC_LOCK` **或** `..._INTERRUPT_LOCK` | `message_timer.h` | 同上；`profiles/*.h` 里没有任何默认值，8 处引用全在该头内 |
-| `ETL_TARGET_OS_FREERTOS` | **我们自己定义**（ETL 全库只消费不定义；自带 profiles 给的都是 `ETL_TARGET_OS_NONE/WINDOWS/LINUX`） | `mutex.h:37` 的分支键。不给就会落进 `ETL_COMPILER_GCC` → `mutex_gcc_sync.h`（靠 `__sync_*`），Cortex-M 上不可用。宿主（FreeRTOS Windows port）与 ESP32 两个目标都要给 |
+| `ETL_TARGET_OS_FREERTOS` | **我们自己定义**（ETL 全库只消费不定义；自带 profiles 给的都是 `ETL_TARGET_OS_NONE/WINDOWS/LINUX`） | `mutex.h:37` 的分支键。不给就会落进 `ETL_COMPILER_GCC` → `mutex_gcc_sync.h`（靠 `__sync_*`），Cortex-M 上不可用。**但给了要看平台有没有 FreeRTOS 头**：定义它以后 `<etl/callback_timer.h>` → `timer.h` → `atomic.h` → `atomic_gcc_sync.h` → `mutex.h` → `mutex_freertos.h` 会去 include `FreeRTOS.h`，没有该头的平台连 `callback_timer` 都编不过（20.40.0 报 `fatal error: FreeRTOS.h`，20.49.0 有一句友好 `#error`；实测见 issues/01 的 Answer）。所以改成按平台能力开关：`EMBARK_PLATFORM_HAS_FREERTOS`（顶层 CMake，宿主在 FreeRTOS Windows port 落地前 OFF，ESP32 侧 ON），两个目标最终都要开 |
 | `ETL_HAS_MUTEX` / `ETL_HAS_ATOMIC` | 由 `mutex.h:34-54` / `platform.h:422-437` 派生 | 用 `etl::mutex`、`etl::atomic`、`queue_mpmc_mutex` 的前提；派生规则见 §16.1「同步」行 |
 | `ETL_CHECK_PUSH_POP` | `vector.h`(9 处)/`deque.h`(18)/`list.h`(18)/`stack.h`(9)/`queue.h`(9)/`forward_list.h`/`intrusive_*`/`indirect_vector.h`/`private/pvoidvector.h`（全库 82 处） | **不是只给 queue 用的**：它守着 `push_back`/`pop_back`/`push`/`pop` 的满空检查。不定义，往满容器写入既无断言也无日志 → 直接写坏内存。**建议定义**（配合下面 `ETL_LOG_ERRORS` 的处理策略） |
 | `ETL_LOG_ERRORS` | `error_handler.h:46` | **`class etl::error_handler` 只在定义了它（或 `ETL_IN_UNIT_TEST`）时才存在**。不定义：debug 走 `assert()`（:347）、release 下 `ETL_ASSERT` 直接空展开（:356），ETL 内部护栏全部失效。**必须定义**；再把 `error_handler::set_callback`（:84）接到我们自己的致命通道——`ETL_LOG_ERRORS` 分支里 `ETL_ASSERT` 只是 `etl::error_handler::error(e)` 回调（:339），**不中断执行**，要「最后一条日志 + halt」就得由我们的回调来做（§9）；需要返回值的位置用 `ETL_ASSERT_OR_RETURN`（:340） |
 | `ETL_USE_ASSERT_FUNCTION` / `ETL_THROW_EXCEPTIONS` | `error_handler.h:311` / `platform.h:236-240` | **两个都不要定义**：前者把断言交给 `etl::set_assert_function` 且优先级高于 `ETL_LOG_ERRORS`；后者让 `ETL_ASSERT` 走 `throw`（内核禁异常）。我们要的就是 `error_handler.h:338-345` 那条分支 |
 | `ETL_ISTRING_REPAIR_ENABLE` / `ETL_IVECTOR_REPAIR_ENABLE` / `ETL_IDEQUE_REPAIR_ENABLE` / `ETL_ICIRCULAR_BUFFER_REPAIR_ENABLE` | `platform.h:204-232` | 容器对象被 `memcpy` 到别处（跨任务传对象、放共享内存）后修复内部指针。**Embark 跨任务只传 POD 负载或引用，不搬容器** → 不定义；将来若真要搬，必须打开 |
 | `ETL_MESSAGE_ID_TYPE` / `ETL_FSM_STATE_ID_TYPE` | `message_types.h:39-43` / `fsm.h:74-77` | 默认都是 `uint_least8_t`。v1 保持默认（消息类型 < 255、状态数 < 255） |
-| 平台 profile | `profiles/cpp17.h` / `profiles/auto.h` | **没有 ESP32/Xtensa/RISC-V 专用 profile**（35 个 profile 里最近的是 `gcc_generic.h`/`cpp17.h`）→ 选 `cpp17.h` 或 `auto.h`，上面这些 `ETL_TARGET_OS_*`、定时器宏由我们自己补 |
+| 平台 profile | `profiles/cpp17.h` / `profiles/auto.h` | **没有 ESP32/Xtensa/RISC-V 专用 profile**（35 个 profile 里最近的是 `gcc_generic.h`/`cpp17.h`）。**我们不提供 `etl_profile.h`**：`platform.h:56-64` 因此走 `ETL_NO_PROFILE_HEADER` 分支，`ETL_USING_CPP17` 由 `platform.h:144` 引入的 `profiles/determine_compiler_language_support.h:157` 按 `__cplusplus` 派生（C++17 目标天然为 1），`ETL_USING_STL` 由 `platform.h:90-96` 按 `ETL_NO_STL` 直接覆盖 —— 所以"不给 profile 会偷偷用上 STL"不成立（已按代码核实）。上面这些 `ETL_TARGET_OS_*`、定时器宏仍由我们自己补 |
 | `ETL_NO_EXCEPTIONS` / `ETL_NO_STL` 等 | `platform.h` | 按目标设置；内核代码两端编译选项必须一致，宿主不得悄悄用上 STL |
 
 ### 16.3 版本差异（已核实的 A/B）
@@ -253,7 +254,8 @@ embark/
 - **文件级差异（我实测：剥掉 30 行版本横幅后逐文件比对）**：A 独有 10 个（`function_traits.h`、`singleton_base.h`、`type_list.h`、`uncopyable.h` + `experimental/` 5 个 + `deprecated/factory.h`），B 独有 0 个；同名文件中**实质不同 48 个**（含 `atomic/atomic_gcc_sync.h`、`private/delegate_cpp11.h`、`private/bitset_*.h`、`generators/*` 等子目录）。上一版这里写「只有 6 个文件有差异」是错的，已按实测更正。
 - 其中对清单有实质影响的 6 处：`expected.h`（`operator bool` 加 `ETL_EXPLICIT` + `ETL_NOEXCEPT`；`value()` 仍无断言——我已核实）、`error_handler.h`（A 新增 `ETL_USE_ASSERT_FUNCTION` 档——我已核实 :311）、`queue.h`（`emplace` 返回 `reference`）、`optional.h`（`emplace` 返回 `T&`）、`span.h`/`array_view.h`/`memory.h`（改用 `etl::to_address`，空 span 更正确）、`ipool.h`（A 才把 free-list 指针写入逻辑放出来并新增 `max_item_size()` → **B 的对象池是残缺的**）；`string.h` 另加 `operator=(string_view)`。**结论不变：用 A（20.40.0）。**
 - **20.49.0 复核清单（拿到新版本后逐条核，别猜）**：① `expected` 是否新增 `and_then`/`or_else`/`transform`；② `expected::value()` 是否仍无断言；③ 是否新增 `bitmap`；④ 是否新增 `interrupt_guard`；⑤ `mutex/` 或 `profiles/` 是否新增 ESP-IDF/FreeRTOS 后端并自带 `ETL_TARGET_OS_FREERTOS`；⑥ `task` 接口是否变化；⑦ `queue::push` 是否仍返回 void、`ETL_CHECK_PUSH_POP` 是否仍在；⑧ `message_bus` 是否新增 `publish`；⑨ `delegate` 存储是否变化；⑩ `pool`/`ipool` free-list 是否又被改；⑪ `ETL_VERSION_VALUE` 编码是否仍是 `major*10000+minor*100+patch`；⑫ `expected<void,E>` 的 API 是否增删。
-- 上游 20.49.0 本机没有 → **先用 20.40.0 开发**（依赖锁 SHA），开工前跑一次「拉到 20.49.0 + 编译 + 本节复核」，再决定最终锁哪个版本（见 §15）。
+- 上游 20.49.0 本机没有 → **先用 20.40.0 开发**（依赖锁 SHA）。
+- **20.49.0 复核已完成（2026-10-03）**：12 条全部实测、零回归，另有两点利好（`expected` 有了 `and_then`/`or_else`/`transform`；`mutex_freertos.h` 用 `__has_include` 认 ESP-IDF 的 `<freertos/...>` 布局）→ 建议升级，但仓库现在仍锁 20.40.0，**等用户点头**；明细与换版清单（submodule 指针、static_assert、本节行号重标）见 `issues/01-etl-version-verify.md` 的 `## Answer`。
 - `version.h:41-52` 给了 `ETL_VERSION_MAJOR/MINOR/PATCH`、`ETL_VERSION`、`ETL_VERSION_VALUE` → 框架里加一条 `static_assert(ETL_VERSION_MAJOR == 20 && ETL_VERSION_MINOR == 40, "Embark v1 按 ETL 20.40.0 核实过，换版本请重跑 §16 复核")`：版本被悄悄换掉时直接编译报错，比"人记得"可靠。
 
 ### 16.4 两处设计选择 + 依赖形态（2026-10-03 用户已拍板）
@@ -274,8 +276,9 @@ embark/
 | `etl::ifunction` 的头文件 | 注意 | **没有 `ifunction.h`**，`ifunction` 在 `function.h`（:52 / :71）里 |
 | 宿主/设备统一构建 | 自备 | ETL 只有头文件与 profile 宏，不含任何构建脚本；两 target 的宏必须在我们的 `platform_config.h` 里集中给定 |
 
-### 16.6 第二轮复核（20.40.0 ↔ 20.39.4）记下的三个反直觉点
+### 16.6 两轮复核记下的反直觉点
 
 1. **定容容器没有堆版本**：全库 `std::allocator`/`malloc`/`operator new` 零命中，容量一律是编译期模板参数（需要运行期容量时用 `_ext` 族 + 调用方提供缓冲）。所以「不小心用 ETL 分配堆内存」这件事不存在，**唯一的坑是容量必须编译期确定**。
 2. **`etl::memory_model` 与堆无关**：它只决定 `size_type` 宽度（`memory_model.h:49-73`，SMALL→`uint_least8_t` … HUGE→`uint_least64_t`）。别当成「内存模型开关」。
 3. **`etl::task` 不是 RTOS 任务**：`task.h:82/:87` 只有 `task_request_work()` / `task_process_work()`，由 `etl::scheduler` 轮询驱动，无栈无线程 —— 它只能当「后台节拍的一种可选实现」（见 16.4 第 1 条），替代不了 FreeRTOS 任务。
+4. **ETL 的宏会顺着 include 链跑到别的模块去**：`ETL_TARGET_OS_FREERTOS` 表面上只是「选互斥实现」（`mutex.h:37`），实际会把 `callback_timer.h` 也拖下水（→ `timer.h` → `atomic.h` → `atomic_gcc_sync.h` → `mutex.h` → `mutex_freertos.h` → 要 `FreeRTOS.h`）。教训：加 ETL 宏之前，先用最小 TU 单独 include 一遍要用的头（骨架就是这么发现宿主编不过的）。
