@@ -1,0 +1,19 @@
+# Embark 代码风格（.clang-format）
+#
+# 说明：v1 阶段【不强制】本机格式化 —— CI 里的 clang-format --dry-run 只作提示
+# （spec §13）。手写风格跟着这份文件走即可。
+BasedOnStyle: Google
+Language: Cpp
+Standard: c++17
+ColumnLimit: 100
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+AccessModifierOffset: -1
+AlignAfterOpenBracket: Align
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+BreakBeforeBraces: Attach
+IncludeBlocks: Preserve
+PointerAlignment: Left

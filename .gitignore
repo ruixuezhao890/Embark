@@ -1,0 +1,20 @@
+# 构建产物（CMake/Ninja 生成的一切都不进仓库）
+build/
+build-*/
+out/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+
+# middleware/ 视图只应出现在构建目录（见 cmake/embark_middleware.cmake）；
+# 万一被误生成到源码树，也不要提交
+/middleware/
+
+# 编辑器 / IDE
+.idea/
+.vscode/
+.vs/
+*.user
+
+# 注意：.scratch/ 是 issue 追踪所在地，必须随仓库提交，不要忽略它。
