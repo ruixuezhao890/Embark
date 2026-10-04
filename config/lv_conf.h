@@ -104,8 +104,8 @@
 #define LV_USE_DEMO_STRESS 0
 #define LV_USE_DEMO_MUSIC 0
 
-#define LV_USE_PERF_MONITOR 0
-#define LV_USE_MEM_MONITOR 0
+#define LV_USE_PERF_MONITOR 1
+#define LV_USE_MEM_MONITOR 1
 #define LV_USE_SNAPSHOT 0
 
 /* 应用侧要把 App 指针挂到控件上（issue 06/07），保留 user_data。 */
