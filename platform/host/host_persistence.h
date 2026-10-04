@@ -34,8 +34,7 @@ class HostPersistence final : public hal::IPersistence {
   Error init() noexcept override;
 
   [[nodiscard]] etl::expected<std::size_t, Error> read(
-          etl::string_view key,
-          etl::span<std::uint8_t> out) const noexcept override;
+      etl::string_view key, etl::span<std::uint8_t> out) const noexcept override;
 
   Error write(etl::string_view key, etl::span<const std::uint8_t> value) noexcept override;
 

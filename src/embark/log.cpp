@@ -53,7 +53,8 @@ void LogSinkBinder::emit(const char* data, std::size_t size) noexcept {
   bytes_ += size;
 }
 
-e_log::logger* install_logger(const char* name, LogSinkBinder& binder, e_log::level level) noexcept {
+e_log::logger* install_logger(const char* name, LogSinkBinder& binder,
+                              e_log::level level) noexcept {
   return e_log::create_logger(name, binder.make_sink(), level);
 }
 

@@ -8,7 +8,10 @@ namespace embark::fakes {
 
 class FakeUiPort final : public IUiPort {
  public:
-  Error init() override { ++init_count; return init_result; }
+  Error init() override {
+    ++init_count;
+    return init_result;
+  }
   void tick() noexcept override { ++tick_count; }
   void pump_input() noexcept override { ++pump_count; }
   void process() noexcept override { ++process_count; }

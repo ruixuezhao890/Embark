@@ -69,7 +69,8 @@ class LvglPort {
   }
 
  private:
-  static void flush_thunk(lv_disp_drv_t* driver, const lv_area_t* area, lv_color_t* pixels) noexcept;
+  static void flush_thunk(lv_disp_drv_t* driver, const lv_area_t* area,
+                          lv_color_t* pixels) noexcept;
   static void read_thunk(lv_indev_drv_t* driver, lv_indev_data_t* data) noexcept;
   static void log_thunk(const char* message) noexcept;
 

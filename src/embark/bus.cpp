@@ -48,8 +48,7 @@ void Bus::unsubscribe(etl::message_router_id_t id) noexcept {
 }
 
 void Bus::clear_subscribers() noexcept {
-  etl::message_bus<max_bus_subscribers>::unsubscribe(
-      etl::imessage_router::ALL_MESSAGE_ROUTERS);
+  etl::message_bus<max_bus_subscribers>::unsubscribe(etl::imessage_router::ALL_MESSAGE_ROUTERS);
   subscribers_.clear();
 }
 

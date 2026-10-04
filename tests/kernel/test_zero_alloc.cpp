@@ -63,9 +63,8 @@ class AuditMsg final : public embark::MessageT<0x61> {
 // 同构，按需精简。
 class RecordSpawner final : public embark::ITaskSpawner {
  public:
-  [[nodiscard]] embark::Error spawn_task(const char*, void (*)(void*) noexcept,
-                                         void*, std::uint16_t,
-                                         std::uint8_t) noexcept override {
+  [[nodiscard]] embark::Error spawn_task(const char*, void (*)(void*) noexcept, void*,
+                                         std::uint16_t, std::uint8_t) noexcept override {
     ++spawn_calls_;
     return result_;
   }
@@ -141,8 +140,7 @@ TEST_CASE("零分配审计：boot→帧循环→消息→切换→shutdown 全�
   }
   const std::uint32_t after_probe = embark::test::global_allocation_count();
   if (after_probe != allocations + 1U) {
-    std::fprintf(stderr,
-                 "零分配审计钩子失效：主动分配 1 次后计数 %u（期望 %u，钩子没在数分配）\n",
+    std::fprintf(stderr, "零分配审计钩子失效：主动分配 1 次后计数 %u（期望 %u，钩子没在数分配）\n",
                  after_probe, allocations + 1U);
     std::abort();
   }

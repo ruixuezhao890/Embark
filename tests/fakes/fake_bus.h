@@ -15,8 +15,7 @@ class FakeBus final : public hal::IBus {
  public:
   FakeBus() noexcept = default;
 
-  Error i2c_write(std::uint8_t address7,
-                  etl::span<const std::uint8_t> data) noexcept override {
+  Error i2c_write(std::uint8_t address7, etl::span<const std::uint8_t> data) noexcept override {
     ++i2c_writes;
     last_address = address7;
     last_write_bytes = data.size();
@@ -26,8 +25,7 @@ class FakeBus final : public hal::IBus {
     return i2c_write_result;
   }
 
-  Error i2c_write_read(std::uint8_t address7,
-                       etl::span<const std::uint8_t> write_data,
+  Error i2c_write_read(std::uint8_t address7, etl::span<const std::uint8_t> write_data,
                        etl::span<std::uint8_t> read_data) noexcept override {
     ++i2c_write_reads;
     last_address = address7;
@@ -40,7 +38,8 @@ class FakeBus final : public hal::IBus {
     return i2c_write_read_result;
   }
 
-  Error spi_transfer(etl::span<const std::uint8_t> out, etl::span<std::uint8_t> in) noexcept override {
+  Error spi_transfer(etl::span<const std::uint8_t> out,
+                     etl::span<std::uint8_t> in) noexcept override {
     ++spi_transfers;
     last_write_bytes = out.size();
     last_read_bytes = in.size();

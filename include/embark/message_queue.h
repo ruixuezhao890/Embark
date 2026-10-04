@@ -17,9 +17,9 @@
 #include <cstddef>
 #include <cstdint>
 
-#include <middleware/elog/elog.hpp>
 #include <middleware/etl/circular_buffer.h>
 #include <middleware/etl/mutex.h>
+#include <middleware/elog/elog.hpp>
 
 namespace embark {
 

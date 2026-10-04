@@ -12,7 +12,8 @@ TEST_CASE("IBus：默认三条路径都是 unsupported（不是没实现，是�
   const std::uint8_t out[4] = {1, 2, 3, 4};
   std::uint8_t in[4] = {};
 
-  CHECK(bus.i2c_write(0x3CU, etl::span<const std::uint8_t>(out, sizeof(out))) == Error::unsupported);
+  CHECK(bus.i2c_write(0x3CU, etl::span<const std::uint8_t>(out, sizeof(out))) ==
+        Error::unsupported);
   CHECK(bus.i2c_write_read(0x3CU, etl::span<const std::uint8_t>(out, 1),
                            etl::span<std::uint8_t>(in, sizeof(in))) == Error::unsupported);
   CHECK(bus.spi_transfer(etl::span<const std::uint8_t>(out, sizeof(out)),

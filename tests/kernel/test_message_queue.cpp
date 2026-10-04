@@ -63,7 +63,7 @@ TEST_CASE("消息队列：移动与拷贝入队均可用") {
 
   queue.push(std::uint32_t{42});  // 右值 → T&& 版
   std::uint32_t v = 43;
-  queue.push(v);                  // 左值 → const T& 版
+  queue.push(v);  // 左值 → const T& 版
 
   std::uint32_t out = 0;
   REQUIRE(queue.pop(out));

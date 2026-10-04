@@ -8,8 +8,8 @@
  * stdout 设成无缓冲：程序若被强杀，块缓冲会让"最后几行"全丢掉（issue 02 踩过）。
  * 输出规矩：文本格式化一律用 efmt，文本输出一律用 elog。
  */
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 
 #include <embark/error.h>
 #include <embark/hal/context.h>
@@ -87,8 +87,7 @@ int self_check(embark::hal::Context& ctx) {
     storage_ok = false;
   } else {
     std::uint8_t sink[1] = {};
-    const auto gone =
-            ctx.storage.read("self_check", etl::span<std::uint8_t>(sink, sizeof(sink)));
+    const auto gone = ctx.storage.read("self_check", etl::span<std::uint8_t>(sink, sizeof(sink)));
     if (!gone.has_value() && gone.error() != embark::Error::not_found) {
       ELOG_ERROR("自检失败：擦除后读回的不是 not_found");
       storage_ok = false;

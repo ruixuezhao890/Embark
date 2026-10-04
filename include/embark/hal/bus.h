@@ -23,12 +23,10 @@ class IBus {
   virtual ~IBus() = default;
 
   /// 只写：start → 7 位地址 + 写标志 → 数据 → stop。设备没响应（NACK）→ io_failure。
-  virtual Error i2c_write(std::uint8_t address7,
-                          etl::span<const std::uint8_t> data) noexcept = 0;
+  virtual Error i2c_write(std::uint8_t address7, etl::span<const std::uint8_t> data) noexcept = 0;
 
   /// 写完重启（repeated start）再读：寄存器读的标准动作。
-  virtual Error i2c_write_read(std::uint8_t address7,
-                               etl::span<const std::uint8_t> write_data,
+  virtual Error i2c_write_read(std::uint8_t address7, etl::span<const std::uint8_t> write_data,
                                etl::span<std::uint8_t> read_data) noexcept = 0;
 
   /// 全双工一次：out 与 in 长度相同、同步收发（屏幕像素走这条）。

@@ -46,8 +46,8 @@ inline constexpr int demo_click_center_x = demo_button_x + demo_button_width / 2
 inline constexpr int demo_click_center_y = demo_button_y + demo_button_height / 2;  // 170
 
 // SettingsApp 的 "Back to clock" 按钮（在 "Level +1" 正下方）。
-inline constexpr int demo_switch_button_y = demo_button_y + demo_button_height + 5;  // 195
-inline constexpr int demo_switch_center_x = demo_click_center_x;                    // 160
+inline constexpr int demo_switch_button_y = demo_button_y + demo_button_height + 5;         // 195
+inline constexpr int demo_switch_center_x = demo_click_center_x;                            // 160
 inline constexpr int demo_switch_center_y = demo_switch_button_y + demo_button_height / 2;  // 215
 
 /// 示例 App 之间的消息（App 间只走消息，不互相 include —— spec §7 / issue 08 验收）。
@@ -89,21 +89,21 @@ class ClockApp final : public App {
   enum class State : std::uint8_t { blinking_on = 0, blinking_off = 1 };
   enum class Event : std::uint8_t { tick = 0 };
 
-  using Chart = etl::state_chart<ClockApp>;  // TParameter = void（无参事件）
+  using Chart = etl::state_chart<ClockApp>;        // TParameter = void（无参事件）
   static const Chart::transition kTransitions[2];  // 定义在 demo_apps.cpp
   static const Chart::state kStates[2];            // 定义在 demo_apps.cpp
   Chart chart_;
 
-  void on_tick() noexcept;              // 状态机 action：++ticks_ + 刷标签
-  void enter_blinking_on() noexcept;    // on_entry：背景换亮色
-  void enter_blinking_off() noexcept;   // on_entry：背景换回深色
+  void on_tick() noexcept;             // 状态机 action：++ticks_ + 刷标签
+  void enter_blinking_on() noexcept;   // on_entry：背景换亮色
+  void enter_blinking_off() noexcept;  // on_entry：背景换回深色
   void refresh_state_label() noexcept;
   void refresh_brightness() noexcept;
   static void on_settings_button(lv_event_t* event) noexcept;  // 请求切到 SettingsApp
 
   Framework* fw_ = nullptr;
   lv_obj_t* screen_ = nullptr;
-  lv_obj_t* state_label_ = nullptr;    // "Ticks: N (about N s)"
+  lv_obj_t* state_label_ = nullptr;       // "Ticks: N (about N s)"
   lv_obj_t* brightness_label_ = nullptr;  // "Brightness: N"
   std::uint32_t ticks_ = 0;
   std::uint32_t level_ = 0;
@@ -166,7 +166,7 @@ class TickerApp final : public App {
   void onExit() override;
 
   // --- 验收观测 --------------------------------------------------------------
-  [[nodiscard]] std::uint32_t sent() const noexcept { return sent_; }        // own task 线程
+  [[nodiscard]] std::uint32_t sent() const noexcept { return sent_; }          // own task 线程
   [[nodiscard]] std::uint32_t received() const noexcept { return received_; }  // UI 任务线程
 
  private:

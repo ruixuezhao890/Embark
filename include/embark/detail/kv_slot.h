@@ -34,7 +34,7 @@ namespace embark::detail {
 inline constexpr std::size_t kv_magic_size = 4;
 inline constexpr std::size_t kv_header_size = 12;
 inline constexpr std::size_t kv_slot_bytes =
-        kv_header_size + persistence_max_key_bytes + persistence_max_value_bytes;
+    kv_header_size + persistence_max_key_bytes + persistence_max_value_bytes;
 
 inline constexpr std::uint8_t kv_state_empty = 0;
 inline constexpr std::uint8_t kv_state_used = 1;
@@ -61,8 +61,9 @@ inline void write_u32(std::uint8_t* out, std::uint32_t value) noexcept {
 }
 
 inline std::uint16_t read_u16(const std::uint8_t* in) noexcept {
-  return static_cast<std::uint16_t>(static_cast<std::uint16_t>(in[0]) |
-                                    static_cast<std::uint16_t>(static_cast<std::uint16_t>(in[1]) << 8U));
+  return static_cast<std::uint16_t>(
+      static_cast<std::uint16_t>(in[0]) |
+      static_cast<std::uint16_t>(static_cast<std::uint16_t>(in[1]) << 8U));
 }
 
 inline std::uint32_t read_u32(const std::uint8_t* in) noexcept {
@@ -79,10 +80,8 @@ inline std::uint32_t slot_crc(etl::string_view key, etl::span<const std::uint8_t
 }
 
 inline bool has_magic(const std::uint8_t* slot) noexcept {
-  return slot[0] == static_cast<std::uint8_t>('E') &&
-         slot[1] == static_cast<std::uint8_t>('K') &&
-         slot[2] == static_cast<std::uint8_t>('V') &&
-         slot[3] == static_cast<std::uint8_t>('1');
+  return slot[0] == static_cast<std::uint8_t>('E') && slot[1] == static_cast<std::uint8_t>('K') &&
+         slot[2] == static_cast<std::uint8_t>('V') && slot[3] == static_cast<std::uint8_t>('1');
 }
 
 }  // namespace internal
@@ -99,8 +98,7 @@ inline Error clear_slot(etl::span<std::uint8_t> slot) noexcept {
 }
 
 /// 编码一条键值。键为空/超长 → invalid_argument；值超上限或槽太小 → no_space。
-inline Error encode_slot(etl::span<std::uint8_t> slot,
-                         etl::string_view key,
+inline Error encode_slot(etl::span<std::uint8_t> slot, etl::string_view key,
                          etl::span<const std::uint8_t> value) noexcept {
   if (key.empty() || key.size() > persistence_max_key_bytes) {
     return Error::invalid_argument;
@@ -153,10 +151,10 @@ inline Error decode_slot(etl::span<const std::uint8_t> slot, SlotView& out) noex
     return Error::corrupt_data;
   }
 
-  const auto key = etl::string_view{reinterpret_cast<const char*>(slot.data() + kv_header_size),
-                                    key_len};
+  const auto key =
+      etl::string_view{reinterpret_cast<const char*>(slot.data() + kv_header_size), key_len};
   const auto value = etl::span<const std::uint8_t>(
-          slot.data() + kv_header_size + persistence_max_key_bytes, value_len);
+      slot.data() + kv_header_size + persistence_max_key_bytes, value_len);
   if (internal::slot_crc(key, value) != internal::read_u32(slot.data() + 8)) {
     return Error::corrupt_data;
   }

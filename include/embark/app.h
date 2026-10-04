@@ -36,7 +36,7 @@ enum class BackgroundPolicy : std::uint8_t {
 /// 每 App 的后台配置（App::settings() 返回；默认 = 纯前台、后台不跑）。
 struct AppSettings {
   BackgroundPolicy background = BackgroundPolicy::suspend;
-  std::uint32_t period_ms = 0;      ///< tick 策略的周期；0 等价 suspend
+  std::uint32_t period_ms = 0;         ///< tick 策略的周期；0 等价 suspend
   std::uint16_t task_stack_words = 0;  ///< own_task 策略的栈深（单位：StackType_t 字）
   std::uint8_t task_priority = 0;      ///< own_task 策略的优先级
 };

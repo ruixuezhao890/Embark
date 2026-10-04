@@ -7,9 +7,9 @@
 #include <embark/app_registry.h>
 
 using embark::App;
+using embark::app_registry;
 using embark::AppId;
 using embark::AppRegistry;
-using embark::app_registry;
 using embark::invalid_app_id;
 
 namespace {

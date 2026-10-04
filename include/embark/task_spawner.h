@@ -33,10 +33,8 @@ class ITaskSpawner {
   ///   stack_words 栈深（平台单位字；0 非法，框架会先填默认值）
   ///   priority    优先级（平台语义，下界留给平台）
   /// 失败返回 busy（槽位耗尽）/ invalid_argument / no_space（静态存储不足）。
-  [[nodiscard]] virtual Error spawn_task(const char* name,
-                                         void (*entry)(void*) noexcept,
-                                         void* argument,
-                                         std::uint16_t stack_words,
+  [[nodiscard]] virtual Error spawn_task(const char* name, void (*entry)(void*) noexcept,
+                                         void* argument, std::uint16_t stack_words,
                                          std::uint8_t priority) noexcept = 0;
 };
 

@@ -263,7 +263,9 @@ TEST_CASE("Framework：step 每帧 = tick → pump → process；exit_requested 
   CHECK(fw.id_of(*registry.at(1)) == 1U);
 }
 
-TEST_CASE("Framework：shutdown = 前台 onPause → 全 App onExit（注册序）→ UI 端口 shutdown；之后 step 无效") {
+TEST_CASE(
+    "Framework：shutdown = 前台 onPause → 全 App onExit（注册序）→ UI 端口 shutdown；之后 step "
+    "无效") {
   embark::fakes::FakeHal hal;
   auto ctx = hal.context();
   embark::fakes::FakeUiPort ui;
@@ -278,7 +280,7 @@ TEST_CASE("Framework：shutdown = 前台 onPause → 全 App onExit（注册序�
   records.back.clear();
 
   fw.shutdown();
-  check_hooks(records.front, {Hook::exit});  // 没在前台 → 只收尾
+  check_hooks(records.front, {Hook::exit});              // 没在前台 → 只收尾
   check_hooks(records.back, {Hook::pause, Hook::exit});  // 前台 → pause 再 exit
   CHECK(ui.shutdown_count == 1);
   CHECK(fw.frames() == 1U);  // shutdown 本身不计帧

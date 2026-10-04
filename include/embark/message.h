@@ -43,8 +43,7 @@ inline constexpr MessageId cross_task_message_id = 0xFEU;
 class CrossTaskMessage : public MessageT<cross_task_message_id> {
  public:
   CrossTaskMessage() noexcept = default;
-  CrossTaskMessage(AppId from, std::uint32_t sequence) noexcept
-      : from_app(from), seq(sequence) {}
+  CrossTaskMessage(AppId from, std::uint32_t sequence) noexcept : from_app(from), seq(sequence) {}
 
   AppId from_app = invalid_app_id;  ///< 发送方 App（own task 的拥有者）
   std::uint32_t seq = 0;            ///< 发送方自己的序号（丢包/乱序观测）

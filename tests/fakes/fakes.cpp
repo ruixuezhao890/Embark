@@ -31,9 +31,13 @@ void record(const char* text) noexcept {
 
 }  // namespace
 
-std::size_t assert_failed_calls() noexcept { return g_assert_failed_calls; }
+std::size_t assert_failed_calls() noexcept {
+  return g_assert_failed_calls;
+}
 
-std::size_t fatal_calls() noexcept { return g_fatal_calls; }
+std::size_t fatal_calls() noexcept {
+  return g_fatal_calls;
+}
 
 etl::string_view last_failure_text() noexcept {
   return etl::string_view(g_last_failure.data(), g_last_failure_length);
@@ -53,8 +57,8 @@ namespace embark {
 void assert_failed(const char* file, int line, const char* expression) noexcept {
   ++fakes::g_assert_failed_calls;
   std::fprintf(stderr, "\n[embark-test] assertion failed: %s\n               at %s:%d\n",
-               expression != nullptr ? expression : "(null)",
-               file != nullptr ? file : "(null)", line);
+               expression != nullptr ? expression : "(null)", file != nullptr ? file : "(null)",
+               line);
   fakes::record(expression != nullptr ? expression : "(null)");
   std::fflush(stderr);
   std::abort();

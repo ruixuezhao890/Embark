@@ -18,8 +18,7 @@ class HostBus final : public hal::IBus {
  public:
   Error i2c_write(std::uint8_t address7, etl::span<const std::uint8_t> data) noexcept override;
 
-  Error i2c_write_read(std::uint8_t address7,
-                       etl::span<const std::uint8_t> write_data,
+  Error i2c_write_read(std::uint8_t address7, etl::span<const std::uint8_t> write_data,
                        etl::span<std::uint8_t> read_data) noexcept override;
 
   Error spi_transfer(etl::span<const std::uint8_t> out,

@@ -11,11 +11,11 @@
 #include <doctest/doctest.h>
 
 #include <embark/version.h>
-#include <middleware/efmt/core/format.hpp>
-#include <middleware/elog/elog.hpp>
 #include <middleware/etl/string_view.h>
 #include <middleware/etl/vector.h>
 #include <middleware/etl/version.h>
+#include <middleware/efmt/core/format.hpp>
+#include <middleware/elog/elog.hpp>
 
 TEST_CASE("版本字符串由构建系统注入") {
   const etl::string_view version(embark::version_string());
@@ -59,7 +59,7 @@ TEST_CASE("ETL 定容容器：容量固定、零堆") {
 
 TEST_CASE("elog + efmt 在测试目标里也能用") {
   e_log::logger* const logger =
-          e_log::create_logger("embark-test", e_log::stdout_sink(), e_log::level::debug);
+      e_log::create_logger("embark-test", e_log::stdout_sink(), e_log::level::debug);
   REQUIRE(logger != nullptr);
 
   ELOG_INFO("冒烟：elog 与 efmt 链路正常（Embark {}）", embark::version_string());

@@ -92,9 +92,7 @@ class Framework {
   [[nodiscard]] const Bus& bus() const noexcept { return bus_; }
 
   /// 收件箱累计溢出次数（own task 发太快、UI 来不及消化的信号）。
-  [[nodiscard]] std::uint32_t inbox_overflows() const noexcept {
-    return inbox_.overflows();
-  }
+  [[nodiscard]] std::uint32_t inbox_overflows() const noexcept { return inbox_.overflows(); }
 
   // --- 查询 ---------------------------------------------------------------
 
@@ -108,9 +106,7 @@ class Framework {
   [[nodiscard]] AppId pending_foreground() const noexcept { return pending_; }
 
   /// 有没有还没生效的切换请求。
-  [[nodiscard]] bool switch_pending() const noexcept {
-    return pending_ != foreground_;
-  }
+  [[nodiscard]] bool switch_pending() const noexcept { return pending_ != foreground_; }
 
   /// 已经跑过的帧数（观测/验收用）。
   [[nodiscard]] std::uint32_t frames() const noexcept { return frames_; }
@@ -127,9 +123,7 @@ class Framework {
   [[nodiscard]] App* app(AppId id) noexcept { return apps_.at(id); }
 
   /// 反查 App 编号（不在注册表里返回 invalid_app_id）。
-  [[nodiscard]] AppId id_of(const App& app) const noexcept {
-    return apps_.id_of(app);
-  }
+  [[nodiscard]] AppId id_of(const App& app) const noexcept { return apps_.id_of(app); }
 
   /// HAL 上下文 —— onCreate 里 App 拿硬件能力的唯一入口（spec：注入，不 include 平台）。
   [[nodiscard]] hal::Context& hal() noexcept { return hal_; }

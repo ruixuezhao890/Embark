@@ -6,9 +6,9 @@
 // 只是多了记账，所以可以放心地在整个测试可执行文件里生效。
 #include "zero_alloc_hooks.h"
 
+#include <malloc.h>  // _aligned_malloc / _aligned_free（MinGW 的 <cstdlib> 没有 std::aligned_alloc）
 #include <cstddef>
 #include <cstdlib>
-#include <malloc.h>  // _aligned_malloc / _aligned_free（MinGW 的 <cstdlib> 没有 std::aligned_alloc）
 #include <new>
 
 namespace {

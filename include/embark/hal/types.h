@@ -56,8 +56,8 @@ constexpr std::uint8_t bits_per_pixel(PixelFormat format) noexcept {
 
 /// 一块区域需要的字节数（单色按整字节向上取整；实际后端还会各自对齐）。
 constexpr std::size_t area_bytes(const Rect& area, PixelFormat format) noexcept {
-  const std::size_t pixels = static_cast<std::size_t>(area.width) *
-                             static_cast<std::size_t>(area.height);
+  const std::size_t pixels =
+      static_cast<std::size_t>(area.width) * static_cast<std::size_t>(area.height);
   return (pixels * bits_per_pixel(format) + 7U) / 8U;
 }
 

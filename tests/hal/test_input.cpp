@@ -25,9 +25,10 @@ TEST_CASE("IInput：脚本化事件按序取出，取空返回 false") {
   FakeHal hal;
   REQUIRE(hal.init() == Error::none);
 
-  CHECK(hal.input.push(embark::hal::InputEvent{embark::hal::InputEventKind::press, 10, 20, 0, 100}));
+  CHECK(
+      hal.input.push(embark::hal::InputEvent{embark::hal::InputEventKind::press, 10, 20, 0, 100}));
   CHECK(hal.input.push(
-          embark::hal::InputEvent{embark::hal::InputEventKind::release, 10, 20, 0, 130}));
+      embark::hal::InputEvent{embark::hal::InputEventKind::release, 10, 20, 0, 130}));
   CHECK(hal.input.pending() == 2U);
 
   embark::hal::InputEvent event{};

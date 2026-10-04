@@ -87,7 +87,7 @@ etl::expected<bool, Error> HostInput::poll(hal::InputEvent& event) noexcept {
           // 鼠标的 button 号（1 = 左键）v1 用不上；把它塞进 key 会让上层把点击当成键盘按键整条丢掉
           // —— 第一轮验收就是这么失败的（合成点击被 lvgl_port 计进"忽略按键"）。
           event = hal::InputEvent{raw.type == SDL_MOUSEBUTTONDOWN ? hal::InputEventKind::press
-                                                                 : hal::InputEventKind::release,
+                                                                  : hal::InputEventKind::release,
                                   last_x_, last_y_, 0, time_.now_ms()};
         }
         return true;
@@ -101,8 +101,8 @@ etl::expected<bool, Error> HostInput::poll(hal::InputEvent& event) noexcept {
           continue;
         }
         event = hal::InputEvent{
-                raw.type == SDL_KEYDOWN ? hal::InputEventKind::press : hal::InputEventKind::release,
-                last_x_, last_y_, key, time_.now_ms()};
+            raw.type == SDL_KEYDOWN ? hal::InputEventKind::press : hal::InputEventKind::release,
+            last_x_, last_y_, key, time_.now_ms()};
         return true;
       }
 

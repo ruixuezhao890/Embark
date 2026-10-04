@@ -7,7 +7,7 @@ namespace embark::platform::host {
 std::uint32_t HostTime::now_ms() const noexcept {
   const auto elapsed = std::chrono::steady_clock::now() - start_;
   return static_cast<std::uint32_t>(
-          std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+      std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
 }
 
 void HostTime::delay_ms(std::uint32_t ms) noexcept {
@@ -18,7 +18,7 @@ void HostTime::delay_ms(std::uint32_t ms) noexcept {
 etl::expected<std::uint64_t, Error> HostTime::epoch_ms() const noexcept {
   const auto since_epoch = std::chrono::system_clock::now().time_since_epoch();
   return static_cast<std::uint64_t>(
-          std::chrono::duration_cast<std::chrono::milliseconds>(since_epoch).count());
+      std::chrono::duration_cast<std::chrono::milliseconds>(since_epoch).count());
 }
 
 }  // namespace embark::platform::host

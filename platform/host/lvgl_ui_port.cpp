@@ -13,8 +13,7 @@
 
 namespace embark::platform::host {
 
-LvglUiPort::LvglUiPort(hal::Context& context, HostDisplay& display,
-                       HostInput& input) noexcept
+LvglUiPort::LvglUiPort(hal::Context& context, HostDisplay& display, HostInput& input) noexcept
     : context_(context), display_(display), input_(input), port_(context) {}
 
 Error LvglUiPort::init() noexcept {

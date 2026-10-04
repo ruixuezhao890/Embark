@@ -50,11 +50,11 @@ namespace {
 
 // 合成点击的帧号：先移动+按下，隔两帧再抬起 ——
 // 让 LVGL 分两个读周期处理，点一下就是完整的一次"按下 → 抬起"。
-constexpr int click_move_frame = 20;    // 点 clock 屏的 "Settings"（中心 160,170）
+constexpr int click_move_frame = 20;  // 点 clock 屏的 "Settings"（中心 160,170）
 constexpr int click_release_frame = click_move_frame + 2;
-constexpr int switch_move_frame = 30;    // 点 settings 屏的 "Level +1"（同一坐标，焦点已换）
+constexpr int switch_move_frame = 30;  // 点 settings 屏的 "Level +1"（同一坐标，焦点已换）
 constexpr int switch_release_frame = switch_move_frame + 2;
-constexpr int back_move_frame = 50;      // "Back to clock"（settings 屏，下排按钮 160,215）
+constexpr int back_move_frame = 50;  // "Back to clock"（settings 屏，下排按钮 160,215）
 constexpr int back_release_frame = back_move_frame + 2;
 
 struct Options {
@@ -210,9 +210,9 @@ void ui_main(void* argument) noexcept {
     std::fprintf(stderr, "HAL 初始化失败：%s\n", embark::to_string(hal_error));
     hp::exit_process(1);
   }
-  ELOG_INFO("HAL 就绪：显示 {}×{}，输入 {}，持久化 {}",
-            static_cast<int>(display.info().width), static_cast<int>(display.info().height),
-            input.is_ready() ? "就绪" : "未就绪", hal.storage_path());
+  ELOG_INFO("HAL 就绪：显示 {}×{}，输入 {}，持久化 {}", static_cast<int>(display.info().width),
+            static_cast<int>(display.info().height), input.is_ready() ? "就绪" : "未就绪",
+            hal.storage_path());
 
   hp::LvglUiPort ui_port(hal.context(), display, input);
   // own task 的后台任务槽位（BSS，不占 UI 任务栈）：进程级一个实例。
@@ -224,8 +224,9 @@ void ui_main(void* argument) noexcept {
   }
   // LVGL_VERSION_* 是整数宏（third_party/lvgl/lvgl.h:16-18），拼字符串要逐个占位。
   ELOG_INFO("框架就绪：{} 个 App，默认前台 {}；LVGL {}.{}.{}，绘制缓冲 {} 行，LVGL 堆预算 {} 字节",
-            framework.apps().size(), framework.apps().at(0)->name(), LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR,
-            LVGL_VERSION_PATCH, static_cast<int>(embark::lvgl_draw_buf_lines), embark::lvgl_alloc_budget_bytes);
+            framework.apps().size(), framework.apps().at(0)->name(), LVGL_VERSION_MAJOR,
+            LVGL_VERSION_MINOR, LVGL_VERSION_PATCH, static_cast<int>(embark::lvgl_draw_buf_lines),
+            embark::lvgl_alloc_budget_bytes);
 
   int frames_run = 0;
   bool screenshot_done = (options->screenshot == nullptr);
@@ -293,24 +294,30 @@ void ui_main(void* argument) noexcept {
     hp::ui_loop_delay(static_cast<std::uint32_t>(options->delay_ms));
   }
 
-  const embark::demo::ClockApp& clock_app = *static_cast<const embark::demo::ClockApp*>(framework.app(0));
-  const embark::demo::SettingsApp& settings = *static_cast<const embark::demo::SettingsApp*>(framework.app(1));
-  const embark::demo::TickerApp& ticker = *static_cast<const embark::demo::TickerApp*>(framework.app(2));
+  const embark::demo::ClockApp& clock_app =
+      *static_cast<const embark::demo::ClockApp*>(framework.app(0));
+  const embark::demo::SettingsApp& settings =
+      *static_cast<const embark::demo::SettingsApp*>(framework.app(1));
+  const embark::demo::TickerApp& ticker =
+      *static_cast<const embark::demo::TickerApp*>(framework.app(2));
 
   // 拆两条统计（efmt 的 format 参数上限 16，观测项多）
-  ELOG_INFO("统计（显示/前台）：帧 {}，刷新 {} 次（{} 字节），Present {} 次，前台 {}（切换 {} 次），"
-            "clock ticks {}/brightness {}，settings enter {}/resume {}",
-            frames_run, ui_port.port().refreshes(), ui_port.port().flush_bytes(), display.presents(),
-            framework.apps().at(framework.foreground())->name(), framework.switches(),
-            clock_app.ticks(), clock_app.brightness(), settings.enters(), settings.resumes());
-  ELOG_INFO("统计（后台/消息）：丢输入 {}，忽略按键 {}，ticker 发送 {} 条 / UI 收到 {} 条，"
-            "总线发布 {} 条 / 无人接收 {} 条，收件箱溢出 {} 次，UI 任务栈余量 {} 字",
-            ui_port.port().dropped_input_events(), ui_port.port().ignored_key_events(),
-            ticker.sent(), ticker.received(), framework.bus().published(), framework.bus().unknown(),
-            framework.inbox_overflows(),
-            static_cast<unsigned long>(uxTaskGetStackHighWaterMark(nullptr)));
-  ELOG_INFO("LVGL 堆：分配 {} 次，峰值 {} 字节，退出前未回收 {} 字节（预算 {}）", hp::lvgl_allocations(),
-            hp::lvgl_peak_bytes(), hp::lvgl_outstanding_bytes(), embark::lvgl_alloc_budget_bytes);
+  ELOG_INFO(
+      "统计（显示/前台）：帧 {}，刷新 {} 次（{} 字节），Present {} 次，前台 {}（切换 {} 次），"
+      "clock ticks {}/brightness {}，settings enter {}/resume {}",
+      frames_run, ui_port.port().refreshes(), ui_port.port().flush_bytes(), display.presents(),
+      framework.apps().at(framework.foreground())->name(), framework.switches(), clock_app.ticks(),
+      clock_app.brightness(), settings.enters(), settings.resumes());
+  ELOG_INFO(
+      "统计（后台/消息）：丢输入 {}，忽略按键 {}，ticker 发送 {} 条 / UI 收到 {} 条，"
+      "总线发布 {} 条 / 无人接收 {} 条，收件箱溢出 {} 次，UI 任务栈余量 {} 字",
+      ui_port.port().dropped_input_events(), ui_port.port().ignored_key_events(), ticker.sent(),
+      ticker.received(), framework.bus().published(), framework.bus().unknown(),
+      framework.inbox_overflows(),
+      static_cast<unsigned long>(uxTaskGetStackHighWaterMark(nullptr)));
+  ELOG_INFO("LVGL 堆：分配 {} 次，峰值 {} 字节，退出前未回收 {} 字节（预算 {}）",
+            hp::lvgl_allocations(), hp::lvgl_peak_bytes(), hp::lvgl_outstanding_bytes(),
+            embark::lvgl_alloc_budget_bytes);
 
   int exit_code = 0;
   if (options->click && settings.enters() != 1U) {
@@ -322,18 +329,23 @@ void ui_main(void* argument) noexcept {
   }
   if (exit_code == 0 && options->switch_mode) {
     // 切换验收：clock→settings→clock 恰好 2 次；onEnter 只在第一次，切回走 onResume；
-    // "Level +1" 的亮度消息要真被 clock 收到（App 间消息）；
+    // 帧 30/32 的合成点击落在 (160,170)：与 --click 叠加时焦点已在 settings，点中的是
+    // "Level +1"（App 间消息要真被 clock 收到）；单独 --switch 时焦点还在 clock，点中的是
+    // "Settings" 按钮本身——此时不应有任何亮度消息（brightness 必须 0）；
     // clock 后台节拍必须要跑过（spec §14.1：后台 tick 可观测）。
-    const bool hooks_ok = framework.switches() == 2U && clock_app.enters() == 1U && clock_app.resumes() == 1U &&
-                          settings.enters() == 1U && settings.resumes() == 0U &&
-                          clock_app.brightness() == 1U && clock_app.ticks() > 0U;
+    const bool brightness_ok =
+        options->click ? (clock_app.brightness() == 1U) : (clock_app.brightness() == 0U);
+    const bool hooks_ok = framework.switches() == 2U && clock_app.enters() == 1U &&
+                          clock_app.resumes() == 1U && settings.enters() == 1U &&
+                          settings.resumes() == 0U && brightness_ok && clock_app.ticks() > 0U;
     if (!hooks_ok) {
       std::fprintf(stderr,
                    "前台切换验收失败：切换 %u 次（期望 2），clock enter %u/resume %u（期望 1/1），"
-                   "settings enter %u/resume %u（期望 1/0），clock brightness %u（期望 1），"
+                   "settings enter %u/resume %u（期望 1/0），clock brightness %u（期望 %u），"
                    "clock ticks %u（期望 > 0）\n",
                    framework.switches(), clock_app.enters(), clock_app.resumes(), settings.enters(),
-                   settings.resumes(), clock_app.brightness(), clock_app.ticks());
+                   settings.resumes(), clock_app.brightness(), options->click ? 1U : 0U,
+                   clock_app.ticks());
       exit_code = 2;
     }
   }
@@ -342,8 +354,7 @@ void ui_main(void* argument) noexcept {
     // own_task 验收：TickerApp 的后台任务至少发出一条，且 UI 任务真的收到了。
     // （sent() 是跨线程观测读取：own task 单写者，v1 接受；received() 在 UI 线程读）
     if (ticker.sent() == 0 || ticker.received() == 0) {
-      std::fprintf(stderr,
-                   "own_task 验收失败：后台发送 %u 条 / UI 收到 %u 条（期望都 > 0）\n",
+      std::fprintf(stderr, "own_task 验收失败：后台发送 %u 条 / UI 收到 %u 条（期望都 > 0）\n",
                    ticker.sent(), ticker.received());
       exit_code = 2;
     }

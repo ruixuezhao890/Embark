@@ -67,8 +67,7 @@ class RecorderApp : public embark::App {
 class TickApp final : public RecorderApp {
  public:
   TickApp() : RecorderApp("tick") {}  // 默认 period 0（= suspend，测试默认构造路径）
-  explicit TickApp(std::uint32_t period_ms)
-      : RecorderApp("tick"), period_ms_(period_ms) {}
+  explicit TickApp(std::uint32_t period_ms) : RecorderApp("tick"), period_ms_(period_ms) {}
 
   void set_period_ms(std::uint32_t period_ms) noexcept { period_ms_ = period_ms; }
 
@@ -127,9 +126,9 @@ class FakeSpawner final : public embark::ITaskSpawner {
     std::uint8_t priority;
   };
 
-  [[nodiscard]] embark::Error
-  spawn_task(const char* name, void (*entry)(void*) noexcept, void* argument,
-             std::uint16_t stack_words, std::uint8_t priority) noexcept override {
+  [[nodiscard]] embark::Error spawn_task(const char* name, void (*entry)(void*) noexcept,
+                                         void* argument, std::uint16_t stack_words,
+                                         std::uint8_t priority) noexcept override {
     if (calls.size() < 16) {
       calls.push_back({name, entry, argument, stack_words, priority});
     }
@@ -251,7 +250,7 @@ TEST_CASE("Framework：tick 策略按 UI 循环粒度触发 onBackgroundTick；p
   for (std::uint32_t frame = 0; frame < period_ticks - 1U; ++frame) {
     fw.step();
   }
-  CHECK(count_hooks(records.back, Hook::bg_tick) == 0U);  // 还差一拍
+  CHECK(count_hooks(records.back, Hook::bg_tick) == 0U);   // 还差一拍
   CHECK(count_hooks(records.front, Hook::bg_tick) == 0U);  // front 是 suspend
 
   fw.step();  // 第 period_ticks 帧：到期触发

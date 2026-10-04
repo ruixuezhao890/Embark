@@ -24,8 +24,8 @@
 #include <cstddef>
 
 #include <embark/hal/log_sink.h>
-#include <middleware/elog/elog.hpp>
 #include <middleware/etl/array.h>
+#include <middleware/elog/elog.hpp>
 
 #if EMBARK_LOG_SERIALIZE
 #include <middleware/etl/mutex.h>
@@ -75,8 +75,7 @@ class LogSinkBinder {
 /// 注册一个 logger 并把它的输出接到 binder 的 sink 上。
 /// 失败返回 nullptr（名字非法 / sink 无效 / 重名 / 注册表满 —— elog 的四种情况），
 /// 不是致命错误：没有日志框架照样能跑。
-[[nodiscard]] e_log::logger* install_logger(const char* name,
-                                            LogSinkBinder& binder,
+[[nodiscard]] e_log::logger* install_logger(const char* name, LogSinkBinder& binder,
                                             e_log::level level = e_log::level::debug) noexcept;
 
 }  // namespace embark

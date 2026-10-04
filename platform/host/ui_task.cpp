@@ -14,8 +14,7 @@
 namespace {
 
 // --- 编译期静态断言：这份代码只允许跑在"纯静态内核"上（spec §10）-------------
-static_assert(configSUPPORT_STATIC_ALLOCATION == 1,
-              "宿主内核必须启用静态分配（FreeRTOSConfig.h）");
+static_assert(configSUPPORT_STATIC_ALLOCATION == 1, "宿主内核必须启用静态分配（FreeRTOSConfig.h）");
 static_assert(configSUPPORT_DYNAMIC_ALLOCATION == 0,
               "宿主内核必须是零堆（configSUPPORT_DYNAMIC_ALLOCATION 0），"
               "这样任何动态分配 API 在编译期就不存在");
@@ -45,8 +44,7 @@ void ui_task_thunk(void* argument) noexcept {
 
 namespace embark::platform::host {
 
-Error start_ui_task(UiTaskEntry entry, void* argument,
-                    const UiTaskConfig& config) noexcept {
+Error start_ui_task(UiTaskEntry entry, void* argument, const UiTaskConfig& config) noexcept {
   if (entry == nullptr) {
     return Error::invalid_argument;
   }
@@ -61,9 +59,8 @@ Error start_ui_task(UiTaskEntry entry, void* argument,
   launch.entry = entry;
   launch.argument = argument;
 
-  ui_task_handle = xTaskCreateStatic(ui_task_thunk, config.name, config.stack_words,
-                                     &launch, config.priority,
-                                     ui_task_stack, &ui_task_tcb);
+  ui_task_handle = xTaskCreateStatic(ui_task_thunk, config.name, config.stack_words, &launch,
+                                     config.priority, ui_task_stack, &ui_task_tcb);
   if (ui_task_handle == nullptr) {
     return Error::no_space;  // 理论上到不了：静态分配不会失败，防御而已
   }

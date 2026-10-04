@@ -27,8 +27,7 @@ class IPersistence {
 
   /// 读一条：返回写进 out 的字节数。键不存在 → not_found；out 太小 → no_space。
   [[nodiscard]] virtual etl::expected<std::size_t, Error> read(
-          etl::string_view key,
-          etl::span<std::uint8_t> out) const noexcept = 0;
+      etl::string_view key, etl::span<std::uint8_t> out) const noexcept = 0;
 
   /// 写一条（键已存在就覆盖）。键为空或超长 → invalid_argument；值超上限 → no_space；
   /// 槽位用完 → no_space。

@@ -60,9 +60,7 @@ class Bus final : public etl::message_bus<max_bus_subscribers> {
   [[nodiscard]] std::uint32_t unknown() const noexcept { return unknown_; }
 
   /// 当前订阅者数量（镜像表大小）。
-  [[nodiscard]] std::size_t subscriber_count() const noexcept {
-    return subscribers_.size();
-  }
+  [[nodiscard]] std::size_t subscriber_count() const noexcept { return subscribers_.size(); }
 
   /// 清零计数（观测/日志打点用）。
   void reset_counters() noexcept {

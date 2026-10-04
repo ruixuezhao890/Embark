@@ -39,7 +39,8 @@ class FakeDisplay final : public hal::IDisplay {
     last_pixel_bytes = pixels.size();
     total_bytes += pixels.size();
     // 只留前 64 字节做指纹：假后端不关心整屏像素，超出的部分仅计数。
-    const std::size_t kept = pixels.size() < last_pixels.size() ? pixels.size() : last_pixels.size();
+    const std::size_t kept =
+        pixels.size() < last_pixels.size() ? pixels.size() : last_pixels.size();
     if (kept < pixels.size()) {
       truncated_capture = true;
     }

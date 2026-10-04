@@ -72,8 +72,7 @@ Error Framework::boot() noexcept {
     // 精度受 ui_loop_period_ms 限制 —— 宿主 5 ms，真机按自己的循环周期重排）。
     const std::uint32_t period_ticks =
         (settings.period_ms + ui_loop_period_ms - 1U) / ui_loop_period_ms;
-    const etl::timer::id::type id =
-        timers_.register_timer(trampoline, period_ticks, true);
+    const etl::timer::id::type id = timers_.register_timer(trampoline, period_ticks, true);
     timers_.start(id, false);
     ++timer_index;
   }
@@ -100,9 +99,9 @@ Error Framework::boot() noexcept {
     const std::uint16_t stack_words = settings.task_stack_words != 0
                                           ? settings.task_stack_words
                                           : static_cast<std::uint16_t>(own_task_stack_words);
-    const Error spawn_error = spawner_->spawn_task(
-        apps_.at(index)->name(), &Framework::own_task_entry, &arg, stack_words,
-        settings.task_priority);
+    const Error spawn_error =
+        spawner_->spawn_task(apps_.at(index)->name(), &Framework::own_task_entry, &arg, stack_words,
+                             settings.task_priority);
     if (spawn_error != Error::none) {
       return spawn_error;
     }
@@ -119,12 +118,12 @@ void Framework::step() noexcept {
   }
 
   if (ui_ != nullptr) {
-    ui_->tick();         // 1. UI 时间轴（LVGL tick，必须在任何界面工作之前）
-    ui_->pump_input();   // 2. 输入事件处理（抽干 HAL 输入队列；事件回调在 process 里）
+    ui_->tick();  // 1. UI 时间轴（LVGL tick，必须在任何界面工作之前）
+    ui_->pump_input();  // 2. 输入事件处理（抽干 HAL 输入队列；事件回调在 process 里）
   }
   apply_pending_switch();  // 3. 循环边界：让前台切换请求生效（钩子顺序可预期）
   if (ui_ != nullptr) {
-    ui_->process();      // 4. 界面工作（lv_timer_handler → 前台 App 的 LVGL 回调）
+    ui_->process();  // 4. 界面工作（lv_timer_handler → 前台 App 的 LVGL 回调）
   }
 
   // 5. 后台节拍：tick 策略的 App 按各自周期触发 onBackgroundTick（framework 线程）。
@@ -174,8 +173,7 @@ void Framework::own_task_entry(void* argument) noexcept {
 
 void Framework::run_own_task(AppId app_id) noexcept {
   App* const app = apps_.at(app_id);
-  const std::uint32_t period_ms =
-      app != nullptr ? app->settings().period_ms : 0U;
+  const std::uint32_t period_ms = app != nullptr ? app->settings().period_ms : 0U;
   for (;;) {
     hal_.time.delay_ms(period_ms);
     if (app != nullptr) {

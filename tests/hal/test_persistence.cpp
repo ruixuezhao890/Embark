@@ -11,9 +11,9 @@
 #include <embark_limits.h>
 
 using embark::Error;
-using embark::fakes::FakePersistence;
 using embark::persistence_max_slots;
 using embark::persistence_max_value_bytes;
+using embark::fakes::FakePersistence;
 
 TEST_CASE("IPersistence：未 init 的读写擦都返回 not_ready") {
   FakePersistence storage;
@@ -94,8 +94,7 @@ TEST_CASE("IPersistence：读缓冲太小 → no_space（不是截断）") {
   CHECK(read.error() == Error::no_space);
   CHECK(tiny[0] == 0U);  // 失败时不动调用方缓冲
 
-  const auto exact =
-          storage.read("full", etl::span<std::uint8_t>(full.data(), full.size()));
+  const auto exact = storage.read("full", etl::span<std::uint8_t>(full.data(), full.size()));
   REQUIRE(exact.has_value());
   CHECK(exact.value() == persistence_max_value_bytes);
 }

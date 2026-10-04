@@ -22,8 +22,7 @@ namespace embark {
 }  // namespace embark
 
 /// 断言：表达式为假就落到平台的 assert_failed。
-#define EMBARK_ASSERT(expression)                                                     \
-  ((expression) ? static_cast<void>(0)                                                \
-                : ::embark::assert_failed(__FILE__, __LINE__, #expression))
+#define EMBARK_ASSERT(expression) \
+  ((expression) ? static_cast<void>(0) : ::embark::assert_failed(__FILE__, __LINE__, #expression))
 
 #endif /* EMBARK_DIAGNOSTICS_H */

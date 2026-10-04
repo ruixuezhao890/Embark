@@ -14,9 +14,9 @@
 #include <cstddef>
 #include <cstdint>
 
-#include <middleware/elog/elog.hpp>
 #include <middleware/etl/array.h>
 #include <middleware/etl/span.h>
+#include <middleware/elog/elog.hpp>
 
 namespace embark::platform::host {
 namespace {
@@ -138,15 +138,16 @@ void LvglPort::flush_area(const lv_area_t& area, const lv_color_t* pixels) noexc
   const auto* bytes = reinterpret_cast<const std::uint8_t*>(pixels);
 
   ++refreshes_;
-  const Error error = context_.display->flush(rect, etl::span<const std::uint8_t>(bytes, byte_count));
+  const Error error =
+      context_.display->flush(rect, etl::span<const std::uint8_t>(bytes, byte_count));
   if (error == Error::none) {
     flush_bytes_ += static_cast<std::uint32_t>(byte_count);
     return;
   }
   if (!flush_error_reported_) {
     flush_error_reported_ = true;
-    ELOG_ERROR("显示刷新失败：{} 区域 ({},{},{}×{})（后续失败不再重复报告）", to_string(error), rect.x, rect.y,
-               rect.width, rect.height);
+    ELOG_ERROR("显示刷新失败：{} 区域 ({},{},{}×{})（后续失败不再重复报告）", to_string(error),
+               rect.x, rect.y, rect.width, rect.height);
   }
 }
 
@@ -194,7 +195,8 @@ void LvglPort::read_event(lv_indev_data_t& data) noexcept {
   data.continue_reading = !events_.empty();
 }
 
-void LvglPort::flush_thunk(lv_disp_drv_t* driver, const lv_area_t* area, lv_color_t* pixels) noexcept {
+void LvglPort::flush_thunk(lv_disp_drv_t* driver, const lv_area_t* area,
+                           lv_color_t* pixels) noexcept {
   if (driver != nullptr && area != nullptr && pixels != nullptr) {
     auto* port = static_cast<LvglPort*>(driver->user_data);
     if (port != nullptr) {

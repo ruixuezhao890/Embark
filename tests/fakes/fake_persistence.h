@@ -27,7 +27,7 @@ class FakePersistence final : public hal::IPersistence {
   }
 
   [[nodiscard]] etl::expected<std::size_t, Error> read(
-          etl::string_view key, etl::span<std::uint8_t> out) const noexcept override {
+      etl::string_view key, etl::span<std::uint8_t> out) const noexcept override {
     if (!ready) {
       return unexpected(Error::not_ready);
     }

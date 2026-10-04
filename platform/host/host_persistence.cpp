@@ -135,7 +135,7 @@ Error HostPersistence::find_slot(etl::string_view key, std::size_t& index) const
     }
     detail::SlotView view{};
     const Error decoded =
-            detail::decode_slot(etl::span<const std::uint8_t>(raw, slot_bytes_), view);
+        detail::decode_slot(etl::span<const std::uint8_t>(raw, slot_bytes_), view);
     if (decoded != Error::none) {
       return decoded;  // 有槽坏了就明说，不装作没这条键
     }
@@ -147,8 +147,8 @@ Error HostPersistence::find_slot(etl::string_view key, std::size_t& index) const
   return Error::not_found;
 }
 
-etl::expected<std::size_t, Error> HostPersistence::read(etl::string_view key,
-                                                        etl::span<std::uint8_t> out) const noexcept {
+etl::expected<std::size_t, Error> HostPersistence::read(
+    etl::string_view key, etl::span<std::uint8_t> out) const noexcept {
   if (!ready_) {
     return unexpected(Error::not_ready);
   }
@@ -206,7 +206,7 @@ Error HostPersistence::write(etl::string_view key, etl::span<const std::uint8_t>
     }
     detail::SlotView view{};
     const Error decoded =
-            detail::decode_slot(etl::span<const std::uint8_t>(probe, slot_bytes_), view);
+        detail::decode_slot(etl::span<const std::uint8_t>(probe, slot_bytes_), view);
     if (decoded != Error::none) {
       return decoded;
     }

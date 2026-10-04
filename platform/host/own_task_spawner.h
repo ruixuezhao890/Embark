@@ -28,8 +28,8 @@ class HostTaskSpawner final : public ITaskSpawner {
  public:
   HostTaskSpawner() noexcept = default;
 
-  [[nodiscard]] Error spawn_task(const char* name, void (*entry)(void*) noexcept,
-                                 void* argument, std::uint16_t stack_words,
+  [[nodiscard]] Error spawn_task(const char* name, void (*entry)(void*) noexcept, void* argument,
+                                 std::uint16_t stack_words,
                                  std::uint8_t priority) noexcept override {
     if (used_ >= embark::max_own_tasks) {
       return Error::busy;  // 静态槽位（TCB/栈数组）耗尽
@@ -41,9 +41,8 @@ class HostTaskSpawner final : public ITaskSpawner {
       return Error::no_space;  // 槽位的栈容量不够 App 要的
     }
 
-    TaskHandle_t handle =
-        xTaskCreateStatic(entry, name, stack_words, argument, priority,
-                          stacks_[used_], &tcbs_[used_]);
+    TaskHandle_t handle = xTaskCreateStatic(entry, name, stack_words, argument, priority,
+                                            stacks_[used_], &tcbs_[used_]);
     if (handle == nullptr) {
       return Error::no_space;  // 静态创建理论不失败，防御
     }

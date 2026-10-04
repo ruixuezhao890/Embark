@@ -1,0 +1,86 @@
+# Embark CI（issues/10）
+#
+# 三个 job：
+#   1. host-build-test：ubuntu 上构建宿主工程 + ctest 全量单测（SDL2 用 apt 装）。
+#   2. esp32-build：espressif/idf:release-v5.4 容器里构建 ESP32 目标（只编不烧）。
+#      —— 依赖 issue 11（ESP32 目标落地），落地前 continue-on-error 允许失败。
+#   3. format-check：clang-format --dry-run --Werror（版本 18，与本地开发机一致；
+#      .clang-format 里的注释说明：v1 阶段不强制本机格式化，CI 只作提示/卡漂移）。
+#
+# 排除不参与格式检查的文件（与本地 dry-run 口径一致）：
+#   - third_party/**           第三方源码不动
+#   - .scratch/embark-v1/spikes/**  实验存档不格式化
+#   - config/lv_conf.h         LVGL 官方配置模板
+#   - platform/host/freertos/FreeRTOSConfig.h  FreeRTOS 官方配置模板
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  host-build-test:
+    name: Host build & tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restore submodule cache
+        uses: actions/cache@v4
+        with:
+          path: third_party
+          key: submodules-${{ hashFiles('.gitmodules') }}
+          restore-keys: |
+            submodules-
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libsdl2-dev
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: host-build-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake', '**/*.h', '**/*.cpp') }}
+          restore-keys: |
+            host-build-
+      - name: Configure
+        run: cmake -G Ninja -B build
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  esp32-build:
+    name: ESP32 build (issue 11)
+    runs-on: ubuntu-latest
+    container: espressif/idf:release-v5.4
+    # 占位：platform/esp32 目标是 issue 11 的交付物，落地前此 job 允许失败；
+    # issue 11 完成后去掉 continue-on-error 并换成真实构建命令。
+    continue-on-error: true
+    steps:
+      - name: Restore submodule cache
+        uses: actions/cache@v4
+        with:
+          path: third_party
+          key: submodules-${{ hashFiles('.gitmodules') }}
+          restore-keys: |
+            submodules-
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build
+        run: |
+          idf.py --version
+          idf.py build
+
+  format-check:
+    name: clang-format check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format
+      - name: Dry-run
+        run: |
+          FILES=$(git ls-files '*.cpp' '*.h' '*.hpp' '*.cc' | grep -v -E '^(third_party/|\.scratch/embark-v1/spikes/|config/lv_conf\.h$|platform/host/freertos/FreeRTOSConfig\.h$)')
+          clang-format --dry-run --Werror $FILES

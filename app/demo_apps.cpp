@@ -22,7 +22,8 @@ namespace embark::demo {
 namespace {
 
 // 居中段落文字（宽度撑满 + 顶部居中，issue 05 同款样式）。
-lv_obj_t* make_centered_label(lv_obj_t* parent, const char* text, lv_color_t color, lv_coord_t y) noexcept {
+lv_obj_t* make_centered_label(lv_obj_t* parent, const char* text, lv_color_t color,
+                              lv_coord_t y) noexcept {
   lv_obj_t* label = lv_label_create(parent);
   lv_label_set_text(label, text);
   lv_obj_set_width(label, LV_PCT(100));
@@ -62,8 +63,10 @@ const ClockApp::Chart::transition ClockApp::kTransitions[2] = {
 };
 
 const ClockApp::Chart::state ClockApp::kStates[2] = {
-    ClockApp::Chart::state(static_cast<Chart::state_id_t>(State::blinking_on), &ClockApp::enter_blinking_on),
-    ClockApp::Chart::state(static_cast<Chart::state_id_t>(State::blinking_off), &ClockApp::enter_blinking_off),
+    ClockApp::Chart::state(static_cast<Chart::state_id_t>(State::blinking_on),
+                           &ClockApp::enter_blinking_on),
+    ClockApp::Chart::state(static_cast<Chart::state_id_t>(State::blinking_off),
+                           &ClockApp::enter_blinking_off),
 };
 
 ClockApp::ClockApp() noexcept
@@ -94,7 +97,8 @@ void ClockApp::onCreate(Framework& fw) {
 
 void ClockApp::onEnter() {
   ++enters_;
-  ELOG_INFO("App {} 进入前台（enter {}, resume {}, 累计 {} 次）", name(), enters_, resumes_, enters_ + resumes_);
+  ELOG_INFO("App {} 进入前台（enter {}, resume {}, 累计 {} 次）", name(), enters_, resumes_,
+            enters_ + resumes_);
   lv_scr_load(screen_);
 }
 
@@ -185,7 +189,8 @@ void SettingsApp::onCreate(Framework& fw) {
 
 void SettingsApp::onEnter() {
   ++enters_;
-  ELOG_INFO("App {} 进入前台（enter {}, resume {}, 累计 {} 次）", name(), enters_, resumes_, enters_ + resumes_);
+  ELOG_INFO("App {} 进入前台（enter {}, resume {}, 累计 {} 次）", name(), enters_, resumes_,
+            enters_ + resumes_);
   lv_scr_load(screen_);
 }
 

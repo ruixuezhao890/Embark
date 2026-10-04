@@ -8,9 +8,9 @@
 
 #include <embark/log.h>
 
+using embark::install_logger;
 using embark::LogSinkBinder;
 using embark::fakes::FakeLogSink;
-using embark::install_logger;
 
 namespace {
 

@@ -17,8 +17,7 @@ std::uint16_t scale_rgb565(std::uint16_t pixel, std::uint8_t percent) noexcept {
   const std::uint32_t green = (pixel >> 5U) & 0x3FU;
   const std::uint32_t blue = pixel & 0x1FU;
   const std::uint32_t scale = percent;
-  return static_cast<std::uint16_t>(((red * scale / 100U) << 11U) |
-                                    ((green * scale / 100U) << 5U) |
+  return static_cast<std::uint16_t>(((red * scale / 100U) << 11U) | ((green * scale / 100U) << 5U) |
                                     (blue * scale / 100U));
 }
 
@@ -28,7 +27,9 @@ HostDisplay::HostDisplay(std::uint8_t window_scale, const char* title) noexcept
     : title_(title == nullptr ? "Embark 宿主" : title),
       window_scale_(window_scale == 0U ? 1U : window_scale) {}
 
-HostDisplay::~HostDisplay() noexcept { destroy(); }
+HostDisplay::~HostDisplay() noexcept {
+  destroy();
+}
 
 Error HostDisplay::init() noexcept {
   if (ready_) {
@@ -89,7 +90,9 @@ Error HostDisplay::init() noexcept {
   return Error::none;
 }
 
-bool HostDisplay::is_ready() const noexcept { return ready_; }
+bool HostDisplay::is_ready() const noexcept {
+  return ready_;
+}
 
 hal::DisplayInfo HostDisplay::info() const noexcept {
   if (!ready_) {
@@ -135,8 +138,8 @@ Error HostDisplay::flush(const hal::Rect& area, etl::span<const std::uint8_t> da
     auto* destination = reinterpret_cast<std::uint16_t*>(staging_.get());
     for (std::size_t index = 0; index < needed / sizeof(std::uint16_t); ++index) {
       const std::uint16_t pixel =
-              static_cast<std::uint16_t>(data[index * 2U]) |
-              static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[index * 2U + 1U]) << 8U);
+          static_cast<std::uint16_t>(data[index * 2U]) |
+          static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[index * 2U + 1U]) << 8U);
       destination[index] = scale_rgb565(pixel, backlight_);
     }
     source = staging_.get();
@@ -177,7 +180,8 @@ SDL_Surface* HostDisplay::capture_surface() noexcept {
     return nullptr;
   }
 
-  SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_ARGB8888);
+  SDL_Surface* surface =
+      SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_ARGB8888);
   if (surface == nullptr) {
     return nullptr;
   }
@@ -185,7 +189,8 @@ SDL_Surface* HostDisplay::capture_surface() noexcept {
   // 顺序是这套截图的关键（见头文件说明）：整屏重画 → 读后备缓冲 → 才 Present。
   SDL_RenderClear(renderer_);
   if (SDL_RenderCopy(renderer_, texture_, nullptr, nullptr) != 0 ||
-      SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_ARGB8888, surface->pixels, surface->pitch) != 0) {
+      SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_ARGB8888, surface->pixels,
+                           surface->pitch) != 0) {
     SDL_FreeSurface(surface);
     return nullptr;
   }

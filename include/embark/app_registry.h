@@ -43,14 +43,10 @@ class AppRegistry {
     return index < count_ ? apps_[index] : nullptr;
   }
 
-  [[nodiscard]] App* operator[](std::size_t index) const noexcept {
-    return apps_[index];
-  }
+  [[nodiscard]] App* operator[](std::size_t index) const noexcept { return apps_[index]; }
 
   /// 下标是不是合法 AppId。
-  [[nodiscard]] constexpr bool valid(AppId id) const noexcept {
-    return id < count_;
-  }
+  [[nodiscard]] constexpr bool valid(AppId id) const noexcept { return id < count_; }
 
   /// 按名字查（线性扫，App 数 ≤ max_apps，无所谓）；找不到返回 invalid_app_id。
   [[nodiscard]] AppId find(const char* name) const noexcept {
@@ -58,8 +54,7 @@ class AppRegistry {
       return invalid_app_id;
     }
     for (std::size_t index = 0; index < count_; ++index) {
-      if (apps_[index] != nullptr &&
-          std::strcmp(apps_[index]->name(), name) == 0) {
+      if (apps_[index] != nullptr && std::strcmp(apps_[index]->name(), name) == 0) {
         return static_cast<AppId>(index);
       }
     }
@@ -105,10 +100,10 @@ template <typename... Apps>
 
 /// 单处声明 App 表：展开成 inline 函数 embark_apps()。
 /// 整个可执行文件里只能出现一次（否则重定义）。参数顺序 = 注册顺序 = 默认前台顺序。
-#define EMBARK_APP_TABLE(...)                                                        \
-    [[nodiscard]] inline ::embark::AppRegistry embark_apps() noexcept {              \
-        return ::embark::app_registry<__VA_ARGS__>();                                \
-    }
+#define EMBARK_APP_TABLE(...)                                         \
+  [[nodiscard]] inline ::embark::AppRegistry embark_apps() noexcept { \
+    return ::embark::app_registry<__VA_ARGS__>();                     \
+  }
 
 }  // namespace embark
 

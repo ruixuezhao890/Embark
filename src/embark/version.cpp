@@ -11,8 +11,12 @@
 
 namespace embark {
 
-const char* version_string() { return EMBARK_VERSION_STRING; }
+const char* version_string() {
+  return EMBARK_VERSION_STRING;
+}
 
-const char* platform_name() { return EMBARK_PLATFORM_NAME; }
+const char* platform_name() {
+  return EMBARK_PLATFORM_NAME;
+}
 
 }  // namespace embark
