@@ -25,3 +25,10 @@ platform/esp32/project/managed_components/
 *.user
 
 # 注意：.scratch/ 是 issue 追踪所在地，必须随仓库提交，不要忽略它。
+# 例外：下面这些是本机临时产物（抓帧用的 Chrome user-data-dir 有几百 MB、
+# 演示用的自包含 HTML 与 GIF），只当本地草稿留着，不进仓库。
+.scratch/embark-v1/demo-frames/
+.scratch/embark-v1/vendor/
+.scratch/embark-v1/runtime-model-demo.html
+.scratch/embark-v1/runtime-model-demo*.gif
+.scratch/_recovered_demo.html
