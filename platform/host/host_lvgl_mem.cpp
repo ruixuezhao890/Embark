@@ -124,6 +124,18 @@ extern "C" void embark_lvgl_assert_failed(void) {
   embark::fatal("LVGL 断言失败");
 }
 
+extern "C" size_t embark_lvgl_outstanding_bytes(void) {
+  return g_counter.outstanding_bytes();
+}
+
+extern "C" size_t embark_lvgl_peak_bytes(void) {
+  return g_counter.peak_bytes();
+}
+
+extern "C" size_t embark_lvgl_budget_bytes(void) {
+  return embark::lvgl_alloc_budget_bytes;
+}
+
 namespace embark::platform::host {
 
 std::size_t lvgl_outstanding_bytes() noexcept {

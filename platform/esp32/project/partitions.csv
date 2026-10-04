@@ -1,0 +1,21 @@
+# Embark ESP32-S3 partition table (partitions.csv)
+#
+# name,      type, subtype,  offset,   size
+# ----       ----  -------   -------   ------
+nvs,         data, nvs,       0x9000,   0x6000
+phy_init,    data, phy,       0xf000,   0x1000
+factory,     app,  factory,   0x10000,  3M
+#
+# Notes:
+#  * 0x0..0x8000 holds the bootloader and 0x8000 is this table itself, hence the
+#    first partition starts at 0x9000.
+#  * NVS gets 24 KB; framework persistence is at most 32 slots x 92 bytes ~= 3 KB,
+#    so there is plenty of headroom for future apps.
+#  * phy_init is not needed today (no WiFi enabled) but is reserved so that adding
+#    radio support later does not force a partition table change.
+#  * factory at 3 MB is far larger than this firmware (LVGL + kernel, no file
+#    system, no audio assets); revisit if large resources are ever needed.
+#
+# NOTE: this file must stay ASCII-only (IDF's kconfgen/gen_esp32part read config
+# files under the host locale encoding; non-ASCII comments abort the build on a
+# Chinese Windows). Chinese documentation lives in README.md.

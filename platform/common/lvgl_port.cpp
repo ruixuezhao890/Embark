@@ -1,10 +1,11 @@
 /**
- * 宿主 · LVGL 端口实现（issues/05）
+ * 平台共用层 · LVGL 端口实现（issues/05、11）
  *
  * 见 lvgl_port.h 的说明。这里补两条实现上的取舍：
  *
  *   - 绘制缓冲是文件级静态（40 行 × 320 像素 × 2 字节 = 25 KB，进 .bss），
- *     不进宿主堆：它必须在 LVGL 整个生命周期里保持同一个地址。
+ *     不进任何堆：它必须在 LVGL 整个生命周期里保持同一个地址，且真机上要落在
+ *     内部 SRAM（LVGL 的 flush 是逐区同步的，缓冲本身不必支持 DMA）。
  *   - LVGL 的日志回调没有 user_data（lv_log_print_cb 只收一个 const char*），
  *     所以用文件级 sink 指针转交 —— v1 规定一个进程只有一份 LVGL、一份 HAL
  *     （spec §8），这条捷径不成立的时候才会需要重构。
@@ -18,7 +19,7 @@
 #include <middleware/etl/span.h>
 #include <middleware/elog/elog.hpp>
 
-namespace embark::platform::host {
+namespace embark::platform {
 namespace {
 
 /// LVGL 的绘制缓冲。alignas(4) 为真机（SPI/DMA 要 4 字节对齐）留好样子。
@@ -38,7 +39,7 @@ LvglPort::~LvglPort() noexcept {
     // （third_party/lvgl/src/core/lv_obj.h:206-214），而我们的 config/lv_conf.h 是
     // LV_MEM_CUSTOM=1 —— LVGL 用别人的分配器时没法自己把全局状态还干净，上游干脆不提供。
     // 于是析构只断开日志出口、清就绪标志，对象由进程退出统一回收。
-    // 想知道"活着的 LVGL 占了多少"，在析构之前调 lvgl_outstanding_bytes()（演示程序正是这么做的）。
+    // 想知道"活着的 LVGL 占了多少"，在析构之前调 embark_lvgl_outstanding_bytes()。
     g_log_sink = nullptr;
     ready_ = false;
   }
@@ -231,4 +232,4 @@ void LvglPort::log_thunk(const char* message) noexcept {
   g_log_sink->write(message, static_cast<std::size_t>(end - message));
 }
 
-}  // namespace embark::platform::host
+}  // namespace embark::platform

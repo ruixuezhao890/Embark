@@ -1,5 +1,5 @@
 /**
- * Embark 宿主 · UI 端口实现（issues/06）
+ * 平台共用层 · UI 端口实现（issues/06、11）
  *
  * 本类只有转发与装配，没有任何业务；线程纪律见 include/embark/ui_port.h：
  * 所有方法只被唯一 UI 任务调用，不需要锁。
@@ -7,21 +7,21 @@
 #include "lvgl_ui_port.h"
 
 #include <embark/log.h>
-#include <embark_limits.h>
+#include <embark_lvgl_hooks.h>
 
-#include "host_lvgl_mem.h"
+namespace embark::platform {
 
-namespace embark::platform::host {
-
-LvglUiPort::LvglUiPort(hal::Context& context, HostDisplay& display, HostInput& input) noexcept
-    : context_(context), display_(display), input_(input), port_(context) {}
+LvglUiPort::LvglUiPort(hal::Context& context, ExitQuery exit_query, void* exit_context) noexcept
+    : context_(context), exit_query_(exit_query), exit_context_(exit_context), port_(context) {}
 
 Error LvglUiPort::init() noexcept {
   if (ready_) {
     return Error::none;
   }
-  // HAL 的显示/输入必须在调用本端口之前就绪（demo 在 UI 任务里先 HostHal::init）。
-  if (!display_.is_ready() || !input_.is_ready()) {
+  // HAL 的显示必须在调用本端口之前就绪（平台在 UI 任务里先做 HAL init）。
+  // 输入这边只判"有没有"：`hal::IInput` 没有 is_ready()（只有 init()/poll()），
+  // 输入后端是否可用由各平台自己负责 —— LvglPort 遇到坏输入会记一条 ERROR 后继续跑。
+  if (context_.display == nullptr || !context_.display->is_ready()) {
     return Error::not_ready;
   }
   const Error error = port_.init();
@@ -47,19 +47,19 @@ void LvglUiPort::process() noexcept {
 }
 
 bool LvglUiPort::exit_requested() const noexcept {
-  return input_.quit_requested();
+  return exit_query_ != nullptr && exit_query_(exit_context_);
 }
 
 void LvglUiPort::shutdown() noexcept {
   // LVGL 8.3.11 在 LV_MEM_CUSTOM=1 下没有 lv_deinit（lv_obj.h:206-214 把它藏起来了），
   // 所以这里做不了完整的 LVGL 收尾；框架的退出路径走到这就够了 —— 宿主进程随后
-  // 由 exit_process()（_Exit）结束，SDL/窗口资源由操作系统回收。想验收"LVGL 还占
-  // 多少"用 platform_host::lvgl_outstanding_bytes()。
+  // 由 exit_process()（_Exit）结束，真机则由 esp_restart() 重启。想验收"LVGL 还占
+  // 多少"用 embark_lvgl_outstanding_bytes()：这行是宿主与真机共用的同一句。
   if (ready_) {
-    ELOG_INFO("UI 端口收尾：LVGL 未回收 {} 字节（预算 {}）", lvgl_outstanding_bytes(),
-              embark::lvgl_alloc_budget_bytes);
+    ELOG_INFO("UI 端口收尾：LVGL 未回收 {} 字节（预算 {}）", embark_lvgl_outstanding_bytes(),
+              embark_lvgl_budget_bytes());
     ready_ = false;
   }
 }
 
-}  // namespace embark::platform::host
+}  // namespace embark::platform

@@ -1,5 +1,5 @@
 /**
- * 宿主 · LVGL 端口（issues/05）
+ * 平台共用层 · LVGL 端口（issues/05，issue 11 从 platform/host 提上来共用）
  *
  * 把 LVGL 接到 HAL 上，四件事：
  *   显示 —— LVGL 的 flush_cb → hal::IDisplay::flush。LVGL 给的是闭区间坐标
@@ -12,16 +12,19 @@
  *           （lv_indev.c:81-114），所以一次点击/一次拖动都不会被后面的移动事件挤掉。
  *   时间 —— tick() 读 hal::ITime::now_ms() 与上次求差，喂 lv_tick_inc()（LV_TICK_CUSTOM 0）。
  *   日志/断言 —— lv_log_register_print_cb → ILogSink；LVGL 断言在
- *           config/lv_conf.h 里指到 embark_lvgl_assert_failed()（host_lvgl_mem.cpp）→ fatal。
+ *           config/lv_conf.h 里指到 embark_lvgl_assert_failed() → fatal。
+ *
+ * 为什么在 platform/common：这一层只认 HAL 与 LVGL，**不认任何平台类型**
+ * （display/input/时间/日志全从 hal::Context 取），所以宿主与真机共用同一份，
+ * 两边只换后端（spec §14.5：换后端不动 app/ 与 include/embark/）。
  *
  * 内存：config/lv_conf.h 的 LV_MEM_CUSTOM 把 LVGL 的分配全部指到 embark_lvgl_*，
- * 于是"LVGL 用了多少"可测（platform::host::lvgl_peak_bytes()，见 host_lvgl_mem.h）。
+ * 于是"LVGL 用了多少"可测（embark_lvgl_outstanding_bytes / _peak_bytes）。
  *
- * 线程：LVGL 只在一条线上跑。issue 05 这条线是 main，issue 06 起交给唯一的 UI 任务
- * （spec §5）—— 本类不含任何锁，也不该有。
+ * 线程：LVGL 只在一条线上跑 —— 唯一 UI 任务（spec §5）—— 本类不含任何锁，也不该有。
  */
-#ifndef EMBARK_PLATFORM_HOST_LVGL_PORT_H
-#define EMBARK_PLATFORM_HOST_LVGL_PORT_H
+#ifndef EMBARK_PLATFORM_LVGL_PORT_H
+#define EMBARK_PLATFORM_LVGL_PORT_H
 
 #include <cstddef>
 #include <cstdint>
@@ -34,11 +37,11 @@
 #include <embark_limits.h>
 #include <middleware/etl/circular_buffer.h>
 
-namespace embark::platform::host {
+namespace embark::platform {
 
 class LvglPort {
  public:
-  /// 引用在对象存活期间必须有效（宿主是进程级静态，没问题）。
+  /// 引用在对象存活期间必须有效（宿主是进程级静态，真机是 .bss 里的全局对象）。
   explicit LvglPort(hal::Context& context) noexcept;
   ~LvglPort() noexcept;
 
@@ -102,6 +105,6 @@ class LvglPort {
   bool input_error_reported_ = false;
 };
 
-}  // namespace embark::platform::host
+}  // namespace embark::platform
 
-#endif /* EMBARK_PLATFORM_HOST_LVGL_PORT_H */
+#endif /* EMBARK_PLATFORM_LVGL_PORT_H */

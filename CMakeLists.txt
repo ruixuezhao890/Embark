@@ -88,9 +88,10 @@ add_subdirectory(third_party)
 set(EMBARK_PLATFORM_NAME "host")
 
 add_subdirectory(src)
+add_subdirectory(platform/common)   # 宿主与真机共用的胶水（静态池、LVGL 端口、UI 端口）
 add_subdirectory(platform/host)
 if(EMBARK_BUILD_ESP32)
-  add_subdirectory(platform/esp32)   # 目前整份文件就是一句 FATAL_ERROR，见 issues/11
+  add_subdirectory(platform/esp32)   # ESP-IDF 工程（platform/esp32/README.md），issues/11
 endif()
 add_subdirectory(app)
 

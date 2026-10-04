@@ -238,7 +238,9 @@ embark/
 - efmt-elog 无 tag、无版本约束 → 只能锁 SHA；上游 API 变动只在"主动更新 + 编译"时才会暴露。
 - 上游 elog 的 `basic_string_stream` 万能 `operator<<` 兜底可能静默接受错误参数——接入时实测确认。
 - **ETL 版本风险：已消（2026-10-03）**。本机副本（20.40.0 / 20.39.4）曾都旧于上游 20.49.0，现已按 §16.3 的 12 条对 20.49.0 逐条复核并把它锁成依赖（`issues/01-etl-version-verify.md`），spec §7 / §16 的行号与结论已同步。唯一仍开放的小项：完全离线构建时是否改为 vendor 本机 20.40.0 副本（不阻塞 v1，需要时再议）。
-- ESP32-S3 具体板型（Touch-LCD-2.8 还是 devkit 接线）与触摸控制器型号：**已决定推迟**到做 esp32 后端时确认（宿主那条线完全不依赖它，见 `issues/11-esp32s3-backend.md`）。
+- ESP32-S3 板型与触摸控制器型号：**已定（2026-10-04，issue 11）**。用户给了板子手册（`ESP32-S3-Touch-LCD-2.8.pdf`）并确认走参考板：模组 ESP32-S3R8（16 MB flash + 8 MB 八线 PSRAM）、屏 ST7789（原生 240×320，横屏 320×240）、触摸 CST328（I2C `0x1A`）、板载 I2C 设备（IMU/RTC）在 IO10/IO11。板级常量集中在 `platform/esp32/src/esp32_board.h` 一处，实机方向/颜色不对只动那几个开关（见 `issues/11-esp32s3-backend.md` 的 `## Answer`）。
+- IDF 侧三条硬约束（第一次 `idf.py build` 就栽在前两条上，已写进 `docs/common-pitfalls.md` 与 `docs/hal-backend-guide.md`）：① `platform/esp32/project/{sdkconfig.defaults,partitions.csv}` **必须是纯 ASCII**（IDF 的 `kconfgen` / `gen_esp32part.py` 按宿主编码读，中文 Windows 上是 GBK，直接 `UnicodeDecodeError`）② `CONFIG_FREERTOS_HZ` 必须 ≥1000（100 Hz 下 `pdMS_TO_TICKS(5)==0` ⇒ UI 循环退化成忙等）③ 栈深单位：IDF 的 `xTaskCreate*` 收字节、`uxTaskGetStackHighWaterMark()` 返回字。
+- **真机侧还有两件事必须人工确认**（本机没有板子，issue 11 只能做到"编得过"）：① 烧写后能显示 demo 第一屏（`idf.py -C platform/esp32/project -B build-esp32 flash monitor`）② 触摸/按键能切前台。判定与调法都在 `platform/esp32/README.md` 的 bring-up 清单里：启动日志会打出 CST328 自报的 `RES_X/RES_Y`，据此定轴方向。
 - 宿主 FreeRTOS port 来自 `lvgl_template_laste`：**已在 GCC 15.1 上验证可编可跑（2026-10-04，见 `issues/02`）**，源码清单 / CMake 片段 / `FreeRTOSConfig.h` 必改项都在该 issue 的 `## Answer`，证据与探针源码留档在 `.scratch/embark-v1/spikes/02-host-freertos/`。残留两个小项（不阻塞）：① 该端口 tick 比墙钟慢约 2×（见 §3 / §13）；② vendor 进仓库后是否顺手消掉上游的 2 条严格警告（`queue.c:489`、`port.c:249`）。
 - LVGL 补丁版号：**已定 v8.3.11（2026-10-04，issue 05）**。8.3 线上游已停更，选它是因为它与既有两代工程（8.3.6 / 8.3.x）的 API 一致、且是 8.3 线最后的补丁；`LV_MEM_CUSTOM 1` 下上游**没有 `lv_deinit`**（`lv_obj.h:206-214` 的门是 `LV_ENABLE_GC || !LV_MEM_CUSTOM`），所以进程内 LVGL 只初始化一次、退出时靠 `lvgl_outstanding_bytes()` 观测是否有泄漏。
 

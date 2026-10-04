@@ -1,0 +1,44 @@
+# Embark ESP32-S3 default configuration (sdkconfig.defaults)
+#
+# Only settings that must match this board or that encode a framework contract
+# live here; everything else uses ESP-IDF defaults.
+#   * board   = Waveshare ESP32-S3-Touch-LCD-2.8 (pin table in README.md)
+#   * module  = ESP32-S3R8: 16 MB flash + 8 MB octal (OPI) PSRAM
+#   * kernel  = zero-heap, static tasks/semaphores, 5 ms UI loop
+#
+# NOTE: this file must stay ASCII-only. IDF's kconfgen reads it using the host
+# locale encoding (GBK on a Chinese Windows), so non-ASCII comments abort CMake
+# with "UnicodeDecodeError". Chinese documentation lives in README.md.
+
+# --- storage and memory -------------------------------------------------------
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+
+# Partition table comes from partitions.csv in this project (NVS + 3 MB factory).
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# 240 MHz: LVGL software rendering plus an 80 MHz SPI flush; slower clocks drop
+# frames visibly.
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+# --- FreeRTOS -----------------------------------------------------------------
+# 1 tick = 1 ms. This is a hard requirement, not tuning: the framework UI loop
+# ticks every 5 ms (config/embark_limits.h: ui_loop_period_ms) and
+# pdMS_TO_TICKS(5) evaluates to 0 at the default 100 Hz -- vTaskDelay(0) does not
+# yield, the UI task would busy-wait and starve the idle task (and trip the task
+# watchdog). The backends additionally degrade "0 ticks" to 1 tick as a safety net.
+CONFIG_FREERTOS_HZ=1000
+
+# Static tasks/semaphores (spec section 10, zero-heap kernel: neither the kernel
+# nor the apps may allocate dynamically). ETL's etl::mutex, the UI task, own
+# tasks and the display flush-complete semaphore all use the static API.
+CONFIG_FREERTOS_SUPPORT_STATIC_ALLOCATION=y
+
+# --- debug and logging --------------------------------------------------------
+# Our log backend writes to stdout (= UART0 console). IDF logging and framework
+# logging share that console; the framework serializes its own writes with
+# EMBARK_LOG_SERIALIZE=1 because the real device is multi-tasking.
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y

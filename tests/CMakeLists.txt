@@ -30,6 +30,7 @@ add_executable(embark_tests
         kernel/test_framework_messaging.cpp
         kernel/test_bus.cpp
         kernel/test_message_queue.cpp
+        kernel/test_static_pool.cpp
         kernel/test_zero_alloc.cpp)
 
 # 测试内部用 "fakes/fakes.h" 这种从 tests/ 起算的相对包含。
@@ -37,6 +38,7 @@ target_include_directories(embark_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(embark_tests PRIVATE
         embark::core
+        embark::static_pool
         embark_freertos
         doctest::doctest)
 

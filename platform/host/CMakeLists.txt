@@ -7,7 +7,8 @@
 # 分两个库：
 #   embark_platform_host     基础后端（时间/持久化/日志/系统/总线 + LVGL 内存钩子）
 #                            + UI 任务启动器（ui_task，issues/06）
-#   embark_platform_host_ui  SDL2 显示、SDL2 输入、LVGL 端口、UI 端口、演示 App
+#   embark_platform_host_ui  SDL2 显示、SDL2 输入（LVGL 端口与 UI 端口在 platform/common，
+#                            宿主与真机共用，issues/11）
 # 找不到 SDL2 时只跳过 UI 那部分：内核、基础后端与全部单元测试照常可建可跑
 # （见 cmake/embark_sdl2.cmake）。
 
@@ -43,9 +44,7 @@ embark_find_sdl2(EMBARK_HOST_SDL2_FOUND)
 if(EMBARK_HOST_SDL2_FOUND)
   add_library(embark_platform_host_ui STATIC
           host_display.cpp
-          host_input.cpp
-          lvgl_port.cpp
-          lvgl_ui_port.cpp)
+          host_input.cpp)
 
   add_library(embark::platform_host_ui ALIAS embark_platform_host_ui)
 
@@ -53,10 +52,12 @@ if(EMBARK_HOST_SDL2_FOUND)
   # （于是也不必链 SDL2main）。PUBLIC 是给演示程序用的。
   target_compile_definitions(embark_platform_host_ui PUBLIC SDL_MAIN_HANDLED)
 
+  # LVGL 端口与 UI 端口在 platform/common（宿主与真机共用，issues/11），
+  # 这里只提供 SDL 的显示/输入后端。
   target_link_libraries(embark_platform_host_ui
           PUBLIC embark::core
                  embark::platform_host
-                 embark_lvgl
+                 embark::common_ui
                  SDL2::SDL2)
 
   # 演示程序：唯一 UI 任务的完整例子 + 无人值守验收开关

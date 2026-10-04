@@ -151,11 +151,14 @@ void ClockApp::enter_blinking_off() noexcept {
 }
 
 void ClockApp::refresh_state_label() noexcept {
-  lv_label_set_text_fmt(state_label_, "Ticks: %u (about %u s)", ticks_, ticks_ / 10);
+  // 显式转 unsigned：xtensa GCC 下 uint32_t 是 long unsigned int，直接喂 %u 会被 IDF 的
+  // -Werror=format 拦下（宿主 MinGW 上 uint32_t 就是 unsigned int，所以宿主从没报过）。
+  lv_label_set_text_fmt(state_label_, "Ticks: %u (about %u s)", static_cast<unsigned>(ticks_),
+                        static_cast<unsigned>(ticks_ / 10));
 }
 
 void ClockApp::refresh_brightness() noexcept {
-  lv_label_set_text_fmt(brightness_label_, "Brightness: %u", level_);
+  lv_label_set_text_fmt(brightness_label_, "Brightness: %u", static_cast<unsigned>(level_));
 }
 
 void ClockApp::on_settings_button(lv_event_t* event) noexcept {
@@ -224,7 +227,7 @@ void SettingsApp::on_back(lv_event_t* event) noexcept {
 }
 
 void SettingsApp::refresh_brightness_label() noexcept {
-  lv_label_set_text_fmt(brightness_label_, "Brightness: %u", level_);
+  lv_label_set_text_fmt(brightness_label_, "Brightness: %u", static_cast<unsigned>(level_));
 }
 
 // ================================ TickerApp ================================

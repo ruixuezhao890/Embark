@@ -76,6 +76,52 @@ struct BrightnessMessage : public embark::MessageT<0x21> {  // 有基类！
 - `lv_conf.h` 在 `config/` 是单一事实来源，LVGL 构建视图从那里取；
   改 `LV_COLOR_DEPTH`（16 = RGB565，spec 定的）或开关要在那一份上改。
 
+## ESP32-S3 真机（IDF）特有
+
+- **配置文件必须纯 ASCII**：`platform/esp32/project/sdkconfig.defaults` 与
+  `partitions.csv` 由 IDF 的 `kconfgen` / `gen_esp32part.py` 按**宿主本地编码**
+  读取（中文 Windows = GBK）。UTF-8 中文注释会让 `set-target` 直接失败：
+  `UnicodeDecodeError: 'gbk' codec can't decode byte ...`。中文说明写在
+  `platform/esp32/README.md`，那两个文件里只留英文注释。
+- **`CONFIG_FREERTOS_HZ` 必须 ≥ 1000**：UI 循环是 5 ms，100 Hz 下
+  `pdMS_TO_TICKS(5) == 0` ⇒ `vTaskDelay(0)` 只让出一次调度 ⇒ UI 任务忙等、
+  拖住空闲任务、触发任务看门狗。后端另有"0 tick 退化成 1 tick"兜底，
+  但底子还是 1 kHz。
+- **栈深的单位**：IDF 的 `xTaskCreate*` 收**字节**（`xTaskCreateStaticPinnedToCore`
+  也一样），`uxTaskGetStackHighWaterMark()` 返回**字**。框架的 `*_stack_words`
+  是字，两处换算分别在 `platform/esp32/src/esp32_ui_task.cpp`（创建与水位）与
+  `esp32_system.cpp`（水位）里做掉了。
+- **`uint32_t` 不等于 `unsigned int`**：xtensa GCC 下 `uint32_t` =
+  `long unsigned int`，所以 `lv_label_set_text_fmt(label, "%u", ticks)` 这类
+  **printf 风格**调用会被 IDF 的 `-Werror=format` 拦下（宿主 MinGW 上两者同类型，
+  永远不报）。写 `%` 格式时显式 `static_cast<unsigned>(...)`；框架自己的日志是
+  efmt 的 `{}` 风格，不受影响。
+- **引脚常量要显式转 `gpio_num_t`**：`esp32_board.h` 故意不引 IDF 头，常量是 `int`；
+  IDF 的 `i2c_master_bus_config_t::sda_io_num` 之类字段是枚举 ⇒ 必须
+  `static_cast<gpio_num_t>(...)`，少了就是
+  `invalid conversion from 'int' to 'gpio_num_t'`。
+- **中间件视图要在 `project()` 之前建**：IDF 的组件配置发生在 `project()` 里，
+  `<middleware/...>` 的 junction 必须先存在；而且 `embark_create_middleware_view`
+  要显式传仓库根（IDF 工程的 `PROJECT_SOURCE_DIR` 是 `platform/esp32/project`，
+  不是仓库根）。
+- **`esp_lcd` 的像素发送是异步的**：`tx_color` / `draw_bitmap` 只是入队，缓冲区要等
+  `on_color_trans_done` 才能复用；而且**一次调用只回调一次**（驱动只在最后一块
+  chunk 上置 `en_trans_done_cb`）⇒ 后端的 `flush()` 用静态二值信号量等它，
+  等到了才算 HAL 要的"同步语义"成立。
+- **组件要自己补宿主 CMake 给过的东西**：`-include config/embark_config.h`、
+  `third_party/etl/include`（ETL 是 header-only，宿主靠 `etl::etl` 的 INTERFACE
+  目录）、`EMBARK_PLATFORM_NAME` / `EMBARK_VERSION_STRING`。
+- **组件的 `PUBLIC` 编译选项会漏到 IDF 生成的纯 C 文件上**：`PUBLIC` 选项会跟着
+  组件传播给最终链接目标 `embark_esp32.elf`，而那个目标要编一个自动生成的
+  `project_elf_src_esp32s3.c`（**纯 C**）。于是 `-include config/embark_config.h`
+  这种 **C++ 专用**的选项一旦写成 `PUBLIC`，C 文件看见 ETL 头就是一片
+  `error: unknown type name 'namespace'`。规矩：`-include` 留在组件 `PRIVATE`，
+  依赖方（`project/main/CMakeLists.txt`）自己带一份；`EMBARK_*` 宏定义可以 `PUBLIC`
+  （纯宏，C 也吃得下）。
+- **真机组件不带 `-Wpedantic`**：IDF/LVGL 的头文件在 `-Wpedantic` 下会刷
+  `#include_next is a GCC extension`、匿名结构体、柔性数组等警告（宿主上这些头是
+  SYSTEM include，IDF 侧没有这层区分）。我们自己的代码在宿主侧仍受 `-Wpedantic` 管。
+
 ## 宿主特有
 
 - SDL2 找不到：`embark_host_ui` 目标被跳过（STATUS 提示），内核与测试照常

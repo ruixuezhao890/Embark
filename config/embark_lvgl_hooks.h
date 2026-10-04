@@ -29,6 +29,18 @@ void* embark_lvgl_realloc(void* pointer, size_t size);
 /** LVGL 断言失败（LV_ASSERT / LV_ASSERT_MSG）：记录后不返回。 */
 void embark_lvgl_assert_failed(void);
 
+/**
+ * LVGL 内存观测：当前未回收字节、历史峰值、预算上限。
+ *
+ * 这两个数字是"零堆"验收的证据来源（真机没有宿主那套全局 new/delete 钩子，只能看
+ * 分配器自己还剩多少）。平台共用层的 UI 端口在收尾时打一行，宿主与真机各自实现：
+ *   - 宿主：platform/host/host_lvgl_mem.cpp（malloc 包装的计数器）
+ *   - 真机：platform/esp32/src/esp32_lvgl_mem.cpp（定容静态池）
+ */
+size_t embark_lvgl_outstanding_bytes(void);
+size_t embark_lvgl_peak_bytes(void);
+size_t embark_lvgl_budget_bytes(void);
+
 #ifdef __cplusplus
 }
 #endif

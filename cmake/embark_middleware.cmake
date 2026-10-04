@@ -23,8 +23,17 @@
 # （LV_LVGL_H_INCLUDE_SIMPLE=ON，include 根是 third_party/lvgl 仓库根），
 # 给它也造一条 junction 只会多出第二套写法。见 third_party/CMakeLists.txt。
 
-# 建视图。参数：视图根目录（例如 ${CMAKE_BINARY_DIR}/include/middleware）
+# 建视图。参数：视图根目录（例如 ${CMAKE_BINARY_DIR}/include/middleware）、
+# 可选的仓库根（默认 ${PROJECT_SOURCE_DIR}）。
+#
+# 为什么要第二参数：ESP-IDF 工程（platform/esp32/project）的 PROJECT_SOURCE_DIR 是工程目录，
+# 不是仓库根；而依赖（third_party/）一直在仓库根下。宿主构建用默认值，IDF 侧显式传仓库根。
 function(embark_create_middleware_view view_dir)
+  set(repo_root "${PROJECT_SOURCE_DIR}")
+  if(ARGC GREATER 1)
+    set(repo_root "${ARGV1}")
+  endif()
+
   set(link_etl  "${view_dir}/etl")
   set(link_efmt "${view_dir}/efmt")
   set(link_elog "${view_dir}/elog")
@@ -35,9 +44,9 @@ function(embark_create_middleware_view view_dir)
 
   file(MAKE_DIRECTORY "${view_dir}")
 
-  embark_middleware_link("${link_etl}"  "${PROJECT_SOURCE_DIR}/third_party/etl/include/etl")
-  embark_middleware_link("${link_efmt}" "${PROJECT_SOURCE_DIR}/third_party/efmt-elog/efmt")
-  embark_middleware_link("${link_elog}" "${PROJECT_SOURCE_DIR}/third_party/efmt-elog/elog")
+  embark_middleware_link("${link_etl}"  "${repo_root}/third_party/etl/include/etl")
+  embark_middleware_link("${link_efmt}" "${repo_root}/third_party/efmt-elog/efmt")
+  embark_middleware_link("${link_elog}" "${repo_root}/third_party/efmt-elog/elog")
 endfunction()
 
 # 造一条链接。参数：链接路径、目标目录

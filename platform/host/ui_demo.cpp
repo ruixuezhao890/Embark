@@ -198,6 +198,16 @@ using embark::Framework;
 
 namespace hp = embark::platform::host;
 
+namespace {
+
+/// 宿主的退出来源：SDL 的关窗标志。`hal::IInput` 里没有"退出请求"这个概念
+/// （宿主是关窗、真机可能是按键或压根没有），所以平台共用的 LvglUiPort 收一个回调。
+bool host_exit_query(void* context) noexcept {
+  return static_cast<hp::HostInput*>(context)->quit_requested();
+}
+
+}  // namespace
+
 /// 唯一 UI 任务。SDL 的窗口与事件泵要求同线程，LVGL 只允许一条线上跑，
 /// 所以 HAL 初始化、UI 端口、App 前台、事件循环全都在这一个任务里（spec §6）。
 void ui_main(void* argument) noexcept {
@@ -217,7 +227,9 @@ void ui_main(void* argument) noexcept {
             static_cast<int>(display.info().height), input.is_ready() ? "就绪" : "未就绪",
             hal.storage_path());
 
-  hp::LvglUiPort ui_port(hal.context(), display, input);
+  // UI 端口在 platform/common（宿主与真机共用）：显示/输入从 HAL Context 取，
+  // 退出来源由平台注入（这里是"用户关窗"）。
+  embark::platform::LvglUiPort ui_port(hal.context(), &host_exit_query, &input);
   // own task 的后台任务槽位（BSS，不占 UI 任务栈）：进程级一个实例。
   static hp::HostTaskSpawner spawner;
   Framework framework(hal.context(), hp::embark_apps(), &ui_port, &spawner);

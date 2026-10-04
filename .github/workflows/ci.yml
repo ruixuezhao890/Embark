@@ -2,8 +2,8 @@
 #
 # 三个 job：
 #   1. host-build-test：ubuntu 上构建宿主工程 + ctest 全量单测（SDL2 用 apt 装）。
-#   2. esp32-build：espressif/idf:release-v5.4 容器里构建 ESP32 目标（只编不烧）。
-#      —— 依赖 issue 11（ESP32 目标落地），落地前 continue-on-error 允许失败。
+#   2. esp32-build：espressif/idf:release-v5.4 容器里构建 ESP32-S3 固件（只编不烧）。
+#      issue 11 已落地，所以是真构建：同一个仓库、同一套源码，宿主与真机两个目标都必须过。
 #   3. format-check：clang-format --dry-run --Werror（版本 18，与本地开发机一致；
 #      .clang-format 里的注释说明：v1 阶段不强制本机格式化，CI 只作提示/卡漂移）。
 #
@@ -51,12 +51,9 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
   esp32-build:
-    name: ESP32 build (issue 11)
+    name: ESP32-S3 firmware build (issue 11)
     runs-on: ubuntu-latest
     container: espressif/idf:release-v5.4
-    # 占位：platform/esp32 目标是 issue 11 的交付物，落地前此 job 允许失败；
-    # issue 11 完成后去掉 continue-on-error 并换成真实构建命令。
-    continue-on-error: true
     steps:
       - name: Restore submodule cache
         uses: actions/cache@v4
@@ -69,9 +66,12 @@ jobs:
         with:
           submodules: recursive
       - name: Build
+        # 构建目录放仓库根的 build-esp32/（.gitignore 的 build-*/ 已覆盖）；
+        # sdkconfig 由 idf.py 生成在 platform/esp32/project/ 下，同样不进仓库。
         run: |
           idf.py --version
-          idf.py build
+          idf.py -C platform/esp32/project -B build-esp32 set-target esp32s3
+          idf.py -C platform/esp32/project -B build-esp32 build
 
   format-check:
     name: clang-format check

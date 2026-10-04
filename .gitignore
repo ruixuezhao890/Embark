@@ -11,6 +11,13 @@ compile_commands.json
 # 万一被误生成到源码树，也不要提交
 /middleware/
 
+# ESP-IDF（issues/11）：sdkconfig 是"本机 idf.py 生成"的产物（默认值在 sdkconfig.defaults
+# 里，那个要提交）；组件管理器下载的依赖与锁定文件同理不进仓库
+platform/esp32/project/sdkconfig
+platform/esp32/project/sdkconfig.old
+platform/esp32/project/dependencies.lock
+platform/esp32/project/managed_components/
+
 # 编辑器 / IDE
 .idea/
 .vscode/

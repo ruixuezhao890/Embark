@@ -19,12 +19,13 @@ LVGL 8.3.11 已接入（宿主可跑出窗口、点击有响应、关窗干净�
 V10.6.2 静态接入、零动态分配）、消息派发与后台节拍（Bus / MessageQueue / callback_timer，
 issue 07）、三种后台策略的演示 App（issue 08：clock 用 `etl::state_chart` + 后台 tick、
 settings 全挂起、ticker 用自己的任务发消息）、零堆审计（issue 09：全局 new/delete 钩子 +
-内核稳态路径断言 0 次，73 用例 / 495 断言全绿）、CI 三个 job（issue 10：宿主构建测试 /
-ESP32 构建 / clang-format 检查，`.github/workflows/ci.yml`）。宿主 UI 演示里切换前台、
-输入焦点随之切换、后台 tick 计数与跨 App 消息都可观测。
-**还没做**：ESP32-S3 后端（issue 11，等你给板型与触摸型号）——按
-`.scratch/embark-v1/issues/` 里的工单继续。规格书见 `.scratch/embark-v1/spec.md`，
-新手路径见 [docs/README.md](docs/README.md)。
+内核稳态路径断言 0 次）、CI 三个 job（issue 10：宿主构建测试 / ESP32 构建 / clang-format
+检查，`.github/workflows/ci.yml`）、**ESP32-S3 真机后端**（issue 11：ST7789 + CST328 的
+七种能力实现、静态池 LVGL 堆、共享的 `platform/common` 端口层、IDF 5.4 真构建）。
+宿主 UI 演示里切换前台、输入焦点随之切换、后台 tick 计数与跨 App 消息都可观测。
+**还没做**：真机上的界面观感确认（issue 11 的验收项 ③⑤：屏幕方向/颜色、触摸方向/触点）
+——需要板子到手；另有 RTC 对时（`epoch_ms` 目前 `unsupported`）与 SD 卡总线。
+规格书见 `.scratch/embark-v1/spec.md`，新手路径见 [docs/README.md](docs/README.md)。
 
 ## 宿主构建
 
@@ -107,17 +108,29 @@ ctest --test-dir build --output-on-failure
 
 ## ESP32-S3 构建
 
-`platform/esp32/` 目前是占位（构建即报错：该后端随 issue 11 落地，等你提供
-板型与触摸控制器型号）。落地后的命令（ESP-IDF 5.4 组件形式接入）：
+真机后端在 `platform/esp32/`，以 ESP-IDF 5.4 工程的形式接入（同一个仓库、
+同一份内核与 App 源码；`platform/esp32/project/components/embark` 只是一个
+"把源码喂给 IDF" 的组件壳）。本机 IDF 5.4 上的命令：
 
 ```sh
-idf.py set-target esp32s3   # 在 platform/esp32/ 下执行
-idf.py build                # 只编不烧（CI 的 esp32 job 同款，issue 11 后转必需）
+idf.py -C platform/esp32/project -B build-esp32 set-target esp32s3
+idf.py -C platform/esp32/project -B build-esp32 build      # 只编不烧
+idf.py -C platform/esp32/project -B build-esp32 -p COM5 flash monitor
 ```
 
-在真机后端就绪前，所有功能都在宿主上开发与验收——同一份 App 代码，换后端
-不动 `app/` 与 `include/embark/`（spec §14.5 验收项，见
-[docs/hal-backend-guide.md](docs/hal-backend-guide.md)）。
+构建目录 `build-esp32/` 由 `.gitignore` 覆盖；`sdkconfig` 是 `idf.py` 在
+`platform/esp32/project/` 下生成的，也不进仓库（要改默认值就改
+`project/sdkconfig.defaults`，注意那两个配置文件必须保持纯 ASCII）。
+
+板型参数、bring-up 清单（屏幕方向/颜色、触摸轴、背光）与串口日志样例见
+[platform/esp32/README.md](platform/esp32/README.md)；两块新硬件（屏幕与触摸）
+的"上板才能确认"部分也是 issue 11 的验收项。
+
+宿主侧想顺带看一眼门面：`cmake -S . -B build -DEMBARK_BUILD_ESP32=ON` 会加两个
+自定义目标（打印构建命令 / 直接调 `idf.py`），缺 IDF 时只是提示，不失败。
+
+在宿主上开发 App 的流程不变 —— 同一份 App 代码，换后端不动 `app/` 与 `include/embark/`
+（spec §14.5 验收项，见 [docs/hal-backend-guide.md](docs/hal-backend-guide.md)）。
 
 ## 怎么加一个 App
 
