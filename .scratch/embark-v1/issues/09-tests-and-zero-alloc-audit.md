@@ -4,7 +4,7 @@ Status: resolved
 Type: task
 Blocked by: 06
 
-Resolved: commit （提交后回填）
+Resolved: commit dafecd2（本地，未推送）
 
 ## Answer
 
