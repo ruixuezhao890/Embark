@@ -193,7 +193,7 @@ Error Esp32Display::init() noexcept {
   // 5) 背光（LEDC 13 位 / 5 kHz）。
   const Error backlight_result = init_backlight();
   if (backlight_result != Error::none) {
-    ELOG_WARN("背光初始化失败：{}（画面还能用，只是亮度不可调）", to_string(backlight_result));
+    ELOG_WARN("背光初始化失败：{}（画面还能用，只是亮度不可调）", backlight_result);
   }
 
   ready_ = true;

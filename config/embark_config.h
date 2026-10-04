@@ -81,6 +81,15 @@ static_assert(ETL_VERSION_MAJOR == 20 && ETL_VERSION_MINOR == 49,
 #define EMBARK_LOG_SERIALIZE 0
 #endif
 
+/* --- 需要知道的 efmt / elog 上限（不改值，只登记）------------------------ */
+/* ELOG_MAX_RECORD_SIZE 默认 384 字节（elog.hpp:64）：单条日志 = 时间戳/位置前缀 + 正文，
+ * 放不下就【整行丢弃】—— elog.hpp:186 的注释与 :211-220 的实现都是"不输出半行、不报错"。
+ * 也就是说：日志行过长不会截断，而是整条静默消失，写的时候看不出来。
+ * 另有一处隐藏成本：这块缓冲是 log_at 里的局部数组 `char record[384 + 1]`（elog.hpp:203），
+ * 每打一行就在调用者栈上占 385 字节 —— 与 own_task 的栈预算（own_task_stack_words）互相牵制。
+ * 所以规矩是"日志行要短、长对象拆两条"（示范见 platform/host/ui_demo.cpp:222-234），
+ * 而不是把这个数字调大。要调就两边一起算栈。 */
+
 /* --- 明确不要定义的（列出来是为了拦住以后"顺手加上"）--------------------- */
 /* ETL_USE_ASSERT_FUNCTION —— 会把 ETL_ASSERT 换成调 assert()，而我们要走自己的回调；
  * ETL_THROW_EXCEPTIONS    —— 内核编不了异常（spec §10），默认就是 0；

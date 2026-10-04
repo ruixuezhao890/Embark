@@ -9,6 +9,11 @@
  *   - cross_task_message_id + CrossTaskMessage：own task → UI 的统一信封
  *     （issue 07）。任何跨任务消息都装进这个信封走 Framework::post()，
  *     UI 循环在 step 的派发段把它经总线投递给目标 App 的 onMessage。
+ *
+ * 打印（issue 13）：信封用类型内的 E_FMT_FIELDS(from_app, seq) 登记（它有基类与
+ * 构造函数，E_FMT_DERIVE 那条路覆盖不到），日志里可以直接打整个信封：
+ *
+ *   ELOG_INFO("UI 收到跨任务消息：{}", envelope);
  */
 #ifndef EMBARK_MESSAGE_H
 #define EMBARK_MESSAGE_H
@@ -16,6 +21,7 @@
 #include <cstdint>
 
 #include <middleware/etl/message.h>
+#include <middleware/efmt/core/format.hpp>
 
 namespace embark {
 
@@ -30,10 +36,15 @@ template <MessageId Id>
 using MessageT = etl::message<Id>;
 
 /// App 的编号：注册表下标（0..size-1）。消息投递、request_switch 都用它。
-using AppId = std::uint8_t;
+///
+/// 宽度是 uint16_t 而不是 uint8_t（issue 13）：efmt 的派生打印会把 1 字节整型
+/// 成员当字符输出（实测 `from_app = 1` 打成控制字符 0x01，值 0 直接写出 NUL
+/// 截断整行日志）。框架里"会进日志的小整数"因此统一抬到 2 字节；
+/// 语义没变——编号仍然只用到 0..max_apps-1。
+using AppId = std::uint16_t;
 
 /// 无效 App 编号（find 失败时返回）。
-inline constexpr AppId invalid_app_id = 0xFFU;
+inline constexpr AppId invalid_app_id = 0xFFFFU;
 
 /// 框架保留消息 id：跨任务信封（见文件头注释）。
 inline constexpr MessageId cross_task_message_id = 0xFEU;
@@ -47,6 +58,9 @@ class CrossTaskMessage : public MessageT<cross_task_message_id> {
 
   AppId from_app = invalid_app_id;  ///< 发送方 App（own task 的拥有者）
   std::uint32_t seq = 0;            ///< 发送方自己的序号（丢包/乱序观测）
+
+  /// 打印用字段清单（issue 13）：类里有基类与构造函数，只能走类型内这一行。
+  E_FMT_FIELDS(from_app, seq);
 };
 
 }  // namespace embark

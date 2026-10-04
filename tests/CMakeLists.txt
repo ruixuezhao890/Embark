@@ -30,6 +30,7 @@ add_executable(embark_tests
         kernel/test_framework_messaging.cpp
         kernel/test_bus.cpp
         kernel/test_message_queue.cpp
+        kernel/test_format_derive.cpp
         kernel/test_static_pool.cpp
         kernel/test_zero_alloc.cpp)
 

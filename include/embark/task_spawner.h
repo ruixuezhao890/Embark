@@ -31,11 +31,11 @@ class ITaskSpawner {
   ///   entry       任务函数，合同与 UI 任务相同：不许返回
   ///   argument    传给 entry 的指针（生命周期归调用方）
   ///   stack_words 栈深（平台单位字；0 非法，框架会先填默认值）
-  ///   priority    优先级（平台语义，下界留给平台）
+  ///   priority    优先级（平台语义，下界留给平台；uint16_t 见 message.h 的说明）
   /// 失败返回 busy（槽位耗尽）/ invalid_argument / no_space（静态存储不足）。
   [[nodiscard]] virtual Error spawn_task(const char* name, void (*entry)(void*) noexcept,
                                          void* argument, std::uint16_t stack_words,
-                                         std::uint8_t priority) noexcept = 0;
+                                         std::uint16_t priority) noexcept = 0;
 };
 
 }  // namespace embark

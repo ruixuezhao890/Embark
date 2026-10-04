@@ -7,9 +7,10 @@
 
 get_filename_component(EMBARK_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../.." ABSOLUTE)
 
-# --- 与宿主 src/CMakeLists.txt 的源列表保持一致（内核 5 个 TU） ----------------
+# --- 与宿主 src/CMakeLists.txt 的源列表保持一致（内核 4 个 TU） ----------------
+# issue 13 起没有 src/embark/error.cpp：错误码文本改由 <embark/error.h> 的
+# error_text() 内联提供，不再单独占一个 TU。
 set(EMBARK_KERNEL_SOURCES
-        "${EMBARK_ROOT}/src/embark/error.cpp"
         "${EMBARK_ROOT}/src/embark/framework.cpp"
         "${EMBARK_ROOT}/src/embark/bus.cpp"
         "${EMBARK_ROOT}/src/embark/log.cpp"

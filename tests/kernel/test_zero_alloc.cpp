@@ -64,7 +64,7 @@ class AuditMsg final : public embark::MessageT<0x61> {
 class RecordSpawner final : public embark::ITaskSpawner {
  public:
   [[nodiscard]] embark::Error spawn_task(const char*, void (*)(void*) noexcept, void*,
-                                         std::uint16_t, std::uint8_t) noexcept override {
+                                         std::uint16_t, std::uint16_t) noexcept override {
     ++spawn_calls_;
     return result_;
   }

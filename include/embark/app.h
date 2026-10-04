@@ -12,6 +12,11 @@
  *   - v1 常驻：没有任何退役/销毁 App 的路径，onExit 只在关机路径触发。
  *
  * 钩子集合与 spec §5 完全一致（实现可在细节上微调，但钩子集合不再增加）。
+ *
+ * 打印（issue 13）：BackgroundPolicy 与 AppSettings 用 efmt 的派生宏声明，框架在装配
+ * 期会把每个 App 的后台配置整条打进日志（src/embark/framework.cpp 的 boot）：
+ *
+ *   App clock 后台配置 { background = BackgroundPolicy::tick, period_ms = 100, ... }
  */
 #ifndef EMBARK_APP_H
 #define EMBARK_APP_H
@@ -19,6 +24,7 @@
 #include <cstdint>
 
 #include <embark/message.h>
+#include <middleware/efmt/core/format.hpp>
 
 namespace embark {
 
@@ -27,19 +33,20 @@ class Framework;
 // AppId / invalid_app_id 定义在 <embark/message.h>（消息投递也用它们），见下。
 
 /// 后台策略（spec §5、§6）：每 App 一个配置，App 自己声明自己是哪种后台。
-enum class BackgroundPolicy : std::uint8_t {
-  suspend = 0,   ///< 完全不跑（默认）
-  tick = 1,      ///< 按 period_ms 周期跑 onBackgroundTick（0 = 等价 suspend）
-  own_task = 2,  ///< 申请自己的 FreeRTOS 任务（栈深/优先级也在这里配）
-};
+E_FMT_DERIVE_ENUM(enum class BackgroundPolicy
+                  : std::uint8_t{
+                      suspend = 0,  ///< 完全不跑（默认）
+                      tick = 1,  ///< 按 period_ms 周期跑 onBackgroundTick（0 = 等价 suspend）
+                      own_task = 2,  ///< 申请自己的 FreeRTOS 任务（栈深/优先级也在这里配）
+                  });
 
 /// 每 App 的后台配置（App::settings() 返回；默认 = 纯前台、后台不跑）。
-struct AppSettings {
+E_FMT_DERIVE(struct AppSettings {
   BackgroundPolicy background = BackgroundPolicy::suspend;
   std::uint32_t period_ms = 0;         ///< tick 策略的周期；0 等价 suspend
   std::uint16_t task_stack_words = 0;  ///< own_task 策略的栈深（单位：StackType_t 字）
-  std::uint8_t task_priority = 0;      ///< own_task 策略的优先级
-};
+  std::uint16_t task_priority = 0;  ///< own_task 策略的优先级（2 字节，见 message.h 的说明）
+});
 
 /// App 基类 —— 钩子集合与 spec §5 一致，不再增加。
 class App {

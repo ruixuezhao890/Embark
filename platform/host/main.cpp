@@ -45,7 +45,7 @@ int self_check(embark::hal::Context& ctx) {
   }
   const auto epoch = ctx.time.epoch_ms();
   if (!epoch.has_value()) {
-    ELOG_ERROR("自检失败：epoch_ms 返回 {}", embark::to_string(epoch.error()));
+    ELOG_ERROR("自检失败：epoch_ms 返回 {}", epoch.error());
     ++failures;
   } else {
     ELOG_INFO("时间：now_ms={} 毫秒，epoch_ms 可用", after);
@@ -64,7 +64,7 @@ int self_check(embark::hal::Context& ctx) {
       boot_count = get_u32_le(raw);
     }
   } else if (read.error() != embark::Error::not_found) {
-    ELOG_ERROR("自检失败：读 boot_count 返回 {}", embark::to_string(read.error()));
+    ELOG_ERROR("自检失败：读 boot_count 返回 {}", read.error());
     storage_ok = false;
   }
 
@@ -105,7 +105,7 @@ int self_check(embark::hal::Context& ctx) {
   const std::uint8_t probe[1] = {0x00};
   const embark::Error bus = ctx.bus.i2c_write(0x3C, etl::span<const std::uint8_t>(probe, 1));
   if (bus != embark::Error::unsupported) {
-    ELOG_ERROR("自检失败：宿主 i2c_write 返回 {}，应为 unsupported", embark::to_string(bus));
+    ELOG_ERROR("自检失败：宿主 i2c_write 返回 {}，应为 unsupported", bus);
     ++failures;
   } else {
     ELOG_INFO("总线：宿主无物理总线，i2c/spi 一律 unsupported");
@@ -125,7 +125,8 @@ int main() {
   auto& platform = embark::platform::host::HostHal::instance();
   const embark::Error init = platform.init();
   if (init != embark::Error::none) {
-    std::fprintf(stderr, "[embark] HAL 初始化失败：%s\n", embark::to_string(init));
+    char text[24];
+    std::fprintf(stderr, "[embark] HAL 初始化失败：%s\n", embark::error_text(text, init));
     return 1;
   }
 

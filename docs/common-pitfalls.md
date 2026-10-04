@@ -61,6 +61,47 @@ struct BrightnessMessage : public embark::MessageT<0x21> {  // 有基类！
 统计行超过就拆两条日志（ui_demo.cpp 的统计输出就是这么拆的）。
 日志钩子请用 `ELOG_*` 门面（整行串行化），不要裸 printf。
 
+## 日志行上限 384 字节：超了整行消失，不是截断
+
+`ELOG_*` 的单条日志 = 时间戳/位置前缀 + 正文，放不下 `ELOG_MAX_RECORD_SIZE`
+（`third_party/efmt-elog/elog/elog.hpp:64`，默认 **384** 字节）就**整行丢弃**：
+`elog.hpp:186` 的注释与 `:211-220` 的实现都是"不输出半行"，不报错、不截断。
+派生打印会显著拉长日志行（一个结构体就能上百字节），所以：
+
+- 一条日志只放一个整对象；多个对象拆两条 —— 宿主 HAL 就绪信息就是这么拆的
+  （`platform/host/ui_demo.cpp:222-234`，"显示"一条、"整屏区域"一条）。
+  拆完发现少了半行、或者某条日志凭空不见，先量长度。
+- 这块缓冲是 `log_at` 里的局部数组 `char record[384 + 1]`（`elog.hpp:203`）：
+  每打一行，调用者栈上就占 385 字节。`own_task` 的栈只有
+  `own_task_stack_words`（默认 256 字 = 1 KB），两边要一起算。
+- 想调大就改 `ELOG_MAX_RECORD_SIZE`（`config/embark_config.h` 里登记了这件事），
+  但栈成本同步上涨。
+
+## 派生打印（E_FMT_DERIVE）：类型的名字只有一份
+
+v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（issue 13）：
+
+- 枚举用 `E_FMT_DERIVE_ENUM(enum class Error : std::uint8_t { ... });`、
+  结构体用 `E_FMT_DERIVE(struct Rect { ... });`；调用处补分号，
+  **声明里一行只写一个字段**（宏按逗号切宏参数）。类里有基类/构造函数、
+  声明里带 `#if` 或字段超过 16 个时，改成在类型体内写
+  `E_FMT_FIELDS(from_app, seq);`（`include/embark/message.h` 的
+  `CrossTaskMessage` 是例子）。
+- 用法就是整对象填空：`ELOG_INFO("HAL 就绪：显示 {}", display_info);`，
+  输出是带类型的 Rust Debug 风格：`embark::hal::Rect { x = 0, y = 0, width = 320, height = 240 }`。
+- **1 字节整型成员会被当成字符打**（上游 efmt 的已知问题，已登记）：派生输出里
+  `std::uint8_t` / `std::int8_t` / `unsigned char` 成员走字符通道，值为 0 时写出
+  NUL，会把整行日志**截断**。所以框架里会进日志的字段一律 2 字节起：`AppId`、
+  `AppSettings::task_priority`、`InputEvent::key` 都是 `std::uint16_t`
+  （原因写在 `include/embark/message.h` 的 `AppId` 处）。顶层 `std::uint8_t`
+  参数打印是正常的（`key = 113` 就来自这里），别把这条推广过头。
+- 只吃 `const char*` 的出口（`fprintf`、`embark::fatal`）用
+  `char text[24]; embark::error_text(text, error);`。
+- 没登记的类型在 `EFMT_DERIVE_STRICT`（默认 1）下是**编译报错**，不会静默降级；
+  想省 Flash 可以 `-DEFMT_DERIVE_SHOW_TYPE=0` 去掉类型名（输出变成
+  `Error::not_found`，代价是不同类型之间会撞名）。派生是纯编译期注册，
+  运行期零开销、零堆；成本只有 Flash（结构体约 1 KB/类型、枚举约 0.3 KB/类型）。
+
 ## ELOG_WARN 在测试里是 no-op（不是 bug)
 
 没有注册默认 logger 时 `ELOG_WARN` 什么都不做（`log_at` 无后端）。
@@ -111,6 +152,12 @@ struct BrightnessMessage : public embark::MessageT<0x21> {  // 有基类！
 - **组件要自己补宿主 CMake 给过的东西**：`-include config/embark_config.h`、
   `third_party/etl/include`（ETL 是 header-only，宿主靠 `etl::etl` 的 INTERFACE
   目录）、`EMBARK_PLATFORM_NAME` / `EMBARK_VERSION_STRING`。
+- **内核源列表有两份，加/删 TU 必须一起改**：宿主是 `src/CMakeLists.txt`，真机是
+  `platform/esp32/project/components/embark/CMakeLists.txt` 的 `EMBARK_KERNEL_SOURCES`
+  （一份源码树、两条构建路径，spec §11）。删 `src/embark/error.cpp` 时只改了宿主那份，
+  宿主照样全绿、`cmake --build build-esp32` 却在 configure 阶段直接失败：
+  `Cannot find source file: .../src/embark/error.cpp` —— 显式列出的源文件不存在时
+  CMake 不会跳过，而是报错。改完记得两边都跑一遍构建。
 - **组件的 `PUBLIC` 编译选项会漏到 IDF 生成的纯 C 文件上**：`PUBLIC` 选项会跟着
   组件传播给最终链接目标 `embark_esp32.elf`，而那个目标要编一个自动生成的
   `project_elf_src_esp32s3.c`（**纯 C**）。于是 `-include config/embark_config.h`

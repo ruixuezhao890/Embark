@@ -58,8 +58,6 @@ _Avoid_: 生命周期回调、状态机
 `IUiPort` 把"渲染/输入泵/LVGL 处理/关窗/收尾"封装成唯一 UI 任务循环的固定阶段（tick → pump_input → process）；宿主实现 = `LvglUiPort`（`lv_timer_handler` 的唯一调用点），测试实现 = `FakeUiPort`。
 _Avoid_: 渲染循环、驱动包装
 
-**Middleware view（middleware 视图）**：
-
 **HAL（芯片能力抽象层）**：
 向 App 暴露芯片能力（显示、输入、时间、持久化、日志后端、系统控制）；不承担逐外设驱动。
 _Avoid_: 驱动层、BSP、外设库
@@ -99,3 +97,11 @@ _Avoid_: LVGL 驱动、GUI 层
 **Middleware view（middleware 视图）**：
 在构建目录里生成的链接视图，用来满足上游写死的 `<middleware/...>` 引用；源码树保持干净，绝不把依赖目录本身加进 include 路径。
 _Avoid_: include 目录、符号链接目录
+
+**Derived printing（派生打印 / 整对象日志）**：
+类型在**声明处**用 efmt 的 `E_FMT_DERIVE`（结构体）或 `E_FMT_DERIVE_ENUM`（枚举）登记打印方式；调用点只写 `{}` 加对象本身，加字段不必改日志行（类里有基类/构造函数时在类型体内写 `E_FMT_FIELDS(...)`）。框架里没有 `to_string` —— 名字只有一份。注意单条日志上限 384 字节、1 字节整型成员会被当字符打（见 `docs/common-pitfalls.md`）。
+_Avoid_: 手写 to_string、逐字段拼日志
+
+**Error text（错误码文本）**：
+给只吃 `const char*` 的出口（`fprintf`、`embark::fatal`）用的助手：`char text[24]; embark::error_text(text, error);`，内部就是派生打印，输出带全名（`embark::Error::not_found`）。
+_Avoid_: to_string(Error)

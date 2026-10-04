@@ -30,7 +30,7 @@ class HostTaskSpawner final : public ITaskSpawner {
 
   [[nodiscard]] Error spawn_task(const char* name, void (*entry)(void*) noexcept, void* argument,
                                  std::uint16_t stack_words,
-                                 std::uint8_t priority) noexcept override {
+                                 std::uint16_t priority) noexcept override {
     if (used_ >= embark::max_own_tasks) {
       return Error::busy;  // 静态槽位（TCB/栈数组）耗尽
     }

@@ -164,7 +164,7 @@ void ClockApp::refresh_brightness() noexcept {
 void ClockApp::on_settings_button(lv_event_t* event) noexcept {
   auto* self = static_cast<ClockApp*>(lv_event_get_user_data(event));
   const Error error = self->fw_->request_switch("settings");
-  ELOG_INFO("请求切到 SettingsApp：{}", to_string(error));
+  ELOG_INFO("请求切到 SettingsApp：{}", error);
 }
 
 // ================================ SettingsApp ================================
@@ -223,7 +223,7 @@ void SettingsApp::on_level_plus(lv_event_t* event) noexcept {
 void SettingsApp::on_back(lv_event_t* event) noexcept {
   auto* self = static_cast<SettingsApp*>(lv_event_get_user_data(event));
   const Error error = self->fw_->request_switch("clock");
-  ELOG_INFO("请求切回 ClockApp：{}", to_string(error));
+  ELOG_INFO("请求切回 ClockApp：{}", error);
 }
 
 void SettingsApp::refresh_brightness_label() noexcept {
@@ -252,10 +252,11 @@ void TickerApp::onResume() {
 void TickerApp::onBackgroundTick(std::uint32_t now_ms) {
   const std::uint32_t sequence = ++sent_;
   const AppId self_id = fw_->id_of(*this);
-  ELOG_INFO("ticker 后台任务：发送第 {} 条（from_app={}，now={} ms）", sequence,
-            static_cast<unsigned>(self_id), now_ms);
+  const CrossTaskMessage envelope(self_id, sequence);
+  // 整对象打（issue 13）：字段名来自 message.h 里的 E_FMT_FIELDS，加字段不用改这行。
+  ELOG_INFO("ticker 后台任务：{}（now={} ms）", envelope, now_ms);
   // 跨任务投递：post() 只入收件箱（锁在队列内部），UI 循环在派发段广播。
-  fw_->post(CrossTaskMessage(self_id, sequence));
+  fw_->post(envelope);
 }
 
 void TickerApp::onMessage(const Message& msg) {
@@ -264,8 +265,7 @@ void TickerApp::onMessage(const Message& msg) {
   }
   ++received_;
   const auto& envelope = static_cast<const CrossTaskMessage&>(msg);
-  ELOG_INFO("UI 收到 ticker 消息：seq {}（from_app={}），累计收 {} 条", envelope.seq,
-            static_cast<unsigned>(envelope.from_app), received_);
+  ELOG_INFO("UI 收到 ticker 消息：{}，累计收 {} 条", envelope, received_);
 }
 
 void TickerApp::onExit() {

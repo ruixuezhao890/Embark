@@ -21,12 +21,12 @@ std::uint16_t to_panel_coordinate(float value, std::size_t limit) noexcept {
   return static_cast<std::uint16_t>(rounded);
 }
 
-/// HAL 的 key 只有 8 位，取 scancode 低字节；超出的（例如多媒体键）丢弃并计数。
-bool to_panel_key(SDL_Scancode scancode, std::uint8_t& key) noexcept {
+/// HAL 的 key 用键号（v1 约定 0..255），这里取 scancode 低字节；超出的（例如多媒体键）丢弃并计数。
+bool to_panel_key(SDL_Scancode scancode, std::uint16_t& key) noexcept {
   if (scancode < 0 || scancode > 255) {
     return false;
   }
-  key = static_cast<std::uint8_t>(scancode);
+  key = static_cast<std::uint16_t>(scancode);
   return true;
 }
 
@@ -95,7 +95,7 @@ etl::expected<bool, Error> HostInput::poll(hal::InputEvent& event) noexcept {
 
       case SDL_KEYDOWN:
       case SDL_KEYUP: {
-        std::uint8_t key = 0;
+        std::uint16_t key = 0;
         if (!to_panel_key(raw.key.keysym.scancode, key)) {
           ++dropped_events_;
           continue;
@@ -103,6 +103,9 @@ etl::expected<bool, Error> HostInput::poll(hal::InputEvent& event) noexcept {
         event = hal::InputEvent{
             raw.type == SDL_KEYDOWN ? hal::InputEventKind::press : hal::InputEventKind::release,
             last_x_, last_y_, key, time_.now_ms()};
+        // 整对象打（issue 13）：键盘事件只有人按才来（合成点击是鼠标，走上面那条），
+        // 不会刷屏；这里顺带演示 InputEvent 的整对象输出（含嵌套的 InputEventKind）。
+        ELOG_INFO("键盘事件 {}", event);
         return true;
       }
 

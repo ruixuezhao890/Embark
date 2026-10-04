@@ -7,6 +7,7 @@
 - 语言与约束：C++17；内核零堆分配、`-fno-exceptions -fno-rtti`、容器只用 ETL 定容版
 - 硬件抽象：按"芯片功能被抽象出来给上层调用"的粒度，不暴露寄存器与引脚细节
 - 日志与格式化：[efmt-elog](https://github.com/ruixuezhao890/efmt-elog)（`<middleware/...>` 形式引用）
+  —— 类型自己在声明处登记打印方式（`E_FMT_DERIVE`），调用点填整对象，见[日志](#日志)
 - 容器与消息等基础设施：[ETL](https://github.com/ETLCPP/etl)（锁 20.49.0）
 - UI 与图形：[LVGL](https://github.com/lvgl/lvgl)（锁 v8.3.11；宿主走 SDL2 窗口，真机走 ST7789）
 
@@ -21,7 +22,9 @@ issue 07）、三种后台策略的演示 App（issue 08：clock 用 `etl::state
 settings 全挂起、ticker 用自己的任务发消息）、零堆审计（issue 09：全局 new/delete 钩子 +
 内核稳态路径断言 0 次）、CI 三个 job（issue 10：宿主构建测试 / ESP32 构建 / clang-format
 检查，`.github/workflows/ci.yml`）、**ESP32-S3 真机后端**（issue 11：ST7789 + CST328 的
-七种能力实现、静态池 LVGL 堆、共享的 `platform/common` 端口层、IDF 5.4 真构建）。
+七种能力实现、静态池 LVGL 堆、共享的 `platform/common` 端口层、IDF 5.4 真构建）、
+**整对象日志**（issue 13：`Error` 等枚举/结构体在声明处登记 `E_FMT_DERIVE`，
+撤掉手写 `to_string`，启动日志直接打印 HAL 信息、App 后台配置与跨任务信封）。
 宿主 UI 演示里切换前台、输入焦点随之切换、后台 tick 计数与跨 App 消息都可观测。
 **还没做**：真机上的界面观感确认（issue 11 的验收项 ③⑤：屏幕方向/颜色、触摸方向/触点）
 ——需要板子到手；另有 RTC 对时（`epoch_ms` 目前 `unsupported`）与 SD 卡总线。
@@ -146,6 +149,30 @@ App 是 `embark::App` 的子类，注册进**编译期静态注册表**即可，
 
 完整可复制的五步清单（含代码）在 [docs/README.md](docs/README.md) 的
 「改起来」最短路径。
+
+## 日志
+
+类型自己在声明处登记打印方式（efmt 的 `E_FMT_DERIVE` / `E_FMT_DERIVE_ENUM`），
+调用点只填空、不再手打字段 —— 加字段不用改日志行：
+
+```cpp
+ELOG_INFO("HAL 就绪：显示 {}", display_info);
+// [info] [ui_demo.cpp:232 ui_main] HAL 就绪：显示 embark::hal::DisplayInfo
+//   { width = 320, height = 240, format = embark::hal::PixelFormat::rgb565, stride_bytes = 640 }
+```
+
+两条硬规矩（细节与出处见 [docs/common-pitfalls.md](docs/common-pitfalls.md)）：
+
+- 单条日志上限 `ELOG_MAX_RECORD_SIZE`（默认 **384** 字节，含前缀），放不下是
+  **整行丢弃**（不截断、不报错）⇒ 一条日志只放一个整对象，长对象拆两条；
+- 派生输出里 **1 字节整型成员会被当字符打**（上游 efmt 已知问题，0 会写出 NUL
+  截断整行）⇒ 框架里会进日志的字段一律 2 字节起（`AppId`、`AppSettings::task_priority`、
+  `InputEvent::key` 都是 `std::uint16_t`）。
+
+新类型想进日志：枚举写 `E_FMT_DERIVE_ENUM(enum class E : ... { ... });`、
+结构体写 `E_FMT_DERIVE(struct S { ... });`（一行一个字段），类里有基类/构造函数时
+在类型体内写 `E_FMT_FIELDS(a, b);`。要 `const char*` 的出口（`fprintf`、
+`embark::fatal`）用 `char text[24]; embark::error_text(text, error);`。
 
 ## 目录
 

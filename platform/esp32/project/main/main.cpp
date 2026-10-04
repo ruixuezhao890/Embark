@@ -60,7 +60,8 @@ void ui_main(void*) noexcept {
 
   Framework framework(hal.context(), ep::embark_apps(), &ui_port, &spawner);
   if (const Error boot_error = framework.boot(); boot_error != Error::none) {
-    embark::fatal(embark::to_string(boot_error));
+    char text[24];
+    embark::fatal(embark::error_text(text, boot_error));
   }
 
   // LVGL_VERSION_* 是整数宏（third_party/lvgl/lvgl.h），拼日志要逐个占位。
@@ -96,19 +97,20 @@ extern "C" void app_main(void) {
   ep::Esp32Hal& hal = ep::Esp32Hal::instance();
   const Error hal_error = hal.init();
   if (hal_error != Error::none) {
-    std::fprintf(stderr, "HAL 初始化失败：%s\n", embark::to_string(hal_error));
+    char text[24];
+    std::fprintf(stderr, "HAL 初始化失败：%s\n", embark::error_text(text, hal_error));
     embark::fatal("HAL 初始化失败");
   }
 
   const embark::hal::DisplayInfo display_info = hal.display().info();
-  ELOG_INFO("Embark {} 启动（平台 {}）：显示 {}×{}，NVS 容量 {} 字节；UI 任务栈 {} 字，周期 {} ms",
-            embark::version_string(), embark::platform_name(), static_cast<int>(display_info.width),
-            static_cast<int>(display_info.height), hal.storage().capacity_bytes(),
-            embark::ui_task_stack_words, embark::ui_loop_period_ms);
+  ELOG_INFO("Embark {} 启动（平台 {}）：显示 {}，NVS 容量 {} 字节；UI 任务栈 {} 字，周期 {} ms",
+            embark::version_string(), embark::platform_name(), display_info,
+            hal.storage().capacity_bytes(), embark::ui_task_stack_words, embark::ui_loop_period_ms);
 
   const Error task_error = ep::start_ui_task(&ui_main, nullptr);
   if (task_error != Error::none) {
-    std::fprintf(stderr, "启动 UI 任务失败：%s\n", embark::to_string(task_error));
+    char text[24];
+    std::fprintf(stderr, "启动 UI 任务失败：%s\n", embark::error_text(text, task_error));
     embark::fatal("UI 任务启动失败");
   }
 

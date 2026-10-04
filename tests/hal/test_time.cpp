@@ -4,7 +4,6 @@
 #include "fakes/fakes.h"
 
 using embark::Error;
-using embark::to_string;
 using embark::fakes::FakeHal;
 using embark::fakes::FakeTime;
 
@@ -35,7 +34,6 @@ TEST_CASE("ITime：epoch_ms 故障返回 Error 码") {
 
   REQUIRE_FALSE(epoch.has_value());
   CHECK(epoch.error() == Error::unsupported);
-  CHECK(etl::string_view(to_string(epoch.error())) == "unsupported");
 }
 
 TEST_CASE("Context：经基类引用拿到的是同一份时钟") {

@@ -171,6 +171,8 @@ public:
 - 编程错误（不可能发生）用 `EMBARK_ASSERT`；release 下的行为是**尽力写最后一条日志 → halt**，不静默继续。
 - 致命错误统一走 `embark::fatal(reason)`，由平台后端决定重启还是进安全态。
 - 容量不足的边界行为：整条丢弃 + 计数（日志行、消息队列一致），不产生半条数据。
+- **错误码的名字只有一份（issue 13）**：`Error` 枚举在声明处用 `E_FMT_DERIVE_ENUM` 登记打印方式，不提供 `to_string`；日志直接 `{}` 填空（输出带全名，如 `embark::Error::not_found`），只吃 `const char*` 的出口（`fprintf` / `embark::fatal`）用 `char text[24]; embark::error_text(text, error);`。加错误码 = 加一行枚举值，不用同步第二张名字表。
+- **日志单行有硬上限（issue 13）**：`ELOG_MAX_RECORD_SIZE` 默认 384 字节（含时间戳/位置前缀），放不下就**整行丢弃**（不截断、不报错）；这块缓冲还是 `log_at` 的局部数组，每行占调用者栈 385 字节（与 `own_task_stack_words` 互相牵制）。结论：一条日志只放一个整对象，长对象拆两条。
 
 ## 10. 内存与语言子集
 
@@ -198,6 +200,7 @@ embark/
 - include 约定：内部一律写 `<middleware/efmt/...>`、`<middleware/elog/...>` 与 `<middleware/etl/...>`；efmt-elog 的**仓库根不作为 include 根**，所以没有 `<elog/elog.hpp>` 这种写法（要用 eserde/ecli 时，再给它们各加一条视图链接，而不是把仓库根整个摊开）。`middleware/` 视图在**构建目录里生成**（Windows 用 junction），实际路径是 `<build>/include/middleware/{etl,efmt,elog}`，**include 根给 `<build>/include`** —— 视图本身就叫 `middleware/`，include 根不能再指到它头上，否则 `<middleware/etl/version.h>` 会被解析成 `<build>/middleware/middleware/etl/version.h`（骨架第一次配置就是这么挂的）。源码树保持干净；**绝不把 `etl/` 目录本身加进 include 路径**（同名 `string.h` 会遮蔽标准头）。eserde / ecli 暂不接入。
 - ETL 用上游的 `etl::etl` INTERFACE target；efmt/elog 上游没有 CMake，由我们包一层 `embark_efmt`（INTERFACE）。LVGL 上游自带 CMake：`LV_CONF_PATH` 指到 `config/lv_conf.h`（用 `CACHE PATH`，LVGL 用 `option()` 声明它，已有缓存值不会被覆盖），它在默认构建里会顺带建出空的 `lvgl_examples` / `lvgl_demos`，我们用 `EXCLUDE_FROM_ALL` 把它们挡在默认构建外；`embark_lvgl` 包一层（INTERFACE，链 `lvgl::lvgl`）。**LVGL 不进 `middleware/` 视图**：视图的唯一理由是满足上游写死的 `<middleware/...>` 互相引用，LVGL 按 `<lvgl.h>` 引入即可（再造 junction 只会多出第二套写法）。
 - 命名：类型 PascalCase、函数/变量 snake_case、文件名 snake_case、宏 `EMBARK_*`、命名空间 `embark`。
+- **源列表有两份（一份源码树、两条构建路径的代价）**：宿主在 `src/CMakeLists.txt`（`app/`、`platform/common/` 各有一份），真机在 `platform/esp32/project/components/embark/CMakeLists.txt` 的 `EMBARK_KERNEL_SOURCES` / `EMBARK_APP_SOURCES` / `EMBARK_COMMON_SOURCES`。加/删内核 TU 要两边一起改 —— 显式列出的源文件不存在时 CMake 不会跳过，而是在 configure 阶段报 `Cannot find source file`（issue 13 删 `src/embark/error.cpp` 时踩到，已写进 `docs/common-pitfalls.md`）。
 
 ## 12. 依赖与版本
 
@@ -319,3 +322,14 @@ embark/
 2. **`etl::memory_model` 与堆无关**：它只决定 `size_type` 宽度（`memory_model.h:49-73`，SMALL→`uint_least8_t` … HUGE→`uint_least64_t`）。别当成「内存模型开关」。
 3. **`etl::task` 不是 RTOS 任务**：`task.h:80/:85` 只有 `task_request_work()` / `task_process_work()`，由 `etl::scheduler` 轮询驱动，无栈无线程 —— 它只能当「后台节拍的一种可选实现」（见 16.4 第 1 条），替代不了 FreeRTOS 任务。
 4. **ETL 的宏会顺着 include 链跑到别的模块去**：`ETL_TARGET_OS_FREERTOS` 表面上只是「选互斥实现」（`mutex.h:37`），实际会把 `callback_timer.h` 也拖下水（→ `timer.h` → `atomic.h` → `atomic_gcc_sync.h` → `mutex.h` → `mutex_freertos.h` → 要 `FreeRTOS.h`）。教训：加 ETL 宏之前，先用最小 TU 单独 include 一遍要用的头（骨架就是这么发现宿主编不过的）。
+
+## 17. 打印约定（issue 13 落地记录）
+
+- **类型的名字只有一份**：能进日志的枚举/结构体在声明处登记打印方式，不再手写 `to_string`：
+  - `include/embark/error.h`：`Error` → `E_FMT_DERIVE_ENUM`（原 `src/embark/error.cpp` 的 34 行 switch 删除，该文件已不存在）；只吃 `const char*` 的出口用新助手 `error_text(buffer, error)`（模板，内部 `e_fmt::format_to`，snprintf 语义）。
+  - `include/embark/hal/types.h`：`Rect` / `DisplayInfo` / `InputEvent` → `E_FMT_DERIVE`，`PixelFormat` / `InputEventKind` → `E_FMT_DERIVE_ENUM`。
+  - `include/embark/app.h`：`AppSettings` → `E_FMT_DERIVE`，`BackgroundPolicy` → `E_FMT_DERIVE_ENUM`。
+  - `include/embark/message.h`：`CrossTaskMessage` 有基类与构造函数、不能整体派生，改用类型体内的 `E_FMT_FIELDS(from_app, seq);`。
+- **1 字节整型字段的坑（本仓库规避 + 已登记上游）**：efmt 的派生输出把 `std::uint8_t` / `std::int8_t` / `unsigned char` 成员走**字符通道**（值为 0 时写出 NUL，把整行日志截断），顶层参数不受影响。所以框架里会进日志的 1 字节字段一律抬到 `std::uint16_t`：`AppId`（`message.h`，`invalid_app_id` 同步改 `0xFFFF`）、`AppSettings::task_priority`、`InputEvent::key`，`ITaskSpawner::spawn_task` 的 `priority` 参数跟着改。efmt-elog 是独立仓库（submodule 钉 commit），本仓库**不改 third_party**，缺陷细节、复现与实测输出见 `.scratch/embark-v1/evidence/13-format-derive/`。
+- **整对象日志的示范点**：`src/embark/framework.cpp` boot 段打每个 App 的 `AppSettings`；`platform/host/ui_demo.cpp` 打 `DisplayInfo` 与整屏 `Rect`（拆两条，理由见 §9 的 384 字节上限）；`app/demo_apps.cpp` 的 ticker 收发路径打整个 `CrossTaskMessage`；`platform/host/host_input.cpp` 的键盘分支打 `InputEvent`；`platform/esp32/project/main/main.cpp` 打 `DisplayInfo`。
+- **验收**：`tests/kernel/test_format_derive.cpp`（5 个用例）钉住 8 个登记类型的输出串与 `error_text` 行为；全量 85 用例 / 629 断言绿（issue 13 的 `## Answer` 有完整记录）。

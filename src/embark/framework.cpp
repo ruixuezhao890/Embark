@@ -6,6 +6,7 @@
 #include <embark/framework.h>
 
 #include <embark/diagnostics.h>
+#include <embark/log.h>
 
 namespace embark {
 
@@ -51,6 +52,14 @@ Error Framework::boot() noexcept {
     if (!bus_.subscribe(adapter)) {
       return Error::no_space;  // 满 8 个订阅者（App 数 ≤ max_apps，理论到不了）
     }
+  }
+
+  // --- 后台配置一览（issue 13）----------------------------------------------
+  // 每个 App 的 AppSettings 整条打出来：字段名与取值名都来自类型声明本身
+  // （app.h 的 E_FMT_DERIVE / E_FMT_DERIVE_ENUM），以后加字段不用改这一行。
+  for (std::size_t index = 0; index < apps_.size(); ++index) {
+    const App* app = apps_.at(index);
+    ELOG_INFO("App {} 后台配置 {}", app->name(), app->settings());
   }
 
   // --- 后台节拍（issue 07）--------------------------------------------------

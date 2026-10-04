@@ -258,7 +258,7 @@ etl::expected<bool, Error> Esp32Input::poll(hal::InputEvent& event) noexcept {
     // I2C 抖一下不该变成 App 里的一个错误事件：这里只记一笔（超时连日志都不刷，
     // 免得总线真断了把日志刷爆），poll 如实回答"这一拍没有事件"。
     if (error != Error::timeout) {
-      ELOG_WARN("触摸读取失败：{}", to_string(error));
+      ELOG_WARN("触摸读取失败：{}", error);
     }
     return false;
   }

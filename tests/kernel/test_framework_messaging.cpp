@@ -123,12 +123,12 @@ class FakeSpawner final : public embark::ITaskSpawner {
     void (*entry)(void*) noexcept;
     void* argument;
     std::uint16_t stack_words;
-    std::uint8_t priority;
+    std::uint16_t priority;
   };
 
   [[nodiscard]] embark::Error spawn_task(const char* name, void (*entry)(void*) noexcept,
                                          void* argument, std::uint16_t stack_words,
-                                         std::uint8_t priority) noexcept override {
+                                         std::uint16_t priority) noexcept override {
     if (calls.size() < 16) {
       calls.push_back({name, entry, argument, stack_words, priority});
     }

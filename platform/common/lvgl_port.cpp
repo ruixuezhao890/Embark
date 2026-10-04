@@ -119,7 +119,7 @@ void LvglPort::pump_input() noexcept {
     if (!result.has_value()) {
       if (!input_error_reported_) {
         input_error_reported_ = true;
-        ELOG_ERROR("输入后端读取失败：{}（后续失败不再重复报告）", to_string(result.error()));
+        ELOG_ERROR("输入后端读取失败：{}（后续失败不再重复报告）", result.error());
       }
       return;
     }
@@ -147,8 +147,8 @@ void LvglPort::flush_area(const lv_area_t& area, const lv_color_t* pixels) noexc
   }
   if (!flush_error_reported_) {
     flush_error_reported_ = true;
-    ELOG_ERROR("显示刷新失败：{} 区域 ({},{},{}×{})（后续失败不再重复报告）", to_string(error),
-               rect.x, rect.y, rect.width, rect.height);
+    ELOG_ERROR("显示刷新失败：{} 区域 ({},{},{}×{})（后续失败不再重复报告）", error, rect.x, rect.y,
+               rect.width, rect.height);
   }
 }
 

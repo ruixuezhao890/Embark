@@ -1,0 +1,62 @@
+# 真机目标构建（issue 13 收尾时的复验）
+
+目的：issue 13 改到了 `platform/esp32/**`（`esp32_task_spawner.h` 的 `priority`
+抬宽、`main.cpp` / `esp32_display.cpp` / `esp32_input.cpp` 撤 `to_string`），
+所以宿主全绿之外，ESP32-S3 目标也必须重新编一遍。
+
+## 环境
+
+- IDF：`E:\00_Software\03_Dev_Env\IDF`（v5.4），target = esp32s3
+- 工具链：`E:\00_Software\03_Dev_Env\Espressif\tools\tools\xtensa-esp-elf\esp-14.2.0_20241119`
+- 构建目录：`build-esp32`（与宿主 `build/` 并列，互不干扰）
+
+## 命令
+
+宿主环境没有 IDF 的 shell 导出（`export.ps1` 要 `IDF_TOOLS_PATH` + 与 venv 匹配的
+python），所以直接驱动已经配置好的构建目录：
+
+```powershell
+$env:IDF_PATH='E:\00_Software\03_Dev_Env\IDF'
+$env:IDF_TOOLS_PATH='E:\00_Software\03_Dev_Env\Espressif\tools'
+# ccache 与 xtensa gcc 的目录要上 PATH（否则 ninja 报 CreateProcess failed）
+$env:PATH='E:\00_Software\03_Dev_Env\Espressif\tools\tools\ccache\4.10.2\ccache-4.10.2-windows-x86_64;E:\00_Software\03_Dev_Env\Espressif\tools\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin;' + $env:PATH
+& 'E:\00_Software\03_Dev_Env\Cmake\bin\cmake.exe' --build build-esp32
+```
+
+## 结果（EXIT=0）
+
+```
+Merged 2 ELF sections
+
+Successfully created esp32s3 image.
+
+Generated .../build-esp32/embark_esp32.bin
+embark_esp32.bin binary size 0xbdf90 bytes.
+Smallest app partition is 0x300000 bytes. 0x242070 bytes (75%) free.
+```
+
+我们自己的代码（`src/`、`app/`、`platform/common/`、`platform/esp32/src/`）零警告；
+全部 5 条 warning 都来自 LVGL 上游同一个位置，与本次改动无关：
+
+```
+third_party/lvgl/src/core/lv_obj_style.h:94:48: warning:
+  bitwise operation between different enumeration types '<unnamed enum>' and
+  '<unnamed enum>' is deprecated [-Wdeprecated-enum-enum-conversion]
+```
+
+## 顺带修掉的漏改（第一次跑真机构建时暴露）
+
+`platform/esp32/project/components/embark/CMakeLists.txt` 的
+`EMBARK_KERNEL_SOURCES` 里还留着 `src/embark/error.cpp`（该文件已随 issue 13 删除）
+⇒ configure 阶段直接失败：
+
+```
+CMake Error at E:/00_Software/03_Dev_Env/IDF/tools/cmake/component.cmake:490 (add_library):
+  Cannot find source file:
+    .../src/embark/error.cpp
+Call Stack (most recent call first):
+  components/embark/CMakeLists.txt:42 (idf_component_register)
+```
+
+删除该项后构建通过。教训已写进 `docs/common-pitfalls.md`：内核源列表有两份
+（宿主 `src/CMakeLists.txt` + 真机组件 `EMBARK_KERNEL_SOURCES`），加/删 TU 要一起改。

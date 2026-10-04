@@ -220,12 +220,18 @@ void ui_main(void* argument) noexcept {
   hal.attach_input(input);
 
   if (const Error hal_error = hal.init(); hal_error != Error::none) {
-    std::fprintf(stderr, "HAL 初始化失败：%s\n", embark::to_string(hal_error));
+    char text[32];
+    std::fprintf(stderr, "HAL 初始化失败：%s\n", embark::error_text(text, hal_error));
     hp::exit_process(1);
   }
-  ELOG_INFO("HAL 就绪：显示 {}×{}，输入 {}，持久化 {}", static_cast<int>(display.info().width),
-            static_cast<int>(display.info().height), input.is_ready() ? "就绪" : "未就绪",
-            hal.storage_path());
+  // 整对象打日志的示范（issue 13）：DisplayInfo 里嵌着 PixelFormat，字段名与取值名
+  // 都来自 hal/types.h 的 E_FMT_DERIVE(_ENUM) 声明；加字段不用改这一行。
+  // 注意 elog 单行上限（ELOG_MAX_RECORD_SIZE，默认 384 字节）：整行放不下会被整体
+  // 丢弃（不输出半行），所以这里把 Rect 拆成下一条 —— 两条都在上限内。
+  const embark::hal::DisplayInfo display_info = display.info();
+  ELOG_INFO("HAL 就绪：显示 {}，输入 {}，持久化 {}", display_info,
+            input.is_ready() ? "就绪" : "未就绪", hal.storage_path());
+  ELOG_INFO("整屏区域 {}", embark::hal::Rect{0, 0, display_info.width, display_info.height});
 
   // UI 端口在 platform/common（宿主与真机共用）：显示/输入从 HAL Context 取，
   // 退出来源由平台注入（这里是"用户关窗"）。
@@ -234,7 +240,8 @@ void ui_main(void* argument) noexcept {
   static hp::HostTaskSpawner spawner;
   Framework framework(hal.context(), hp::embark_apps(), &ui_port, &spawner);
   if (const Error boot_error = framework.boot(); boot_error != Error::none) {
-    std::fprintf(stderr, "框架启动失败：%s\n", embark::to_string(boot_error));
+    char text[32];
+    std::fprintf(stderr, "框架启动失败：%s\n", embark::error_text(text, boot_error));
     hp::exit_process(1);
   }
   // LVGL_VERSION_* 是整数宏（third_party/lvgl/lvgl.h:16-18），拼字符串要逐个占位。
@@ -390,7 +397,8 @@ int main(int argc, char** argv) {
 
   const Error task_error = hp::start_ui_task(&ui_main, &options);
   if (task_error != Error::none) {
-    std::fprintf(stderr, "启动 UI 任务失败：%s\n", embark::to_string(task_error));
+    char text[24];
+    std::fprintf(stderr, "启动 UI 任务失败：%s\n", embark::error_text(text, task_error));
     return 1;
   }
 

@@ -17,12 +17,18 @@ Windows（MinGW + Ninja）与 Linux（apt 装 `ninja-build libsdl2-dev`）同一
 git submodule update --init --recursive   # 拉齐 ETL / efmt-elog / LVGL / FreeRTOS / doctest
 cmake -G Ninja -B build                   # 配置（宿主 + 测试；SDL2 找不到只跳过 UI demo）
 cmake --build build                       # 构建（零警告要求）
-ctest --test-dir build --output-on-failure  # 单元测试（73 用例 / 495 断言）
+ctest --test-dir build --output-on-failure  # 单元测试（85 用例 / 629 断言）
 ./build/platform/host/embark_host_ui      # 宿主 UI demo（Windows: .\build\platform\host\embark_host_ui.exe）
 ```
 
 看到 320×240 的 LVGL 窗口（标题 "Embark demo"，默认前台是 clock App）就跑起来了。
 关窗退出。想要"跑够帧数自己退"或验证参数，看下一步。
+
+日志是整对象风格（issue 13）：类型自己在声明处登记怎么打，调用点直接填空，
+比如启动时的 `HAL 就绪：显示 embark::hal::DisplayInfo { width = 320, height = 240, ... }`、
+每个 App 的 `后台配置 embark::AppSettings { background = ..., period_ms = 100, ... }`。
+加字段不用改日志行；新类型怎么登记见 [common-pitfalls.md](common-pitfalls.md) 的
+"派生打印"一节（含 384 字节单行上限）。
 
 ### 2. 敲起来
 
@@ -139,7 +145,7 @@ cmake --build build
 | [messages-and-background.md](messages-and-background.md) | 消息（总线 / 收件箱信封）与三种后台策略怎么用，含示例代码 |
 | [hal-backend-guide.md](hal-backend-guide.md) | 怎么写一个 HAL 后端：宿主骨架（照 platform/host/）、共享层（platform/common/）与真机实现（platform/esp32/，含 IDF 坑清单） |
 | [../platform/esp32/README.md](../platform/esp32/README.md) | ESP32-S3 真机端口：板级参数、构建/烧录命令、bring-up 清单、串口日志样例 |
-| [common-pitfalls.md](common-pitfalls.md) | 常见坑：ETL 定容行为、消息非聚合、保留 id、无异常/无堆、MinGW 对齐分配、宏前置条件…… |
+| [common-pitfalls.md](common-pitfalls.md) | 常见坑：ETL 定容行为、消息非聚合、保留 id、无异常/无堆、MinGW 对齐分配、日志 384 字节上限、派生打印（E_FMT_DERIVE）、宏前置条件…… |
 | [adr/](adr/) | 架构决策记录：单一 UI 任务（0001）、HAL 能力粒度（0002）、零堆无异常（0003）、后台节拍与状态范式（0004） |
 | [agents/](agents/) | 面向 agent 的仓库约定（领域模型、issue 追踪规则） |
 
