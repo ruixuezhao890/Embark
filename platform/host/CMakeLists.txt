@@ -42,7 +42,6 @@ embark_find_sdl2(EMBARK_HOST_SDL2_FOUND)
 
 if(EMBARK_HOST_SDL2_FOUND)
   add_library(embark_platform_host_ui STATIC
-          demo_apps.cpp
           host_display.cpp
           host_input.cpp
           lvgl_port.cpp
@@ -61,10 +60,11 @@ if(EMBARK_HOST_SDL2_FOUND)
                  SDL2::SDL2)
 
   # 演示程序：唯一 UI 任务的完整例子 + 无人值守验收开关
-  # （--frames / --click / --switch / --screenshot / --quit-at）。
+  # （--frames / --click / --switch / --own-task / --screenshot / --quit-at）。
+  # demo App 本体在 app/（embark::demo_apps），issues/08 起宿主侧不再自带。
   add_executable(embark_host_ui ui_demo.cpp)
 
-  target_link_libraries(embark_host_ui PRIVATE embark::platform_host_ui)
+  target_link_libraries(embark_host_ui PRIVATE embark::platform_host_ui embark::demo_apps)
 
   embark_copy_sdl2_runtime(embark_host_ui)
 else()

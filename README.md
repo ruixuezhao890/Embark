@@ -16,9 +16,12 @@ v0.1.0 进行中：构建系统、依赖与配置注入已就位；HAL 七个能
 （时间 / 持久化 / 日志 sink / 系统控制 / 总线 / SDL2 显示 / SDL2 输入）与测试用假后端已落地；
 LVGL 8.3.11 已接入（宿主可跑出窗口、点击有响应、关窗干净退出）。
 **已完成**：App 内核（App 契约 + 编译期注册表 + 唯一 UI 任务 + 前后台切换，宿主 FreeRTOS
-V10.6.2 静态接入、零动态分配），宿主 UI 演示里两个 App 互切前台、输入焦点随之切换。
-**还没做**：消息派发与后台 tick（issue 07）与 ESP32-S3 后端 —— 按
-`.scratch/embark-v1/issues/` 里的工单继续。规格书见 `.scratch/embark-v1/spec.md`。
+V10.6.2 静态接入、零动态分配）、消息派发与后台节拍（Bus / MessageQueue / callback_timer，
+issue 07）、三种后台策略的演示 App（issue 08：clock 用 `etl::state_chart` + 后台 tick、
+settings 全挂起、ticker 用自己的任务发消息）。宿主 UI 演示里切换前台、输入焦点随之切换、
+后台 tick 计数与跨 App 消息都可观测。**还没做**：ESP32-S3 后端（issue 11，等你给板型与
+触摸型号）与后续工单 —— 按 `.scratch/embark-v1/issues/` 里的工单继续。规格书见
+`.scratch/embark-v1/spec.md`。
 
 ## 宿主构建
 
@@ -57,28 +60,34 @@ ctest --test-dir build --output-on-failure
 
 窗口是 320×240 的 LVGL 界面按 `--scale`（默认 2）放大显示。运行在唯一 UI 任务里
 （FreeRTOS 静态任务，5 ms 一跳）：UI 端口 → 输入泵 → 循环边界的前台切换 → 消息/后台节拍 →
-`lv_timer_handler()`。三个演示 App：`CounterApp`（计数按钮）与 `SwitchApp`（互切前台，
-输入焦点跟着 App 走），外加 `TickerApp`——`own_task` 策略的后台 App（周期 50 ms），
-自己的任务每拍发一条 `CrossTaskMessage`，UI 任务收到后经总线回派给 App 自己。命令行开关：
+`lv_timer_handler()`。三个演示 App 都在 `app/`（named 空间 `embark::demo`，不含任何平台头）：
+
+| App | 后台策略 | 演示点 |
+| --- | --- | --- |
+| `ClockApp` | `Tick`（100 ms） | 内部用 `etl::state_chart` 表达亮/灭状态机；后台节拍驱动状态转移并刷新界面 |
+| `SettingsApp` | `Suspend` | 前台才有行为的典型设置页；「Level +1」发 `BrightnessMessage` 经总线广播，clock 收到后更新亮度标签 |
+| `TickerApp` | `OwnTask`（50 ms） | 自己的任务每拍发一条 `CrossTaskMessage`，UI 任务收到后经总线回派给 App 自己，不丢不乱序 |
+
+命令行开关：
 
 | 开关 | 作用 |
 | --- | --- |
 | `--frames N` | 跑满 N 帧就退出（默认 0 = 一直跑到关窗） |
-| `--click [X,Y]` | 第 20 帧合成一次点击（默认点按钮中心 160,170；走 SDL 真事件队列）；按钮没被触发则退出码 2 |
-| `--switch` | 合成两次点击验证前台切换（第 30/32 帧点"切到 App 2"，第 50/52 帧点"返回 App 1"）；钩子序或切换次数不对则退出码 2 |
+| `--click [X,Y]` | 第 20 帧合成一次点击（默认点按钮中心 160,170；走 SDL 真事件队列）；settings 没被切进前台则退出码 2 |
+| `--switch` | 合成两次点击验证前台切换（第 30/32 帧点「Level +1」发亮度消息，第 50/52 帧点「Back to clock」切回）；钩子序或切换次数不对则退出码 2 |
 | `--own-task` | 验证 own_task 后台 App：TickerApp 发出的每条消息都必须被 UI 任务收到（不丢不乱序）；发送或收到为 0 则退出码 2 |
 | `--screenshot FILE` | 最后一帧存成 BMP |
 | `--quit-at N` | 第 N 帧合成关窗事件（等价于点窗口 ×，用来验收"干净退出"） |
 | `--scale S` / `--delay MS` | 窗口放大倍数（默认 2）/ 每帧让出的毫秒数（默认 5） |
 | `--help` | 用法 |
 
-最短的自动验收（退出码 0 + 日志里 `按钮点击：第 1 次`）：
+最短的自动验收（退出码 0 + 日志里 `clock 进入前台`）：
 
 ```sh
 ./build/platform/host/embark_host_ui --frames 60 --click
 ```
 
-前台切换验收（退出码 0 + 日志里 `切换 2 次`、两个 App 的 enter/resume 计数符合
+前台切换验收（退出码 0 + 日志里 `切换 2 次`、clock 的 enter/resume 计数符合
 "首次 onEnter、之后 onResume"）：
 
 ```sh
@@ -98,9 +107,9 @@ ctest --test-dir build --output-on-failure
 | --- | --- |
 | `include/embark/` | 框架公开头文件（上层只依赖这里，见 spec §11） |
 | `src/` | 内核实现（Framework、日志、错误等） |
-| `platform/host/` | 宿主后端（SDL2 显示/输入、LVGL 端口、宿主文件存储、FreeRTOS 配置与 UI 任务、演示 App） |
+| `platform/host/` | 宿主后端（SDL2 显示/输入、LVGL 端口、宿主文件存储、FreeRTOS 配置与 UI 任务、演示 UI 入口） |
 | `platform/esp32/` | ESP32-S3 后端（以 ESP-IDF 组件形式接入） |
-| `app/` | 自带示例 App |
+| `app/` | 自带示例 App（clock/settings/ticker，三种后台策略各一；不含平台头） |
 | `tests/` | 宿主单元测试（doctest）：`tests/hal/` 按能力分文件，`tests/fakes/` 是 HAL 假后端，`tests/detail/` 是内部工具，`tests/kernel/` 是 App 注册表与 Framework 契约测试 |
 | `config/` | 编译期宏、`lv_conf.h` 与固定容量上限（单一事实来源） |
 | `cmake/` | 构建辅助（`middleware/` 视图生成、SDL2 探测与运行时拷贝、FreeRTOS 内核目标） |

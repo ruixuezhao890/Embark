@@ -9,9 +9,10 @@
  *
  * 无人值守验收开关（会自动退出，不需要人去点窗口）：
  *   --frames N        跑 N 帧后退出（默认 0 = 一直跑到关窗）
- *   --click [X,Y]     在第 20 帧合成一次鼠标点击（走 SDL_PushEvent → 真事件队列 → 输入后端）
- *   --switch          合成两次点击验证前台切换：帧 30/32 点"Switch to app 2"，
- *                     帧 50/52 点"Back to app 1"（同一坐标，两个前台 App 各中一个按钮）
+ *   --click [X,Y]     在第 20 帧合成一次鼠标点击（走 SDL_PushEvent → 真事件队列 → 输入后端；
+ *                     点 clock 屏的 "Settings" = 触发一次前台切换）
+ *   --switch          合成两次点击验证前台切换：帧 30/32 点 settings 的 "Level +1"（亮度消息
+ *                     广播给 clock），帧 50/52 点 "Back to clock"（同一中心，两个前台 App 各中一个按钮）
  *   --screenshot FILE 最后一帧把窗口内容存成 BMP（用 Python/Pillow 转 PNG 便于查看）
  *   --scale S         窗口放大倍数（默认 2）
  *   --delay MS        每帧间隔（默认 5）
@@ -49,11 +50,11 @@ namespace {
 
 // 合成点击的帧号：先移动+按下，隔两帧再抬起 ——
 // 让 LVGL 分两个读周期处理，点一下就是完整的一次"按下 → 抬起"。
-constexpr int click_move_frame = 20;
+constexpr int click_move_frame = 20;    // 点 clock 屏的 "Settings"（中心 160,170）
 constexpr int click_release_frame = click_move_frame + 2;
-constexpr int switch_move_frame = 30;    // "Switch to app 2"（counter 屏幕上，见 demo_apps.h）
+constexpr int switch_move_frame = 30;    // 点 settings 屏的 "Level +1"（同一坐标，焦点已换）
 constexpr int switch_release_frame = switch_move_frame + 2;
-constexpr int back_move_frame = 50;      // "Back to app 1"（switch 屏幕上，同一个坐标点）
+constexpr int back_move_frame = 50;      // "Back to clock"（settings 屏，下排按钮 160,215）
 constexpr int back_release_frame = back_move_frame + 2;
 
 struct Options {
@@ -62,8 +63,8 @@ struct Options {
   int delay_ms = 5;
   const char* screenshot = nullptr;
   bool click = false;
-  int click_x = embark::platform::host::demo_click_center_x;
-  int click_y = embark::platform::host::demo_click_center_y;
+  int click_x = embark::demo::demo_click_center_x;
+  int click_y = embark::demo::demo_click_center_y;
   int quit_at = 0;  ///< >0 时在第 N 帧推一个 SDL_QUIT（等价于用户点窗口的关闭按钮）
   bool switch_mode = false;
   bool own_task = false;  ///< 验证 own_task 后台 App：TickerApp 的消息要能被 UI 收到
@@ -73,15 +74,15 @@ void print_usage() {
   std::printf(
       "用法：embark_host_ui [选项]\n"
       "  --frames N         跑 N 帧后退出（默认 0：一直跑到关窗）\n"
-      "  --click [X,Y]      合成一次鼠标点击（默认点按钮中心 %d,%d）\n"
-      "  --switch           合成两次点击验证前台切换（counter→switch→counter）\n"
+      "  --click [X,Y]      合成一次鼠标点击（默认点按钮中心 %d,%d；触发 clock 的 Settings 按钮）\n"
+      "  --switch           合成两次点击验证前台切换（clock→settings→clock）\n"
       "  --own-task         验证 own_task 后台 App（TickerApp 的消息要被 UI 收到）\n"
       "  --quit-at N        第 N 帧推一个关窗事件（验收「关窗干净退出」用）\n"
       "  --screenshot FILE  最后一帧存 BMP 截图\n"
       "  --scale S          窗口放大倍数（默认 2）\n"
       "  --delay MS         每帧间隔毫秒（默认 5）\n"
       "  --help             显示本帮助\n",
-      embark::platform::host::demo_click_center_x, embark::platform::host::demo_click_center_y);
+      embark::demo::demo_click_center_x, embark::demo::demo_click_center_y);
 }
 
 /// 解析 "X,Y"（失败就用默认值）。
@@ -182,9 +183,10 @@ bool save_screenshot(embark::platform::host::HostDisplay& display, const char* p
 
 namespace embark::platform::host {
 
-// 整个可执行文件只出现一次的 App 注册表：CounterApp 是默认前台，SwitchApp 待命，
+// 整个可执行文件只出现一次的 App 注册表：ClockApp 是默认前台，SettingsApp 待命，
 // TickerApp 是纯后台（own_task 策略，issue 07 的消息回 UI 演示）。
-EMBARK_APP_TABLE(CounterApp, SwitchApp, TickerApp)
+// demo App 本体在 app/（issues/08 起宿主侧不再自带）。
+EMBARK_APP_TABLE(embark::demo::ClockApp, embark::demo::SettingsApp, embark::demo::TickerApp)
 
 }  // namespace embark::platform::host
 
@@ -249,15 +251,23 @@ void ui_main(void* argument) noexcept {
 
     if (options->switch_mode) {
       if (frames_run == switch_move_frame) {
-        ELOG_INFO("合成点击：切换按钮 ({},{})", hp::demo_switch_center_x, hp::demo_switch_center_y);
-        push_motion_and_press(options->scale, hp::demo_switch_center_x, hp::demo_switch_center_y);
+        // settings 屏的 "Level +1"（与 clock 屏 "Settings" 同一中心 (160,170)，证明焦点已换）。
+        ELOG_INFO("合成点击：切换按钮 ({},{})", embark::demo::demo_click_center_x,
+                  embark::demo::demo_click_center_y);
+        push_motion_and_press(options->scale, embark::demo::demo_click_center_x,
+                              embark::demo::demo_click_center_y);
       } else if (frames_run == switch_release_frame) {
-        push_release(options->scale, hp::demo_switch_center_x, hp::demo_switch_center_y);
+        push_release(options->scale, embark::demo::demo_click_center_x,
+                     embark::demo::demo_click_center_y);
       } else if (frames_run == back_move_frame) {
-        ELOG_INFO("合成点击：返回按钮 ({},{})", hp::demo_click_center_x, hp::demo_click_center_y);
-        push_motion_and_press(options->scale, hp::demo_click_center_x, hp::demo_click_center_y);
+        // settings 屏的 "Back to clock"（下排按钮 (160,215)）。
+        ELOG_INFO("合成点击：返回按钮 ({},{})", embark::demo::demo_switch_center_x,
+                  embark::demo::demo_switch_center_y);
+        push_motion_and_press(options->scale, embark::demo::demo_switch_center_x,
+                              embark::demo::demo_switch_center_y);
       } else if (frames_run == back_release_frame) {
-        push_release(options->scale, hp::demo_click_center_x, hp::demo_click_center_y);
+        push_release(options->scale, embark::demo::demo_switch_center_x,
+                     embark::demo::demo_switch_center_y);
       }
     }
 
@@ -283,16 +293,16 @@ void ui_main(void* argument) noexcept {
     hp::ui_loop_delay(static_cast<std::uint32_t>(options->delay_ms));
   }
 
-  const hp::CounterApp& counter = *static_cast<const hp::CounterApp*>(framework.app(0));
-  const hp::SwitchApp& switch_app = *static_cast<const hp::SwitchApp*>(framework.app(1));
-  const hp::TickerApp& ticker = *static_cast<const hp::TickerApp*>(framework.app(2));
+  const embark::demo::ClockApp& clock_app = *static_cast<const embark::demo::ClockApp*>(framework.app(0));
+  const embark::demo::SettingsApp& settings = *static_cast<const embark::demo::SettingsApp*>(framework.app(1));
+  const embark::demo::TickerApp& ticker = *static_cast<const embark::demo::TickerApp*>(framework.app(2));
 
   // 拆两条统计（efmt 的 format 参数上限 16，观测项多）
-  ELOG_INFO("统计（显示/前台）：帧 {}，刷新 {} 次（{} 字节），Present {} 次，前台 {}（切换 {} 次），点击 {} 次，"
-            "counter enter {}/resume {}，switch enter {}/resume {}",
+  ELOG_INFO("统计（显示/前台）：帧 {}，刷新 {} 次（{} 字节），Present {} 次，前台 {}（切换 {} 次），"
+            "clock ticks {}/brightness {}，settings enter {}/resume {}",
             frames_run, ui_port.port().refreshes(), ui_port.port().flush_bytes(), display.presents(),
-            framework.apps().at(framework.foreground())->name(), framework.switches(), counter.clicks(),
-            counter.enters(), counter.resumes(), switch_app.enters(), switch_app.resumes());
+            framework.apps().at(framework.foreground())->name(), framework.switches(),
+            clock_app.ticks(), clock_app.brightness(), settings.enters(), settings.resumes());
   ELOG_INFO("统计（后台/消息）：丢输入 {}，忽略按键 {}，ticker 发送 {} 条 / UI 收到 {} 条，"
             "总线发布 {} 条 / 无人接收 {} 条，收件箱溢出 {} 次，UI 任务栈余量 {} 字",
             ui_port.port().dropped_input_events(), ui_port.port().ignored_key_events(),
@@ -303,20 +313,27 @@ void ui_main(void* argument) noexcept {
             hp::lvgl_peak_bytes(), hp::lvgl_outstanding_bytes(), embark::lvgl_alloc_budget_bytes);
 
   int exit_code = 0;
-  if (options->click && counter.clicks() == 0) {
-    std::fprintf(stderr, "合成点击没有触发按钮回调（验收失败）\n");
+  if (options->click && settings.enters() != 1U) {
+    // --click 点的是 clock 屏的 "Settings" 按钮：settings 必须恰好首次进入前台一次。
+    // （不校验 switches() 总数：--click 与 --switch 叠加时帧 50 的"返回"也算一次切换。）
+    std::fprintf(stderr, "合成点击没有触发前台切换（验收失败）：settings 进入 %u 次（期望 1）\n",
+                 settings.enters());
     exit_code = 2;
   }
   if (exit_code == 0 && options->switch_mode) {
-    // 切换验收：counter→switch→counter 恰好 2 次；onEnter 只在第一次，切回走 onResume。
-    const bool hooks_ok = framework.switches() == 2U && counter.enters() == 1U && counter.resumes() == 1U &&
-                          switch_app.enters() == 1U && switch_app.resumes() == 0U;
+    // 切换验收：clock→settings→clock 恰好 2 次；onEnter 只在第一次，切回走 onResume；
+    // "Level +1" 的亮度消息要真被 clock 收到（App 间消息）；
+    // clock 后台节拍必须要跑过（spec §14.1：后台 tick 可观测）。
+    const bool hooks_ok = framework.switches() == 2U && clock_app.enters() == 1U && clock_app.resumes() == 1U &&
+                          settings.enters() == 1U && settings.resumes() == 0U &&
+                          clock_app.brightness() == 1U && clock_app.ticks() > 0U;
     if (!hooks_ok) {
       std::fprintf(stderr,
-                   "前台切换验收失败：切换 %u 次（期望 2），counter enter %u/resume %u（期望 1/1），"
-                   "switch enter %u/resume %u（期望 1/0）\n",
-                   framework.switches(), counter.enters(), counter.resumes(), switch_app.enters(),
-                   switch_app.resumes());
+                   "前台切换验收失败：切换 %u 次（期望 2），clock enter %u/resume %u（期望 1/1），"
+                   "settings enter %u/resume %u（期望 1/0），clock brightness %u（期望 1），"
+                   "clock ticks %u（期望 > 0）\n",
+                   framework.switches(), clock_app.enters(), clock_app.resumes(), settings.enters(),
+                   settings.resumes(), clock_app.brightness(), clock_app.ticks());
       exit_code = 2;
     }
   }
