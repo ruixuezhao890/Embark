@@ -36,6 +36,13 @@ Error HostDisplay::init() noexcept {
     return Error::none;  // 重复调用是允许的（HAL 契约：失败要能重试）
   }
 
+  // 两条 hint 都必须在 SDL_Init 之前设，否则不生效：
+  //   ① 声明进程 DPI 感知（permonitorv2）—— 不声明的话，Windows 会在缩放过的显示器上对
+  //      窗口做位图拉伸（双线性），那才是「窗口糊」最常见的外部原因；
+  //   ② 像素级放大只走最近邻。默认 1:1 时窗口尺寸 = 面板尺寸，根本没有取样这一步。
+  SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
+
   if (SDL_WasInit(SDL_INIT_VIDEO) == 0) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
       ELOG_ERROR("显示：SDL_Init 失败（{}）", SDL_GetError());
@@ -43,9 +50,6 @@ Error HostDisplay::init() noexcept {
     }
     owns_video_ = true;
   }
-
-  // 像素级放大要最近邻，否则 2 倍窗口会把界面糊成一团。
-  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 
   const auto window_width = static_cast<int>(display_width) * static_cast<int>(window_scale_);
   const auto window_height = static_cast<int>(display_height) * static_cast<int>(window_scale_);
@@ -84,9 +88,18 @@ Error HostDisplay::init() noexcept {
     return Error::io_failure;
   }
 
+  // 窗口尺寸与"实际可绘制像素"必须一致：不一致就说明系统在缩放我们的窗口（画面会发虚）。
+  int pixel_width = 0;
+  int pixel_height = 0;
+  SDL_GetWindowSizeInPixels(window_, &pixel_width, &pixel_height);
+
   ready_ = true;
-  ELOG_INFO("显示：SDL 窗口 {}×{}（放大 {}×，纹理 RGB565）", display_width, display_height,
-            window_scale_);
+  ELOG_INFO("显示：SDL 窗口 {}×{}，可绘制区 {}×{}（放大 {}×，纹理 RGB565）", window_width,
+            window_height, pixel_width, pixel_height, window_scale_);
+  if (pixel_width != window_width || pixel_height != window_height) {
+    ELOG_WARN("显示：可绘制区 {}×{} 与窗口 {}×{} 不一致 —— 系统在缩放窗口，画面会发虚", pixel_width,
+              pixel_height, window_width, window_height);
+  }
   return Error::none;
 }
 

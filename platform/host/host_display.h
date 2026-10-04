@@ -3,7 +3,8 @@
  *
  * 一个窗口、一张 RGB565 streaming 纹理：HAL 的 flush(区域, 紧凑像素) 直接
  * → SDL_UpdateTexture（pitch = 区域宽 × 2，与 HAL 的紧凑布局逐字对应）
- * → SDL_RenderCopy 到逻辑尺寸（窗口按 window_scale 放大，最近邻取样，不糊）
+ * → SDL_RenderCopy 到逻辑尺寸（默认 window_scale = 1：窗口就是 320×240，一个面板像素对一个
+ *   屏幕像素，不经过任何取样；N ≥ 2 时是整数倍最近邻放大，画面同样不糊）
  * → SDL_RenderPresent。
  *
  * 为什么不做双缓冲/脏区合并：LVGL 自己就有 draw buffer 与脏区，显示后端再做一层只会
@@ -31,7 +32,9 @@ namespace embark::platform::host {
 class HostDisplay final : public hal::IDisplay {
  public:
   /// title 必须比本对象活得久（传字面量即可）。
-  explicit HostDisplay(std::uint8_t window_scale = 2, const char* title = "Embark 宿主") noexcept;
+  /// window_scale 默认 1 = 窗口 320×240、面板像素与屏幕像素 1:1（画面不糊）；
+  /// 传 N ≥ 2 是整数倍最近邻放大，仍然是一个面板像素对应 N×N 个屏幕像素。
+  explicit HostDisplay(std::uint8_t window_scale = 1, const char* title = "Embark 宿主") noexcept;
   ~HostDisplay() noexcept override;
 
   HostDisplay(const HostDisplay&) = delete;

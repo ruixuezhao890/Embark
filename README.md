@@ -65,7 +65,8 @@ ctest --test-dir build --output-on-failure
 ./build/platform/host/embark_host_ui          # Windows: .\build\platform\host\embark_host_ui.exe
 ```
 
-窗口是 320×240 的 LVGL 界面按 `--scale`（默认 2）放大显示。运行在唯一 UI 任务里
+窗口默认就是 320×240：面板像素与屏幕像素 1:1，不缩放、不取样，所以画面不糊
+（`--scale N`，N ≥ 2 时是整数倍最近邻放大，同样不模糊）。运行在唯一 UI 任务里
 （FreeRTOS 静态任务，5 ms 一跳）：UI 端口 → 输入泵 → 循环边界的前台切换 → 消息/后台节拍 →
 `lv_timer_handler()`。四个演示 App 都在 `app/`（named 空间 `embark::demo`，不含任何平台头）：
 
@@ -86,7 +87,7 @@ ctest --test-dir build --output-on-failure
 | `--own-task` | 验证 own_task 后台 App：TickerApp 发出的每条消息都必须被 UI 任务收到（不丢不乱序）；发送或收到为 0 则退出码 2 |
 | `--screenshot FILE` | 最后一帧存成 BMP |
 | `--quit-at N` | 第 N 帧合成关窗事件（等价于点窗口 ×，用来验收"干净退出"） |
-| `--scale S` / `--delay MS` | 窗口放大倍数（默认 2）/ 每帧让出的毫秒数（默认 5） |
+| `--scale S` / `--delay MS` | 窗口放大倍数（默认 1 = 320×240 1:1，不糊）/ 每帧让出的毫秒数（默认 5） |
 | `--help` | 用法 |
 
 最短的自动验收（退出码 0 + 日志里 `clock 进入前台`）：

@@ -14,7 +14,7 @@
  *   --switch          合成两次点击验证前台切换：帧 30/32 点 settings 的 "Level +1"（亮度消息
  *                     广播给 clock），帧 50/52 点 "Back to clock"（同一中心，两个前台 App 各中一个按钮）
  *   --screenshot FILE 最后一帧把窗口内容存成 BMP（用 Python/Pillow 转 PNG 便于查看）
- *   --scale S         窗口放大倍数（默认 2）
+ *   --scale S         窗口放大倍数（默认 1 = 320×240 与面板像素 1:1，画面不糊）
  *   --delay MS        每帧间隔（默认 5）
  *   --quit-at N       第 N 帧推一个关窗事件（验收「关窗干净退出」用）
  *   --help            打印用法
@@ -60,7 +60,7 @@ constexpr int back_release_frame = back_move_frame + 2;
 
 struct Options {
   int frames = 0;
-  int scale = 2;
+  int scale = 1;  ///< 默认 1:1（窗口就是 320×240）；N ≥ 2 是整数倍最近邻放大
   int delay_ms = 5;
   const char* screenshot = nullptr;
   bool click = false;
@@ -80,7 +80,7 @@ void print_usage() {
       "  --own-task         验证 own_task 后台 App（TickerApp 的消息要被 UI 收到）\n"
       "  --quit-at N        第 N 帧推一个关窗事件（验收「关窗干净退出」用）\n"
       "  --screenshot FILE  最后一帧存 BMP 截图\n"
-      "  --scale S          窗口放大倍数（默认 2）\n"
+      "  --scale S          窗口放大倍数（默认 1 = 320×240 1:1；N ≥ 2 为整数倍最近邻放大）\n"
       "  --delay MS         每帧间隔毫秒（默认 5）\n"
       "  --help             显示本帮助\n",
       embark::demo::demo_click_center_x, embark::demo::demo_click_center_y);
