@@ -4,7 +4,7 @@ Status: resolved
 Type: task
 Blocked by: 07
 
-Resolved: commit 60b68d9（本地，未推送）
+Resolved: commit 7d7a71f（本地，未推送）
 
 ## Answer
 
