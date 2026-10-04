@@ -63,10 +63,19 @@ class AuditMsg final : public embark::MessageT<0x61> {
 // 同构，按需精简。
 class RecordSpawner final : public embark::ITaskSpawner {
  public:
-  [[nodiscard]] embark::Error spawn_task(const char*, void (*)(void*) noexcept, void*,
-                                         std::uint16_t, std::uint16_t) noexcept override {
+  [[nodiscard]] etl::expected<embark::TaskToken, embark::Error> spawn_task(
+      const char*, void (*)(void*) noexcept, void*, std::uint16_t,
+      std::uint16_t) noexcept override {
     ++spawn_calls_;
-    return result_;
+    if (result_ != embark::Error::none) {
+      return embark::unexpected(result_);
+    }
+    return embark::TaskToken{0U, 0U};
+  }
+
+  /// 记录型替身不真建任务，入口永远不会返回，所以回收一律报 busy。
+  [[nodiscard]] embark::Error release_task(embark::TaskToken) noexcept override {
+    return embark::Error::busy;
   }
 
   std::uint32_t spawn_calls_ = 0;

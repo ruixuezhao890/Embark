@@ -1,0 +1,68 @@
+﻿[doctest] doctest version is "2.4.11"
+[doctest] run with "--help" for options
+
+===== own task 生命周期：boot 创建 → 跑完 → step 回收 → 运行期再创建 =====
+① boot 前：spawn_own_task() 只能拿到 not_ready（持有者生命周期之外）
+② boot：own_task 策略的 App 在这里被创建（名字/栈/优先级原样交出去）
+  已创建：job（栈 256 字 / 优先级 4）；此刻它还没跑，槽位是 running
+③ 入口还没返回：回收段什么也不做（busy 不是错误，下一帧再看）
+④ 任务跑完：入口返回 → 平台记 finished 并 park；step 的回收段把槽位还池
+  回收后：创建 1 / 回收 1，槽位空闲（世代号 +1，旧句柄从此 not_found）
+⑤ 运行期再创建一轮：spawn_own_task(job) 复用同一个槽
+  第二轮同样跑完并回收：创建 2 / 回收 2，池回到全空
+⑥ 回收段也认「入口返回了但内核还没停稳」：那一帧只报 busy，绝不提前删
+⑦ shutdown 之后不再创建（槽位随进程一起结束）
+  收尾：创建 3 / 回收 3，job 共跑完 3 轮
+===== 一轮循环走完：创建 → 跑完 → 回收 → 再创建 =====
+
+
+===== 系统用例：启动 → 后台节拍 → 消息 → 前台切换 → 收尾 =====
+
+── ① 假 HAL：七个能力端点就绪（display/input/time/storage/log/system/bus）
+  hal.init() → none
+
+── ② 框架装配：UI 端口 + 两个 App，然后 boot()
+  boot 前：booted = 0，foreground = 65535（invalid_app_id），frames = 0
+  · clock    onCreate
+  · settings onCreate
+  · clock    onEnter
+  boot 后：前台 = clock（默认取注册表第 0 个），两个 App 都已 onCreate
+
+── ③ 后台节拍：clock 是 tick 策略，period_ms = 40（每 8 帧一拍）
+  clock.settings()  = { background = tick, period_ms = 40 }
+  settings 用默认策略（suspend）：退场后不跑节拍，只等消息
+  走了 7 帧：clock 节拍 0 次（还差一拍）
+  · clock    onBackgroundTick(now_ms = 35)  ← 后台节拍
+  第 8 帧：clock 节拍 1 次（周期到期触发），settings 仍是 0 次
+
+── ④ App 间消息：publish 广播给所有 App，post 走收件箱下一帧派发
+  · clock    onMessage(payload = 7)  ← 广播通知
+  · settings onMessage(payload = 7)  ← 广播通知
+  publish 后：clock 收到 1 条、settings 收到 1 条（广播，前台后台都算）
+  post 后（尚未 step）：只进收件箱，帧数还是 8
+  · clock    onMessage(from_app = 1, seq = 42)  ← 跨任务信封
+  · settings onMessage(from_app = 1, seq = 42)  ← 跨任务信封
+  step 后：两个 App 都收到信封（跨任务消息在下一帧派发，内容不丢）
+
+── ⑤ 前台切换：request_switch(settings) 在下一帧的循环边界生效
+  请求已受理：此刻前台仍是 clock（切换不在请求里发生）
+  · clock    onPause
+  · settings onEnter
+  step 后：前台 = settings，累计切换 1 次
+
+── ⑥ 再切回 clock：第二次进前台走 onResume，不再走 onEnter
+  · settings onPause
+  · clock    onResume
+  step 后：前台 = clock（clock.onEnter 仍是 1 次、clock.onResume 1 次）
+
+── ⑦ shutdown()：前台 onPause → 全 App onExit → UI 端口 shutdown
+  · clock    onPause
+  · clock    onExit
+  · settings onExit
+  收尾：帧数 11，UI pump 11 次 / process 11 次，切换 2 次，收件箱溢出 0
+===== 全流程走完：注册 → boot → 节拍 → 消息 → 切换 → 收尾 =====
+
+===============================================================================
+[doctest] test cases:  95 |  95 passed | 0 failed | 0 skipped
+[doctest] assertions: 835 | 835 passed | 0 failed |
+[doctest] Status: SUCCESS!

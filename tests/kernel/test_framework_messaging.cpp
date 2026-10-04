@@ -126,13 +126,21 @@ class FakeSpawner final : public embark::ITaskSpawner {
     std::uint16_t priority;
   };
 
-  [[nodiscard]] embark::Error spawn_task(const char* name, void (*entry)(void*) noexcept,
-                                         void* argument, std::uint16_t stack_words,
-                                         std::uint16_t priority) noexcept override {
+  [[nodiscard]] etl::expected<embark::TaskToken, embark::Error> spawn_task(
+      const char* name, void (*entry)(void*) noexcept, void* argument, std::uint16_t stack_words,
+      std::uint16_t priority) noexcept override {
     if (calls.size() < 16) {
       calls.push_back({name, entry, argument, stack_words, priority});
     }
-    return result;
+    if (result != embark::Error::none) {
+      return embark::unexpected(result);
+    }
+    return embark::TaskToken{static_cast<std::uint16_t>(calls.size() - 1U), 0U};
+  }
+
+  /// 替身不真建任务：入口永不返回，回收一律 busy（持有者侧记录保持 active）。
+  [[nodiscard]] embark::Error release_task(embark::TaskToken) noexcept override {
+    return embark::Error::busy;
   }
 
   std::vector<Call> calls;

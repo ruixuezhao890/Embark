@@ -101,6 +101,7 @@ public:
 - 循环节拍目标 5 ms 一跳（与既有两代框架一致），空闲时 `vTaskDelay` 让出；不忙等。（宿主上这一拍的实际墙钟约 2×，tick 语义不变，见 §3。）
 - 后台 tick 在 UI 任务里执行，因此**必须轻量**；周期由 `etl::callback_timer<MAX_TIMERS>` 按 per-App 配置驱动（见 §7）。
 - 逃生舱：`OwnTask` 策略的 App 由框架创建自己的任务，框架保证任务名唯一、启动时机在 `onCreate` 之后、消息经队列进出。
+  **任务入口允许返回**（issue 15）：返回 = 任务结束，平台把它 park 在槽里等持有者（唯一 UI 任务）回收，`Framework::step()` 每帧自动收一次，槽位之后可再创建 —— WiFi 非阻塞连接就走这条路径（发起时 `spawn_own_task`，成功或超时后入口返回）。
 - 硬约束：前台 App 的所有回调**不得阻塞**；任何阻塞或长耗时工作必须走 `OwnTask`。
 
 ## 7. 消息与事件（直接用 ETL 现成设施 + 一层薄封装）
@@ -180,7 +181,9 @@ public:
 - App 层默认同规则；宿主仿真可用编译开关放开（开关名实现时定）。
 - LVGL：**已按此配置落地（issue 05）**——`config/lv_conf.h` 由本仓库自持（锁 8.3.11，只钉影响内存/尺寸/构图/可观测性的项，其余交给 `lv_conf_internal.h` 的 `#ifndef` 默认）；`LV_MEM_CUSTOM 1` + 我们自己的 `embark_lvgl_alloc/free/realloc`（`platform/host/host_lvgl_mem.cpp`，真机换成静态池实现），**带记账与预算上限**（`config/embark_limits.h` 的 `lvgl_alloc_budget_bytes`，默认 256 KB；超预算或分配失败返回 nullptr，由 `LV_USE_ASSERT_MALLOC` 带分配点行号进 `embark::fatal`）。真机上"UI 对象总量有上限"仍待 issue 11 用实测数字定，宿主侧已有 `lvgl_outstanding_bytes()` / `lvgl_peak_bytes()` 两个观测点。两处硬约束：`lv_conf.h` 的头护栏必须叫 `LV_CONF_H`；`LV_ASSERT_HANDLER` 宏必须自带结尾分号（LVGL 的展开是裸语句）。
 - 每个容器的容量上限必须是**代码里可查的常量**，集中放在 `config/`。
-- **任务创建：静态槽位为默认，运行期增删走固定块池（2026-10-04 记录，ADR 0005）**。现状：所有任务都用 `xTaskCreate*Static`（UI 任务在 `platform/host/ui_task.cpp` / `platform/esp32/src/esp32_ui_task.cpp`，App 的 own_task 走 `ITaskSpawner`，槽位 = `max_own_tasks × own_task_stack_words`）；宿主配 `configSUPPORT_STATIC_ALLOCATION 1` + `configSUPPORT_DYNAMIC_ALLOCATION 0` 且 `heap_4.c` 刻意不参与编译，所以 `pvPortMalloc/vPortFree` 在**符号层面就不存在** —— 零动态分配是结构保证而非纪律。取舍：静态把"内存够不够"从运行期问题挪成链接期问题（账目在 map 文件 / 真机 `check_sizes.py` 里可核对、0 碎片、0 堆锁、唯一失败点是 boot 时的容量不足返回 `Error::no_space`），代价是预留即占用（2 × 512 字 = 4 KB）与栈尺寸一刀切（App 声明的栈深超过 `own_task_stack_words` 直接 `no_space`）。**升级路径已定**：将来需要"运行期创建、完成即回收"时（首个真实用例：WiFi 非阻塞连接 —— 发起连接时创建任务，成功或超时后任务自行结束并归还资源），把 `ITaskSpawner` 的实现换成"固定块池 + 空闲链"（池复用 `platform/common/static_pool.h` 的 `StaticPool`，仍然调 `xTaskCreateStatic`，接口增加 `release_task`，回收必须能确认任务真的已结束）。静态 vs 动态的逐项对比在 `docs/adr/0005-static-task-slots-and-pool.md`，工作项见 `.scratch/embark-v1/issues/15-runtime-task-lifecycle.md`。
+- **任务创建：静态槽位 + 固定块池，运行期创建/回收已落地（2026-10-04，ADR 0005，issue 15）**。所有任务都用 `xTaskCreate*Static`（UI 任务在 `platform/host/ui_task.cpp` / `platform/esp32/src/esp32_ui_task.cpp`，App 的 own_task 走 `ITaskSpawner`，实现是 `platform/common/pooled_task_spawner.h` 的 `PooledTaskSpawner<Kernel>`：`.bss` 里一块 `alignas(16)` 的 arena，按 `max_own_tasks` 个槽切给各平台 Kernel）；宿主配 `configSUPPORT_STATIC_ALLOCATION 1` + `configSUPPORT_DYNAMIC_ALLOCATION 0` 且 `heap_4.c` 刻意不参与编译，所以 `pvPortMalloc/vPortFree` 在**符号层面就不存在** —— 零动态分配是结构保证而非纪律。
+  **生命周期**（issue 15）：任务入口返回 → 平台 trampoline 标 `finished` 并 park（`vTaskSuspend(nullptr)`，不再被调度）→ 持有者（唯一 UI 任务）`release_task` 确认已停稳后 `vTaskDelete`，槽位还池、`generation` +1。回收**只能由持有者做**，任务自己删自己会踩 FreeRTOS 的"删除中"中间态（静态 TCB 会被空闲任务延迟释放，此时复用存储会写出致命别名）。失败点仍唯一且确定：池满 / 栈深超过槽容量 → `Error::no_space`，参数非法 → `invalid_argument`，正在跑 → `busy`。
+  取舍：静态把"内存够不够"从运行期问题挪成链接期问题（账目在 map 文件 / 真机 `check_sizes.py` 里可核对、0 碎片、0 堆锁），代价是预留即占用（默认 `max_own_tasks = 2` 个槽；宿主一槽 = 登记项 + `StaticTask_t` + 512 字栈 ≈ 4 KB，真机一槽 ≈ 512 字节栈 + TCB）与栈尺寸一刀切（App 声明的栈深超过 `own_task_stack_words` 直接 `no_space`）。静态 vs 动态的逐项对比在 `docs/adr/0005-static-task-slots-and-pool.md`，实现与验收见 `.scratch/embark-v1/issues/15-runtime-task-lifecycle.md`。
 
 ## 11. 目录结构与构建
 
@@ -218,7 +221,7 @@ embark/
 ## 13. 测试与 CI
 
 - 测试框架 **doctest**（单头、编译快、无堆友好）。
-- 宿主测试覆盖：前台切换、后台 tick 周期、消息溢出策略、日志门面、错误路径（`expected`）、App 注册表顺序。
+- 宿主测试覆盖：前台切换、后台 tick 周期、消息溢出策略、日志门面、错误路径（`expected`）、App 注册表顺序、任务池（创建 / 槽满 `no_space` / 入口返回 / 回收 / 槽位复用 / 失败回滚，issue 15）。
 - HAL 能力测试（`tests/hal/`）：七个能力各一条成功 + 一条失败路径，用 `tests/fakes/` 的假后端；fake 与宿主持久化后端**共用 `include/embark/detail/kv_slot.h` 的同一套槽编解码**（magic `EKV1` / state / key_len / value_len / CRC32 / key[16] / value[64] = 92 字节），任何一方改格式，另一方的测试立刻红。
 - 内部工具测试（`tests/detail/`）：`AllocationCounter` 六个用例（累计与峰值、释放保留峰值、realloc 按差值、释放对不上夹 0、`over_budget` 严格大于、`reset` 清空）——LVGL allocator 的记账与预算就是靠它（`include/embark/detail/allocation_counter.h`，header-only）。
 - LVGL 端口不做单测（它必须是"一个进程一份"的全局状态），靠宿主可执行文件的自动验收开关覆盖；LCD 真机那条线在 issue 11。
@@ -247,7 +250,7 @@ embark/
 - **真机侧还有两件事必须人工确认**（本机没有板子，issue 11 只能做到"编得过"）：① 烧写后能显示 demo 第一屏（`idf.py -C platform/esp32/project -B build-esp32 flash monitor`）② 触摸/按键能切前台。判定与调法都在 `platform/esp32/README.md` 的 bring-up 清单里：启动日志会打出 CST328 自报的 `RES_X/RES_Y`，据此定轴方向。
 - 宿主 FreeRTOS port 来自 `lvgl_template_laste`：**已在 GCC 15.1 上验证可编可跑（2026-10-04，见 `issues/02`）**，源码清单 / CMake 片段 / `FreeRTOSConfig.h` 必改项都在该 issue 的 `## Answer`，证据与探针源码留档在 `.scratch/embark-v1/spikes/02-host-freertos/`。残留两个小项（不阻塞）：① 该端口 tick 比墙钟慢约 2×（见 §3 / §13）；② vendor 进仓库后是否顺手消掉上游的 2 条严格警告（`queue.c:489`、`port.c:249`）。
 - LVGL 补丁版号：**已定 v8.3.11（2026-10-04，issue 05）**。8.3 线上游已停更，选它是因为它与既有两代工程（8.3.6 / 8.3.x）的 API 一致、且是 8.3 线最后的补丁；`LV_MEM_CUSTOM 1` 下上游**没有 `lv_deinit`**（`lv_obj.h:206-214` 的门是 `LV_ENABLE_GC || !LV_MEM_CUSTOM`），所以进程内 LVGL 只初始化一次、退出时靠 `lvgl_outstanding_bytes()` 观测是否有泄漏。
-- **运行时任务生命周期（创建 / 回收）尚未支持（2026-10-04 记录，不阻塞 v1）**：当前任务集合在编译期定死、own_task 常驻不退役（纪律见 `include/embark/task_spawner.h` 头部），`ITaskSpawner` 没有 `release_task`。用户已明确"未来会出现运行期创建任务的情况，例如 WiFi 非阻塞连接（连接时创建任务、完成后删除任务）"，因此升级路径与验收草案先落成工单：`.scratch/embark-v1/issues/15-runtime-task-lifecycle.md`（设计决定见 `docs/adr/0005-static-task-slots-and-pool.md`）。v1 的实现按现状不动。
+- **运行时任务生命周期：已落地（2026-10-04，issue 15）**。`ITaskSpawner` 补上 `release_task(TaskToken)`，两种平台实现都换成 `PooledTaskSpawner<Kernel>`（固定块池 + 每槽 `Task`，仍是 `xTaskCreateStatic*`、仍然零堆）。任务入口**允许返回**：返回后平台标 `finished` 并 park，持有者（唯一 UI 任务）在 `Framework::step()` 的回收段 `release_task` 确认停稳后删任务、还槽位、`generation` +1。三个语义点：① 回收**只能由持有者做**（任务自己删自己会踩 FreeRTOS 的删除中间态，静态 TCB 被延迟释放时复用存储是致命别名）② park 用 `vTaskSuspend(nullptr)` 而不是 `vTaskDelay` 循环 —— 挂起的任务永远不会被选中，`is_parked` 一旦为真就稳定为真，没有"已从就绪表摘掉但还在让出"的交接窗口 ③ 真机跨核的罕见窗口（已在挂起链表上、但仍是某核的 `pxCurrentTCB`）由 `is_parked` 的第二条判据挡掉，`release_task` 此时返回 `busy`，下一帧重试即好。第一个真实用例（WiFi 非阻塞连接）所需的机制已具备；WiFi 能力面本身仍不在 v1 范围内。
 
 ## 16. ETL 可复用组件清单（开工前定稿，避免边写边改）
 

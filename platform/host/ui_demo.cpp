@@ -391,9 +391,10 @@ int main(int argc, char** argv) {
 
   Options options = parse_options(argc, argv);
 
+  // 栈深口径是 StackType_t 字：宿主 1 字 = 8 字节，真机 xtensa 1 字 = 1 字节。
   ELOG_INFO("UI 任务启动：栈 {} 字（{} KB），优先级 {}，周期 {} ms", embark::ui_task_stack_words,
-            embark::ui_task_stack_words * 4 / 1024, static_cast<int>(embark::ui_task_priority),
-            embark::ui_loop_period_ms);
+            embark::ui_task_stack_words * static_cast<int>(sizeof(StackType_t)) / 1024,
+            static_cast<int>(embark::ui_task_priority), embark::ui_loop_period_ms);
 
   const Error task_error = hp::start_ui_task(&ui_main, &options);
   if (task_error != Error::none) {

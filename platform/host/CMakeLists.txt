@@ -28,7 +28,10 @@ add_library(embark_platform_host STATIC
 add_library(embark::platform_host ALIAS embark_platform_host)
 
 # PUBLIC：平台后端及其消费者都需要 FreeRTOS（静态库的链接依赖会透传到可执行文件）。
-target_link_libraries(embark_platform_host PUBLIC embark::core embark_freertos)
+# embark::static_pool：own_task_spawner.h（issue 15）经 pooled_task_spawner.h 用 StaticPool
+# 记账槽位，头文件里的调用点落在消费者（ui_demo / ui_tour）的 TU 上，所以符号要从这里透传。
+# 真机侧不需要这条：platform/esp32 的组件源列表里已经有 platform/common/static_pool.cpp。
+target_link_libraries(embark_platform_host PUBLIC embark::core embark_freertos embark::static_pool)
 
 add_executable(embark_host main.cpp)
 

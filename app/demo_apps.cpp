@@ -6,6 +6,8 @@
  *       ClockApp 还在其后启动状态机（chart_.start()：触发初始态的 on_entry）；
  *   2. onEnter/onResume 里 lv_scr_load 换上自己的屏幕（App 自决界面生命周期）；
  *   3. 想离开前台时 request_switch() 请求，框架在循环边界执行切换；
+ *      JobApp（issue 15）是第四个 App，演示"一次性后台任务"：任务入口跑完就返回，
+ *      槽位由框架回收（只出现在系统用例 ui_tour 的注册表里）；
  *      App 之间只走消息（SettingsApp publish → ClockApp onMessage）。
  * 全程不碰框架内部，也绝不自己调 lv_timer_handler()（那是 UI 端口的活）。
  */
@@ -269,6 +271,37 @@ void TickerApp::onMessage(const Message& msg) {
 }
 
 void TickerApp::onExit() {
+  ELOG_INFO("App {} onExit", name());
+}
+
+// ================================ JobApp =================================
+// 一次性任务：period_ms = 0 由框架解释成"跑一轮就结束"（run_own_task 的零周期分支）。
+// 任务体里没有循环、没有 delay —— 返回即结束，回收由框架的 step 负责。
+
+void JobApp::onCreate(Framework& fw) {
+  (void)fw;  // 本 App 不投消息、不请求切换：任务体只做一轮记账
+  ELOG_INFO("App {} onCreate（own_task，period_ms = 0：跑完即结束）", name());
+}
+
+void JobApp::onEnter() {
+  ELOG_INFO("App {} 进入前台", name());
+}
+
+void JobApp::onPause() {
+  ELOG_INFO("App {} 离开前台", name());
+}
+
+void JobApp::onResume() {
+  ELOG_INFO("App {} 回到前台", name());
+}
+
+void JobApp::onBackgroundTick(std::uint32_t now_ms) {
+  ++runs_;
+  ELOG_INFO("job 后台任务：第 {} 轮跑完（now={} ms）—— 入口即将返回，槽位等 UI 任务回收", runs_,
+            now_ms);
+}
+
+void JobApp::onExit() {
   ELOG_INFO("App {} onExit", name());
 }
 

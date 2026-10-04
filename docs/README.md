@@ -17,7 +17,7 @@ Windows（MinGW + Ninja）与 Linux（apt 装 `ninja-build libsdl2-dev`）同一
 git submodule update --init --recursive   # 拉齐 ETL / efmt-elog / LVGL / FreeRTOS / doctest
 cmake -G Ninja -B build                   # 配置（宿主 + 测试；SDL2 找不到只跳过 UI demo）
 cmake --build build                       # 构建（零警告要求）
-ctest --test-dir build --output-on-failure  # 单元测试（86 用例 / 666 断言）
+ctest --test-dir build --output-on-failure  # 单元测试（95 用例 / 835 断言）
 ./build/platform/host/embark_host_ui      # 宿主 UI demo（Windows: .\build\platform\host\embark_host_ui.exe）
 ./build/platform/host/embark_host_tour    # 系统用例：从启动看到任务切换（同上 Windows 加 .exe）
 ```
@@ -26,11 +26,13 @@ ctest --test-dir build --output-on-failure  # 单元测试（86 用例 / 666 断
 关窗退出。想要"跑够帧数自己退"或验证参数，看下一步。
 
 `embark_host_tour` 是"一条用例看完整系统"：不加参数就会自己走完
-**启动 → 后台节拍 → 合成点击切前台 → App 间消息 → 再切回来 → 关窗收尾**，
-边跑边在控制台用中文解说每一步（前台是谁、谁收到了消息、钩子跑了几次），
-最后打一张 8 项自检清单；全部通过退出码 0，任一项不满足退出码 2。
+**启动 → 后台节拍 → 合成点击切前台 → App 间消息 → 再切回来 → 一次性任务跑完并回收 → 关窗收尾**，
+边跑边在控制台用中文解说每一步（前台是谁、谁收到了消息、钩子跑了几次、任务池还剩几个槽），
+最后打一张 10 项自检清单；全部通过退出码 0，任一项不满足退出码 2。
 同一条流程的**无窗口版本**是 doctest 用例 `系统用例：从启动到任务切换走一遍`
-（`tests/kernel/test_system_tour.cpp`），在 CLion 里单跑那一条即可从上往下读日志。
+（`tests/kernel/test_system_tour.cpp`），在 CLion 里单跑那一条即可从上往下读日志；
+任务生命周期那一步的用例是 `系统用例：own task 创建 → 跑完 → 回收 → 再创建`
+（`tests/kernel/test_own_task_lifecycle.cpp`）。
 
 日志是整对象风格（issue 13）：类型自己在声明处登记怎么打，调用点直接填空，
 比如启动时的 `HAL 就绪：显示 embark::hal::DisplayInfo { width = 240, height = 320, ... }`、
@@ -150,13 +152,13 @@ cmake --build build
 
 | 文档 | 内容 |
 | --- | --- |
-| [messages-and-background.md](messages-and-background.md) | 消息（总线 / 收件箱信封）与三种后台策略怎么用，含示例代码 |
+| [messages-and-background.md](messages-and-background.md) | 消息（总线 / 收件箱信封）与三种后台策略怎么用，含示例代码；`own_task` 的生命周期（入口返回 = 结束、每帧回收、运行期再创建）也在这里 |
 | [hal-backend-guide.md](hal-backend-guide.md) | 怎么写一个 HAL 后端：宿主骨架（照 platform/host/）、共享层（platform/common/）与真机实现（platform/esp32/，含 IDF 坑清单） |
 | [../platform/esp32/README.md](../platform/esp32/README.md) | ESP32-S3 真机端口：板级参数、构建/烧录命令、bring-up 清单、串口日志样例 |
 | [common-pitfalls.md](common-pitfalls.md) | 常见坑：ETL 定容行为、消息非聚合、保留 id、无异常/无堆、MinGW 对齐分配、日志 384 字节上限、派生打印（E_FMT_DERIVE）、宏前置条件…… |
-| [adr/](adr/) | 架构决策记录：单一 UI 任务（0001）、HAL 能力粒度（0002）、零堆无异常（0003）、后台节拍与状态范式（0004）、任务创建静态槽位与池化升级路径（0005） |
+| [adr/](adr/) | 架构决策记录：单一 UI 任务（0001）、HAL 能力粒度（0002）、零堆无异常（0003）、后台节拍与状态范式（0004）、静态槽位与任务池（0005） |
 | [agents/](agents/) | 面向 agent 的仓库约定（领域模型、issue 追踪规则） |
 
-交叉参考：内核契约测试在 `tests/kernel/`（发消息、切前台、节拍、own_task
-装配的"正确用法"都在测试里，比任何文档都新）；`.scratch/embark-v1/spec.md`
+交叉参考：内核契约测试在 `tests/kernel/`（发消息、切前台、节拍、own_task 生命周期与
+任务池装配的"正确用法"都在测试里，比任何文档都新）；`.scratch/embark-v1/spec.md`
 §5–§10 是接口设计与约束的来源。

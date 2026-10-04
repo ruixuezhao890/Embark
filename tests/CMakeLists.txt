@@ -33,6 +33,8 @@ add_executable(embark_tests
         kernel/test_message_queue.cpp
         kernel/test_format_derive.cpp
         kernel/test_static_pool.cpp
+        kernel/test_pooled_task_spawner.cpp
+        kernel/test_own_task_lifecycle.cpp
         kernel/test_zero_alloc.cpp)
 
 # 测试内部用 "fakes/fakes.h" 这种从 tests/ 起算的相对包含。

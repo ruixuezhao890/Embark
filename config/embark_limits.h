@@ -57,16 +57,24 @@ inline constexpr std::size_t lvgl_input_queue_depth = 16;
 // 总线的订阅者上限（= etl::message_bus 的 MAX_ROUTERS；镜像订阅表同容量）。
 inline constexpr std::size_t max_bus_subscribers = 8;
 
-// own_task 策略的后台任务数上限（每个 App 至多一个任务，槽位静态分配）。
+// own_task 策略的并发上限（每个 App 至多一个任务）。
+// issue 15 起，槽位由平台的任务池在运行时分配/回收
+// （platform/common/pooled_task_spawner.h）：这里只定"同时最多几个"；
+// 一个槽占多少字节由各平台 Kernel 按自己的 StackType_t 口径算，
+// 不再是"max_own_tasks × own_task_stack_words"那种编译期二维数组。
 inline constexpr std::size_t max_own_tasks = 2;
 
-// 后台任务的默认栈深（单位：StackType_t 字；宿主 512 字 = 2 KB）。
-// App 的 settings().task_stack_words 为 0 时用它；真机按 SRAM 预算重排（issue 11）。
+// 后台任务槽的栈容量（单位：StackType_t 字）。
+// 宿主 1 字 = 8 字节 → 512 字 = 4 KB；真机 xtensa 1 字 = 1 字节 → 512 字 = 512 字节。
+// App 的 settings().task_stack_words 为 0 时用它；超过它 = 槽装不下（no_space）。
+// 真机按 SRAM 预算重排（issue 11）。全仓库的换算一律乘 sizeof(StackType_t)，
+// 不再有"512 字 = 2 KB"这类 32 位口径的硬编码。
 inline constexpr std::size_t own_task_stack_words = 512;
 
 // --- 唯一 UI 任务（issues/06）--------------------------------------------------
 // 全工程只有一个 UI 任务（spec §6，宿主 = FreeRTOS 静态任务，真机同构）。
-// 栈深单位是 StackType_t 字（宿主 4 字节）：2048 字 = 8 KB。留给 LVGL 回调 +
+// 栈深单位是 StackType_t 字：宿主 1 字 = 8 字节（2048 字 = 16 KB），
+// 真机 xtensa 1 字 = 1 字节（2048 字 = 2 KB）。留给 LVGL 回调 +
 // 前台 App 逻辑；实测占用看宿主演示的栈高水位输出（uxTaskGetStackHighWaterMark），
 // 真机按 SRAM 预算调（issue 11）。
 inline constexpr std::size_t ui_task_stack_words = 2048;

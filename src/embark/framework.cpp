@@ -5,7 +5,6 @@
  */
 #include <embark/framework.h>
 
-#include <embark/diagnostics.h>
 #include <embark/log.h>
 
 namespace embark {
@@ -86,35 +85,18 @@ Error Framework::boot() noexcept {
     ++timer_index;
   }
 
-  // --- own task 逃生舱（issue 07）--------------------------------------------
-  std::size_t own_slot = 0;
+  // --- own task 逃生舱（issues/07、15）---------------------------------------
+  // boot 只把声明了 own_task 策略的 App 装起来：创建细节与失败口径都在
+  // spawn_own_task_internal 里 —— 运行期的 spawn_own_task 走的是同一条路（issue 15）。
   for (std::size_t index = 0; index < apps_.size(); ++index) {
     const AppSettings settings = apps_.at(index)->settings();
     if (settings.background != BackgroundPolicy::own_task) {
       continue;
     }
-    if (spawner_ == nullptr) {
-      return Error::unsupported;  // 平台没给任务创建能力
-    }
-    if (own_slot >= max_own_tasks) {
-      return Error::no_space;  // 静态槽位耗尽
-    }
-    if (settings.task_stack_words > own_task_stack_words) {
-      return Error::no_space;  // App 要的栈超出框架分配的槽位
-    }
-    OwnTaskArg& arg = own_task_args_[own_slot];
-    arg.fw = this;
-    arg.app = static_cast<AppId>(index);
-    const std::uint16_t stack_words = settings.task_stack_words != 0
-                                          ? settings.task_stack_words
-                                          : static_cast<std::uint16_t>(own_task_stack_words);
-    const Error spawn_error =
-        spawner_->spawn_task(apps_.at(index)->name(), &Framework::own_task_entry, &arg, stack_words,
-                             settings.task_priority);
+    const Error spawn_error = spawn_own_task_internal(static_cast<AppId>(index));
     if (spawn_error != Error::none) {
       return spawn_error;
     }
-    ++own_slot;
   }
 
   booted_ = true;
@@ -145,6 +127,10 @@ void Framework::step() noexcept {
     bus_.publish(envelope);
   }
 
+  // 7. own task 回收（issue 15）：入口已返回、平台已停稳的任务在这里把槽位还给池。
+  //    回收责任在持有者（就是本任务）：池只记账，绝不去删一个还在跑的任务。
+  (void)reap_finished_own_tasks();  // 回收数是观测值：step 里不关心本次收了几个
+
   ++frames_;
 }
 
@@ -173,22 +159,113 @@ void Framework::fire_background_tick(AppId app_id) noexcept {
 
 void Framework::own_task_entry(void* argument) noexcept {
   auto* const arg = static_cast<OwnTaskArg*>(argument);
+  if (arg == nullptr || arg->fw == nullptr) {
+    return;  // 防御：参数不合法就直接结束（平台会停稳它，持有者回收）
+  }
+  // 合同（issue 15）：任务入口**允许返回** —— 返回 = 任务自行结束，不是错误。
+  // 返回之后平台 trampoline 记 finished 并 park 住，持有者在 step 的回收段还槽位。
   arg->fw->run_own_task(arg->app);
-  // 合同：任务函数不许返回（与 UI 任务同一条纪律，spec §6）。
-  ::embark::fatal("own task 入口返回了：任务函数不许返回");
-  for (;;) {
-  }  // 防御：fatal 若被测试替身接管后返回，也不能继续往下走
 }
 
 void Framework::run_own_task(AppId app_id) noexcept {
   App* const app = apps_.at(app_id);
-  const std::uint32_t period_ms = app != nullptr ? app->settings().period_ms : 0U;
+  if (app == nullptr) {
+    return;  // 防御：编号无效直接结束（onCreate 之后不该发生）
+  }
+  const std::uint32_t period_ms = app->settings().period_ms;
+  if (period_ms == 0U) {
+    // 一次性任务：跑一轮就结束（返回 = 任务结束，见 framework.h 文件头）。
+    app->onBackgroundTick(hal_.time.now_ms());
+    return;
+  }
   for (;;) {
     hal_.time.delay_ms(period_ms);
-    if (app != nullptr) {
-      app->onBackgroundTick(hal_.time.now_ms());
+    app->onBackgroundTick(hal_.time.now_ms());
+  }
+}
+
+Error Framework::spawn_own_task(AppId id) noexcept {
+  if (!booted_ || shutdown_) {
+    return Error::not_ready;  // 持有者的生命周期之外（boot 前 / shutdown 后）
+  }
+  return spawn_own_task_internal(id);
+}
+
+Error Framework::spawn_own_task_internal(AppId id) noexcept {
+  if (!apps_.valid(id)) {
+    return Error::not_found;
+  }
+  App* const app = apps_.at(id);
+  const AppSettings settings = app->settings();
+  if (settings.background != BackgroundPolicy::own_task) {
+    return Error::unsupported;  // 这个 App 没声明 own_task 策略
+  }
+  if (spawner_ == nullptr) {
+    return Error::unsupported;  // 平台没给任务创建能力
+  }
+  if (own_task_index_of(id) != own_tasks_.size()) {
+    return Error::busy;  // 同一个 App 同时只允许一个任务
+  }
+  const std::size_t index = find_free_own_task();
+  if (index == own_tasks_.size()) {
+    return Error::no_space;  // 记录满 = 并发上限（与池同口径 = max_own_tasks）
+  }
+  const std::uint16_t stack_words = settings.task_stack_words != 0
+                                        ? settings.task_stack_words
+                                        : static_cast<std::uint16_t>(own_task_stack_words);
+  // 参数必须在 spawn 之前写好：真机上任务落在另一个核，建好就可能开跑并读它。
+  OwnTaskRecord& record = own_tasks_[index];
+  record.arg.fw = this;
+  record.arg.app = id;
+  const etl::expected<TaskToken, Error> spawned = spawner_->spawn_task(
+      app->name(), &Framework::own_task_entry, &record.arg, stack_words, settings.task_priority);
+  if (!spawned.has_value()) {
+    record.arg = OwnTaskArg{};  // 失败回滚：空闲记录里不留 this 指针
+    return spawned.error();
+  }
+  record.token = *spawned;
+  record.active = true;
+  ++own_tasks_spawned_;
+  return Error::none;
+}
+
+std::size_t Framework::reap_finished_own_tasks() noexcept {
+  if (spawner_ == nullptr) {
+    return 0U;  // 没有记录，也就没有回收（防御：spawner 为空时记录必然全空）
+  }
+  std::size_t released = 0U;
+  for (std::size_t index = 0; index < own_tasks_.size(); ++index) {
+    OwnTaskRecord& record = own_tasks_[index];
+    if (!record.active) {
+      continue;
+    }
+    const Error release_error = spawner_->release_task(record.token);
+    if (release_error != Error::none) {
+      continue;  // busy（还在跑 / 还没停稳）不是错误：下一帧再看
+    }
+    record = OwnTaskRecord{};  // 句柄、参数一起清掉；token 归零 = 无效句柄
+    ++released;
+    ++own_tasks_released_;
+  }
+  return released;
+}
+
+std::size_t Framework::own_task_index_of(AppId id) const noexcept {
+  for (std::size_t index = 0; index < own_tasks_.size(); ++index) {
+    if (own_tasks_[index].active && own_tasks_[index].arg.app == id) {
+      return index;
     }
   }
+  return own_tasks_.size();
+}
+
+std::size_t Framework::find_free_own_task() const noexcept {
+  for (std::size_t index = 0; index < own_tasks_.size(); ++index) {
+    if (!own_tasks_[index].active) {
+      return index;
+    }
+  }
+  return own_tasks_.size();
 }
 
 void Framework::apply_pending_switch() noexcept {
@@ -233,8 +310,9 @@ void Framework::shutdown() noexcept {
   if (ui_ != nullptr) {
     ui_->shutdown();
   }
-  // own task 不停：v1 常驻任务没有退役路径（见 framework.h 文件头），
-  // 宿主由 exit_process(_Exit) 兜底回收。
+  // own task 不做终止（issue 15）：入口已返回的槽位本来由 step 的回收段归还，
+  // 但 shutdown 之后不再 step，所以它们会一直占着槽位 —— 进程退出时随 .bss 一起没；
+  // 仍在跑的任务同样只随进程退出（宿主由 exit_process(_Exit) 兜底，见 framework.h 文件头）。
 }
 
 }  // namespace embark

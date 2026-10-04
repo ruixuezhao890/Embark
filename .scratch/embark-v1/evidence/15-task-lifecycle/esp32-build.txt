@@ -1,0 +1,47 @@
+# 真机目标构建（issue 15 收尾复验）
+
+目的：issue 15 改到了 `platform/esp32/**`（`esp32_task_spawner.h` 从固定二维槽换成
+`PooledTaskSpawner<Esp32TaskKernel>`）、`platform/common/pooled_task_spawner.h`（新文件）、
+`include/embark/task_spawner.h`（`release_task`）、`config/embark_limits.h`（栈深口径注释）、
+`src/embark/framework.cpp` / `include/embark/framework.h`（运行期创建 + 每帧回收）、
+`app/demo_apps.{h,cpp}`（JobApp），所以宿主全绿之外，ESP32-S3 目标也必须重新编一遍。
+
+## 环境
+
+- IDF：`E:\00_Software\03_Dev_Env\IDF`（v5.4），target = esp32s3
+- 工具链：`E:\00_Software\03_Dev_Env\Espressif\tools\tools\xtensa-esp-elf\esp-14.2.0_20241119`
+- 构建目录：`build-esp32`（与宿主 `build/` 并列，互不干扰）
+
+## 命令
+
+宿主环境没有 IDF 的 shell 导出（`export.ps1` 要 `IDF_TOOLS_PATH` + 与 venv 匹配的
+python），所以直接驱动已经配置好的构建目录：
+
+```powershell
+$env:IDF_PATH='E:\00_Software\03_Dev_Env\IDF'
+$env:IDF_TOOLS_PATH='E:\00_Software\03_Dev_Env\Espressif\tools'
+# ccache 与 xtensa gcc 的目录要上 PATH（否则 ninja 报 CreateProcess failed）
+$env:PATH='E:\00_Software\03_Dev_Env\Espressif\tools\tools\ccache\4.10.2\ccache-4.10.2-windows-x86_64;E:\00_Software\03_Dev_Env\Espressif\tools\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin;' + $env:PATH
+& 'E:\00_Software\03_Dev_Env\Cmake\bin\cmake.exe' --build build-esp32
+```
+
+## 结果（EXIT=0）
+
+```
+[207/213] Linking C static library esp-idf\embark\libembark.a
+[208/213] Linking C static library esp-idf\main\libmain.a
+[210/213] Linking CXX executable embark_esp32.elf
+[211/213] Generating binary image from built executable
+Successfully created esp32s3 image.
+embark_esp32.bin binary size 0xbe9f0 bytes. Smallest app partition is 0x300000 bytes. 0x241610 bytes (75%) free.
+```
+
+重编范围核对（时间戳 = 22:43，在 clang-format 收尾 22:42 之后，即编的就是最终源码）：
+
+- `build-esp32/esp-idf/embark/CMakeFiles/embark.dir/**` 下 `framework.cpp.obj`、`demo_apps.cpp.obj`
+  等 10 个对象在 22:43:36-38 重新编译（`static_pool.cpp.obj` 未变，因为源文件未改）。
+- `build-esp32/esp-idf/main/CMakeFiles/main.dir/main.cpp.obj` 22:43:38（含 `Esp32TaskSpawner` 实例化）。
+- `embark_esp32.bin` 22:43:53，780784 字节。
+
+我们自己的代码（`src/`、`app/`、`platform/common/`、`platform/esp32/src/`）零警告；
+全部 warning 都来自 LVGL 上游 `lv_obj_style.h` 的 `-Wdeprecated-enum-enum-conversion`，与本次改动无关。

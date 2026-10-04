@@ -24,7 +24,10 @@ settings 全挂起、ticker 用自己的任务发消息）、零堆审计（issu
 检查，`.github/workflows/ci.yml`）、**ESP32-S3 真机后端**（issue 11：ST7789 + CST328 的
 七种能力实现、静态池 LVGL 堆、共享的 `platform/common` 端口层、IDF 5.4 真构建）、
 **整对象日志**（issue 13：`Error` 等枚举/结构体在声明处登记 `E_FMT_DERIVE`，
-撤掉手写 `to_string`，启动日志直接打印 HAL 信息、App 后台配置与跨任务信封）。
+撤掉手写 `to_string`，启动日志直接打印 HAL 信息、App 后台配置与跨任务信封）、
+**运行期任务生命周期**（issue 15：own_task 走平台无关的 `PooledTaskSpawner<Kernel>` ——
+静态池分槽 + `xTaskCreateStatic*`，任务入口返回 = 结束，框架每帧回收槽位，`spawn_own_task()`
+可在运行期再创建；失败点仍是唯一且确定的 `no_space`）。
 宿主 UI 演示里切换前台、输入焦点随之切换、后台 tick 计数与跨 App 消息都可观测。
 **还没做**：真机上的界面观感确认（issue 11 的验收项 ③⑤：屏幕方向/颜色、触摸方向/触点）
 ——需要板子到手；另有 RTC 对时（`epoch_ms` 目前 `unsupported`）与 SD 卡总线。
@@ -77,6 +80,7 @@ ctest --test-dir build --output-on-failure
 | `SettingsApp` | `Suspend` | 前台才有行为的典型设置页；「Level +1」发 `BrightnessMessage` 经总线广播，clock 收到后更新亮度标签 |
 | `TickerApp` | `OwnTask`（50 ms） | 自己的任务每拍发一条 `CrossTaskMessage`，UI 任务收到后经总线回派给 App 自己，不丢不乱序 |
 | `HelloApp` | `Suspend` | 最简 App 模板（只显示一行字）——「加一个 App」的起点，见 [docs/README.md](docs/README.md) |
+| `JobApp` | `OwnTask`（`period_ms = 0`） | 一次性任务：入口跑一轮就返回，槽位被框架回收后可再创建。只挂在系统用例 `embark_host_tour` 的注册表里（宿主演示与真机固件仍是上面那 4 个 App） |
 
 命令行开关：
 
@@ -120,16 +124,20 @@ ctest --test-dir build --output-on-failure
 ./build/platform/host/embark_host_tour     # Windows: .\build\platform\host\embark_host_tour.exe
 ```
 
-它在真平台后端上（同一个 UI 任务、真 LVGL、真输入、真 FreeRTOS 任务）按 9 步走完
+它在真平台后端上（同一个 UI 任务、真 LVGL、真输入、真 FreeRTOS 任务）按 10 步走完
 **进程入口 → HAL → 框架 boot → 后台节拍 → 合成点击切到 settings → 亮度消息回到后台的 clock
-→ 再切回 clock（onResume）→ own_task 回流 → 关窗收尾**，每一步都用中文解说发生了什么
-（前台是谁、钩子跑了几次、消息第几帧到达），最后打一张 8 项自检清单：全部通过退出码 0，
+→ 再切回 clock（onResume）→ own_task 回流 → 一次性任务跑完并回收（再创建一次）→ 关窗收尾**，
+每一步都用中文解说发生了什么
+（前台是谁、钩子跑了几次、消息第几帧到达、池里还剩几个槽），最后打一张 10 项自检清单：全部通过退出码 0，
 任一项不满足退出码 2（日志里 `[失败]` 会说出期望值与实测值）。开关只有
 `--scale / --delay / --frames / --screenshot / --help`（`--help` 有清单）。
 
 同一条流程还有**无窗口版本**（纯假后端，适合放在 CI 或想读断言的时候）：
 doctest 用例 `系统用例：从启动到任务切换走一遍（跟着日志读）`，源码在
 `tests/kernel/test_system_tour.cpp`，在 CLion 里单跑那一条即可从上往下读日志。
+任务生命周期那一步的对应用例是 `系统用例：own task 创建 → 跑完 → 回收 → 再创建（跟着日志读）`
+（`tests/kernel/test_own_task_lifecycle.cpp`）；池本身（槽满 `no_space`、归还后可复用、失败回滚）
+的契约用例在 `tests/kernel/test_pooled_task_spawner.cpp`。
 
 ## ESP32-S3 构建
 

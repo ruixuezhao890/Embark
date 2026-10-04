@@ -13,6 +13,11 @@
  *   - TickerApp（后台策略 = own_task）：自己的 FreeRTOS 任务每 50 ms 发一条
  *       CrossTaskMessage 回 UI —— 证明"后台长活不阻塞 UI"与"消息经收件箱回 UI"
  *       （issue 07 的机制，原样迁移）。
+ *   - JobApp（后台策略 = own_task，period_ms = 0）：一次性任务 —— 入口跑一轮
+ *       onBackgroundTick 就返回；平台记 finished 并 park，框架在 step 的回收段归还槽位，
+ *       于是"创建 → 跑完 → 回收 → 再创建"能反复走（issue 15 的任务生命周期）。
+ *       它只挂在系统用例（platform/host/ui_tour.cpp）的注册表里：宿主演示 ui_demo 与
+ *       真机固件仍是原来的那 4 个 App（Clock / Settings / Ticker / Hello）。
  *
  * 界面的构建/装载纪律与 issue 06 一致：屏幕自己建（onCreate）、自己装
  * （onEnter/onResume），切换只经 fw.request_switch() 请求，框架在循环边界执行。
@@ -175,6 +180,40 @@ class TickerApp final : public App {
   Framework* fw_ = nullptr;
   std::uint32_t sent_ = 0;
   std::uint32_t received_ = 0;
+};
+
+/// 示例 App 4：一次性后台任务（issue 15 的任务生命周期演示）。
+///
+/// 与 TickerApp 的唯一区别是 period_ms = 0：入口跑一轮 onBackgroundTick 就返回。
+/// "入口返回 = 任务结束"—— 平台 trampoline 记 finished 并 park，框架在 step 的回收段
+/// 归还槽位，所以同一个槽可以被反复创建 / 跑完 / 回收。系统用例（ui_tour）拿它演示
+/// 完整一轮：boot 时按策略创建一次，运行期再显式创建一次。
+///
+/// 观测线程纪律与 TickerApp 相同：runs_ 只被 own task 写，UI 任务读它是观测性读取
+/// （v1 接受，见 docs/common-pitfalls.md 的"跨任务观测"一条）。
+class JobApp final : public App {
+ public:
+  JobApp() noexcept = default;
+
+  [[nodiscard]] const char* name() const override { return "job"; }
+
+  [[nodiscard]] AppSettings settings() const override {
+    // own_task + period_ms = 0 = 跑完即结束的短命任务（栈 256 字，优先级 4）。
+    return AppSettings{BackgroundPolicy::own_task, 0U, 256U, 4U};
+  }
+
+  void onCreate(Framework& fw) override;
+  void onEnter() override;
+  void onPause() override;
+  void onResume() override;
+  void onBackgroundTick(std::uint32_t now_ms) override;
+  void onExit() override;
+
+  // --- 验收观测 --------------------------------------------------------------
+  [[nodiscard]] std::uint32_t runs() const noexcept { return runs_; }  // own task 线程
+
+ private:
+  std::uint32_t runs_ = 0;
 };
 
 }  // namespace embark::demo

@@ -72,8 +72,10 @@ struct BrightnessMessage : public embark::MessageT<0x21> {  // 有基类！
   （`platform/host/ui_demo.cpp:222-234`，"显示"一条、"整屏区域"一条）。
   拆完发现少了半行、或者某条日志凭空不见，先量长度。
 - 这块缓冲是 `log_at` 里的局部数组 `char record[384 + 1]`（`elog.hpp:203`）：
-  每打一行，调用者栈上就占 385 字节。`own_task` 的栈只有
-  `own_task_stack_words`（默认 256 字 = 1 KB），两边要一起算。
+  每打一行，调用者栈上就占 385 字节。`own_task` 的栈只有 `own_task_stack_words`
+  （默认 512 字，`config/embark_limits.h`），两边要一起算 —— 注意"字"是 `StackType_t` 字：
+  宿主 1 字 = 8 字节（512 字 = 4 KB），真机 xtensa 1 字 = 1 字节（512 字 = 512 字节），
+  同一个常量在两种口径下差 8 倍。
 - 想调大就改 `ELOG_MAX_RECORD_SIZE`（`config/embark_config.h` 里登记了这件事），
   但栈成本同步上涨。
 

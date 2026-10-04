@@ -47,11 +47,21 @@ HAL 是"芯片能力"的抽象（spec §8）：七个纯虚接口 + 一个引用
   "退出请求"来源改成注入的函数指针 `ExitQuery` + 上下文：宿主传"关窗查询"，
   真机传 `nullptr`（永远为假）。
 - `static_pool.{h,cpp}`：定容静态池（16 字节粒度、地址序双向链表、首次适配、
-  相邻块合并）——真机拿它当 LVGL 堆的 arena。
+  相邻块合并）。两个用户：真机拿它当 LVGL 堆的 arena，以及 `pooled_task_spawner.h`
+  拿它当 own task 的槽位池。
+- `pooled_task_spawner.h`：`ITaskSpawner` 的平台无关实现 `PooledTaskSpawner<Kernel>` ——
+  `.bss` 里一块 `alignas(16)` 的 arena 按 `max_own_tasks` 个槽切给 Kernel，管槽位状态机
+  （free / running / finished）、世代号、以及"入口返回 → 标 finished → 持有者回收"的回收协议。
+  **不含任何 FreeRTOS 类型**：`StaticTask_t` / `StackType_t` 全留在各平台 Kernel 里，靠 CRTP 挂钩。
+  Kernel 要提供的契约（新平台照这个清单实现即可）：`slot_bytes()`、`header_of()`、
+  `make_task()`（`xTaskCreate*Static`）、`is_parked()`（任务真的停稳了吗）、`delete_task()`、
+  `suspend_self()`（入口返回后永久挂起）。宿主侧另加 `Kernel::KernelEntry`（`void (*)(void*)`，
+  注意 FreeRTOS 的 `TaskFunction_t` 不带 `noexcept`）。
 - 平台相关的两块在 `platform/host/` 与 `platform/esp32/` 各写一份：
   `ui_task.{h,cpp}` + `freertos/`（唯一 UI 任务的静态创建——TCB/栈在 BSS、
   `configSUPPORT_STATIC_ALLOCATION`、FreeRTOSConfig 与钩子）、
-  `own_task_spawner.h` / `esp32_task_spawner.h`（`ITaskSpawner` 的两种实现）。
+  `own_task_spawner.h` / `esp32_task_spawner.h`（只写上面那份 Kernel 契约 + 各自的任务类型定义，
+  `using HostTaskSpawner = PooledTaskSpawner<HostTaskKernel>` / `Esp32TaskSpawner` 是最终实现）。
 
 ## 真机后端骨架（ESP32-S3，issue 11 已落地）
 
