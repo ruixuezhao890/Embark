@@ -105,3 +105,47 @@ _Avoid_: 手写 to_string、逐字段拼日志
 **Error text（错误码文本）**：
 给只吃 `const char*` 的出口（`fprintf`、`embark::fatal`）用的助手：`char text[24]; embark::error_text(text, error);`，内部就是派生打印，输出带全名（`embark::Error::not_found`）。
 _Avoid_: to_string(Error)
+
+**Launcher app（启动器 App）**：
+注册表首位的管理型 App：把全部 App 以扇形半环列出，点击启动、拖动/滚轮换位；它是主屏，也是 `request_home()` 的唯一目标。
+_Avoid_: 桌面、主菜单、App 列表页
+
+**request_home（回主屏请求）**：
+`request_switch(registry[0])` 的语义别名：从任何 App 切回注册表首位（即启动器）。注册顺序即主屏归属，首位不可被运行期改变。
+_Avoid_: 返回首页、退出到桌面
+
+**Unified back navigation（框架统一返回）**：
+非主屏 App 在前台时，框架在其导航壳里渲染返回键，点击等效 `request_home()`；App 自己不画返回按钮（SettingsApp 里硬编码的 "Back to clock" 将移除）。
+_Avoid_: 各 App 自绘返回、导航堆栈
+
+**Nav chrome（导航壳）**：
+框架级叠加层（`lv_layer_top`）：承载状态行与统一返回键，跨 `lv_scr_load` 持久存在；App 对壳的存在无感知，契约不变。
+_Avoid_: 页面框架、装饰层
+
+**Status bar（状态行）**：
+导航壳顶部的信息条：左侧时间（宿主墙钟；真机 RTC 未接时显示占位），右侧当前前台 App 的后台策略名（`悬` / `tick:100ms` / `own:50ms`）；不渲染节拍计数。
+_Avoid_: 顶部栏、通知栏
+
+**App metadata（App 元数据）**：
+注册表条目的编译期附加信息：中文标题、图标（LV_SYMBOL 码点，可选）、主题色（可选）；随 `EMBARK_APP_TABLE` 展开为零堆 constexpr 表。
+_Avoid_: 运行时描述符、注册文件
+
+**Design tokens（设计令牌）**：
+命名化视觉常量（底色/面板/文字/强调色、圆角、间距、线宽），手写 LVGL 的唯一取色来源；框架壳与启动器共用，风格为深色科技风。
+_Avoid_: 魔法颜色、主题对象
+
+**Static subset font（静态子集字库）**：
+lv_font_conv 生成、编译进 flash 的 C 数组字库，只收录 UI 实际用到的字符（启动器与框架壳文本全走它）；覆盖范围由清单文件声明、构建期审计。
+_Avoid_: 全量字库、外挂字体文件
+
+**IFileSystem（文件服务）**：
+框架级字节流接口（open/read/seek/close）；宿主后端读可执行文件旁目录（与持久化同模式），真机 SD 后端待后续 issue（需先加 HAL 面，当前 `spi_transfer` 如实返回 `unsupported`）。
+_Avoid_: 文件系统、SD 驱动
+
+**Font ledger（字库记账）**：
+运行时字库的显式资源管理：字节预算 + 引用计数，包装 `lv_font_load` 与 `lv_font_free`，独立于 LVGL 全局堆预算；超预算返回 `no_space`。真机侧后续映射到 PSRAM 显式分配。
+_Avoid_: 字体缓存、字库池
+
+**Coverage audit（缺字审计）**：
+构建期检查：扫描源码中的 UI 字符串，对照静态子集字库的覆盖清单，发现字库外字符即失败（CI 门禁），从源头防豆腐块。
+_Avoid_: 运行时缺字检查、字体检测
