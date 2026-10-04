@@ -28,7 +28,7 @@ spec §13 的 CI：三个 job，push 即验。
 
 ## Answer
 
-commit `把这里替换为第一个提交的 hash`：
+commit `864e46e`：
 
 - `.github/workflows/ci.yml` 三个 job：
   - `host-build-test`：ubuntu-latest，checkout（submodules: recursive）→ apt 装 ninja-build/libsdl2-dev → `cmake -G Ninja -B build` → `cmake --build build` → `ctest --test-dir build --output-on-failure`。
