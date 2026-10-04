@@ -18,10 +18,13 @@ LVGL 8.3.11 已接入（宿主可跑出窗口、点击有响应、关窗干净�
 **已完成**：App 内核（App 契约 + 编译期注册表 + 唯一 UI 任务 + 前后台切换，宿主 FreeRTOS
 V10.6.2 静态接入、零动态分配）、消息派发与后台节拍（Bus / MessageQueue / callback_timer，
 issue 07）、三种后台策略的演示 App（issue 08：clock 用 `etl::state_chart` + 后台 tick、
-settings 全挂起、ticker 用自己的任务发消息）。宿主 UI 演示里切换前台、输入焦点随之切换、
-后台 tick 计数与跨 App 消息都可观测。**还没做**：ESP32-S3 后端（issue 11，等你给板型与
-触摸型号）与后续工单 —— 按 `.scratch/embark-v1/issues/` 里的工单继续。规格书见
-`.scratch/embark-v1/spec.md`。
+settings 全挂起、ticker 用自己的任务发消息）、零堆审计（issue 09：全局 new/delete 钩子 +
+内核稳态路径断言 0 次，73 用例 / 495 断言全绿）、CI 三个 job（issue 10：宿主构建测试 /
+ESP32 构建 / clang-format 检查，`.github/workflows/ci.yml`）。宿主 UI 演示里切换前台、
+输入焦点随之切换、后台 tick 计数与跨 App 消息都可观测。
+**还没做**：ESP32-S3 后端（issue 11，等你给板型与触摸型号）——按
+`.scratch/embark-v1/issues/` 里的工单继续。规格书见 `.scratch/embark-v1/spec.md`，
+新手路径见 [docs/README.md](docs/README.md)。
 
 ## 宿主构建
 
@@ -60,13 +63,14 @@ ctest --test-dir build --output-on-failure
 
 窗口是 320×240 的 LVGL 界面按 `--scale`（默认 2）放大显示。运行在唯一 UI 任务里
 （FreeRTOS 静态任务，5 ms 一跳）：UI 端口 → 输入泵 → 循环边界的前台切换 → 消息/后台节拍 →
-`lv_timer_handler()`。三个演示 App 都在 `app/`（named 空间 `embark::demo`，不含任何平台头）：
+`lv_timer_handler()`。四个演示 App 都在 `app/`（named 空间 `embark::demo`，不含任何平台头）：
 
 | App | 后台策略 | 演示点 |
 | --- | --- | --- |
 | `ClockApp` | `Tick`（100 ms） | 内部用 `etl::state_chart` 表达亮/灭状态机；后台节拍驱动状态转移并刷新界面 |
 | `SettingsApp` | `Suspend` | 前台才有行为的典型设置页；「Level +1」发 `BrightnessMessage` 经总线广播，clock 收到后更新亮度标签 |
 | `TickerApp` | `OwnTask`（50 ms） | 自己的任务每拍发一条 `CrossTaskMessage`，UI 任务收到后经总线回派给 App 自己，不丢不乱序 |
+| `HelloApp` | `Suspend` | 最简 App 模板（只显示一行字）——「加一个 App」的起点，见 [docs/README.md](docs/README.md) |
 
 命令行开关：
 
@@ -101,6 +105,35 @@ ctest --test-dir build --output-on-failure
 ./build/platform/host/embark_host_ui --frames 150 --own-task
 ```
 
+## ESP32-S3 构建
+
+`platform/esp32/` 目前是占位（构建即报错：该后端随 issue 11 落地，等你提供
+板型与触摸控制器型号）。落地后的命令（ESP-IDF 5.4 组件形式接入）：
+
+```sh
+idf.py set-target esp32s3   # 在 platform/esp32/ 下执行
+idf.py build                # 只编不烧（CI 的 esp32 job 同款，issue 11 后转必需）
+```
+
+在真机后端就绪前，所有功能都在宿主上开发与验收——同一份 App 代码，换后端
+不动 `app/` 与 `include/embark/`（spec §14.5 验收项，见
+[docs/hal-backend-guide.md](docs/hal-backend-guide.md)）。
+
+## 怎么加一个 App
+
+App 是 `embark::App` 的子类，注册进**编译期静态注册表**即可，不需要改框架
+（后台策略、生命周期钩子的完整说明见 [docs/messages-and-background.md](docs/messages-and-background.md)）：
+
+1. 在 `app/` 新建 `hello_app.h` / `hello_app.cpp`（类 HelloApp；七个钩子，
+   `name()` 返回唯一名字）；
+2. `app/CMakeLists.txt`：`embark_demo_apps` 源列表加 `hello_app.cpp`；
+3. `platform/host/ui_demo.cpp`：`EMBARK_APP_TABLE(...)` 里加
+   `embark::demo::HelloApp`（放最前 = 默认前台）；
+4. `cmake --build build` 重新构建，运行 demo 即可看到它。
+
+完整可复制的五步清单（含代码）在 [docs/README.md](docs/README.md) 的
+「改起来」最短路径。
+
 ## 目录
 
 | 路径 | 放什么 |
@@ -109,12 +142,12 @@ ctest --test-dir build --output-on-failure
 | `src/` | 内核实现（Framework、日志、错误等） |
 | `platform/host/` | 宿主后端（SDL2 显示/输入、LVGL 端口、宿主文件存储、FreeRTOS 配置与 UI 任务、演示 UI 入口） |
 | `platform/esp32/` | ESP32-S3 后端（以 ESP-IDF 组件形式接入） |
-| `app/` | 自带示例 App（clock/settings/ticker，三种后台策略各一；不含平台头） |
+| `app/` | 自带示例 App（clock/settings/ticker 三种后台策略各一 + hello 最简模板；不含平台头） |
 | `tests/` | 宿主单元测试（doctest）：`tests/hal/` 按能力分文件，`tests/fakes/` 是 HAL 假后端，`tests/detail/` 是内部工具，`tests/kernel/` 是 App 注册表与 Framework 契约测试 |
 | `config/` | 编译期宏、`lv_conf.h` 与固定容量上限（单一事实来源） |
 | `cmake/` | 构建辅助（`middleware/` 视图生成、SDL2 探测与运行时拷贝、FreeRTOS 内核目标） |
 | `third_party/` | 依赖（submodule） |
-| `docs/` | 文档（完整文档见 issue 12；ADR 在 `docs/adr/`） |
+| `docs/` | 文档：新手最短路径与索引在 [docs/README.md](docs/README.md)，HAL 后端 / 消息与后台策略 / 常见坑各一篇，ADR 在 `docs/adr/` |
 | `.scratch/` | 规格书与 issue 追踪（随仓库提交） |
 
 ## 许可

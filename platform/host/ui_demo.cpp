@@ -37,6 +37,7 @@
 #include <embark_limits.h>
 
 #include "demo_apps.h"
+#include "hello_app.h"
 #include "host_context.h"
 #include "host_display.h"
 #include "host_input.h"
@@ -184,9 +185,11 @@ bool save_screenshot(embark::platform::host::HostDisplay& display, const char* p
 namespace embark::platform::host {
 
 // 整个可执行文件只出现一次的 App 注册表：ClockApp 是默认前台，SettingsApp 待命，
-// TickerApp 是纯后台（own_task 策略，issue 07 的消息回 UI 演示）。
+// TickerApp 是纯后台（own_task 策略，issue 07 的消息回 UI 演示），HelloApp 是
+// 最简模板（issue 12 的新手最短路径，挂在末位不参与验收断言）。
 // demo App 本体在 app/（issues/08 起宿主侧不再自带）。
-EMBARK_APP_TABLE(embark::demo::ClockApp, embark::demo::SettingsApp, embark::demo::TickerApp)
+EMBARK_APP_TABLE(embark::demo::ClockApp, embark::demo::SettingsApp, embark::demo::TickerApp,
+                 embark::demo::HelloApp)
 
 }  // namespace embark::platform::host
 

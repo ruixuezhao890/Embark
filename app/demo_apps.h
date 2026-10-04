@@ -16,7 +16,8 @@
  *
  * 界面的构建/装载纪律与 issue 06 一致：屏幕自己建（onCreate）、自己装
  * （onEnter/onResume），切换只经 fw.request_switch() 请求，框架在循环边界执行。
- * 界面文案是英文（LVGL 内置字体只有 Montserrat，无中文字形，issue 12 配字体）。
+ * 界面文案是英文（LVGL 内置字体只有 Montserrat，无中文字形；v1 不配 CJK 字体，
+ * 中文显示留到后续版本，见 docs/common-pitfalls.md）。
  *
  * 换后端不动本目录：这里只依赖 embark 公开头、LVGL 与 ETL（middleware），
  * 没有任何 platform/ 后端头（spec §14.5 验收项）。

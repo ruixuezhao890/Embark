@@ -22,7 +22,7 @@ target_include_directories(embark_apps INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 embark_find_sdl2(EMBARK_APP_SDL2_FOUND)
 
 if(EMBARK_APP_SDL2_FOUND)
-  add_library(embark_demo_apps STATIC demo_apps.cpp)
+  add_library(embark_demo_apps STATIC demo_apps.cpp hello_app.cpp)
   add_library(embark::demo_apps ALIAS embark_demo_apps)
 
   # PUBLIC：demo_apps.h 公开 include <embark/app.h> 与 <lvgl.h>，使用方需要
