@@ -27,7 +27,7 @@ spec §14.6 的文档验收：新人照着做就能跑起来、加一个 App。
 
 ## Answer
 
-commit `把这里替换为第一个提交的 hash`（文档主体）+ 补号提交：
+commit `2b1d8ab`（文档主体）+ 补号提交：
 
 - 根 `README.md`：状态段补 issue 09/10；**ESP32-S3 构建**小节（当前占位说明 +
   issue 11 落地后的 `idf.py set-target esp32s3` / `idf.py build` 命令）；**怎么加一个
