@@ -88,7 +88,7 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
   `E_FMT_FIELDS(from_app, seq);`（`include/embark/message.h` 的
   `CrossTaskMessage` 是例子）。
 - 用法就是整对象填空：`ELOG_INFO("HAL 就绪：显示 {}", display_info);`，
-  输出是带类型的 Rust Debug 风格：`embark::hal::Rect { x = 0, y = 0, width = 320, height = 240 }`。
+  输出是带类型的 Rust Debug 风格：`embark::hal::Rect { x = 0, y = 0, width = 240, height = 320 }`。
 - **1 字节整型成员会被当成字符打**（上游 efmt 的已知问题，已登记）：派生输出里
   `std::uint8_t` / `std::int8_t` / `unsigned char` 成员走字符通道，值为 0 时写出
   NUL，会把整行日志**截断**。所以框架里会进日志的字段一律 2 字节起：`AppId`、

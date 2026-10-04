@@ -23,10 +23,11 @@ TEST_CASE("IDisplay：init 后 flush 记下区域与字节数") {
   CHECK(display.is_ready());
 
   const embark::hal::DisplayInfo info = display.info();
-  CHECK(info.width == 320U);
-  CHECK(info.height == 240U);
+  // 尺寸断言跟着唯一的编译期常量走（config/embark_limits.h）：改面板分辨率不用改测试。
+  CHECK(info.width == embark::display_width);
+  CHECK(info.height == embark::display_height);
   CHECK(info.format == embark::hal::PixelFormat::rgb565);
-  CHECK(info.stride_bytes == 640U);
+  CHECK(info.stride_bytes == embark::display_stride_bytes);
   CHECK(embark::hal::bits_per_pixel(info.format) == 16U);
 
   const embark::hal::Rect area{4, 6, 2, 2};

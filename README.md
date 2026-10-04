@@ -65,7 +65,8 @@ ctest --test-dir build --output-on-failure
 ./build/platform/host/embark_host_ui          # Windows: .\build\platform\host\embark_host_ui.exe
 ```
 
-窗口默认就是 320×240：面板像素与屏幕像素 1:1，不缩放、不取样，所以画面不糊
+窗口默认就是 240×320（竖屏，与 ST7789 面板原生方向一致）：面板像素与屏幕像素 1:1，
+不缩放、不取样，所以画面不糊
 （`--scale N`，N ≥ 2 时是整数倍最近邻放大，同样不模糊）。运行在唯一 UI 任务里
 （FreeRTOS 静态任务，5 ms 一跳）：UI 端口 → 输入泵 → 循环边界的前台切换 → 消息/后台节拍 →
 `lv_timer_handler()`。四个演示 App 都在 `app/`（named 空间 `embark::demo`，不含任何平台头）：
@@ -82,12 +83,12 @@ ctest --test-dir build --output-on-failure
 | 开关 | 作用 |
 | --- | --- |
 | `--frames N` | 跑满 N 帧就退出（默认 0 = 一直跑到关窗） |
-| `--click [X,Y]` | 第 20 帧合成一次点击（默认点按钮中心 160,170；走 SDL 真事件队列）；settings 没被切进前台则退出码 2 |
+| `--click [X,Y]` | 第 20 帧合成一次点击（默认点按钮中心 120,220；走 SDL 真事件队列）；settings 没被切进前台则退出码 2 |
 | `--switch` | 合成两次点击验证前台切换（第 30/32 帧点「Level +1」发亮度消息，第 50/52 帧点「Back to clock」切回）；钩子序或切换次数不对则退出码 2 |
 | `--own-task` | 验证 own_task 后台 App：TickerApp 发出的每条消息都必须被 UI 任务收到（不丢不乱序）；发送或收到为 0 则退出码 2 |
 | `--screenshot FILE` | 最后一帧存成 BMP |
 | `--quit-at N` | 第 N 帧合成关窗事件（等价于点窗口 ×，用来验收"干净退出"） |
-| `--scale S` / `--delay MS` | 窗口放大倍数（默认 1 = 320×240 1:1，不糊）/ 每帧让出的毫秒数（默认 5） |
+| `--scale S` / `--delay MS` | 窗口放大倍数（默认 1 = 240×320 1:1，不糊）/ 每帧让出的毫秒数（默认 5） |
 | `--help` | 用法 |
 
 最短的自动验收（退出码 0 + 日志里 `clock 进入前台`）：
@@ -159,7 +160,7 @@ App 是 `embark::App` 的子类，注册进**编译期静态注册表**即可，
 ```cpp
 ELOG_INFO("HAL 就绪：显示 {}", display_info);
 // [info] [ui_demo.cpp:232 ui_main] HAL 就绪：显示 embark::hal::DisplayInfo
-//   { width = 320, height = 240, format = embark::hal::PixelFormat::rgb565, stride_bytes = 640 }
+//   { width = 240, height = 320, format = embark::hal::PixelFormat::rgb565, stride_bytes = 480 }
 ```
 
 两条硬规矩（细节与出处见 [docs/common-pitfalls.md](docs/common-pitfalls.md)）：

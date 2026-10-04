@@ -84,9 +84,9 @@ void ClockApp::onCreate(Framework& fw) {
   make_centered_label(screen_, "Embark demo", lv_color_hex(0xf0f4f8), 20);
   make_centered_label(screen_, "clock app (tick + state_chart)", lv_color_hex(0x8a97a8), 50);
 
-  state_label_ = make_centered_label(screen_, "Ticks: 0", lv_color_hex(0x6cd4ff), 85);
+  state_label_ = make_centered_label(screen_, "Ticks: 0", lv_color_hex(0x6cd4ff), 100);
   refresh_state_label();
-  brightness_label_ = make_centered_label(screen_, "Brightness: 0", lv_color_hex(0x54d97e), 110);
+  brightness_label_ = make_centered_label(screen_, "Brightness: 0", lv_color_hex(0x54d97e), 130);
 
   lv_obj_t* settings_btn = make_button(screen_, "Settings", demo_button_x, demo_button_y);
   lv_obj_add_event_cb(settings_btn, &ClockApp::on_settings_button, LV_EVENT_CLICKED, this);
@@ -180,7 +180,7 @@ void SettingsApp::onCreate(Framework& fw) {
   make_centered_label(screen_, "Settings", lv_color_hex(0xf0f4f8), 20);
   make_centered_label(screen_, "suspend: foreground only", lv_color_hex(0x8a97a8), 50);
 
-  brightness_label_ = make_centered_label(screen_, "Brightness: 0", lv_color_hex(0x6cd4ff), 85);
+  brightness_label_ = make_centered_label(screen_, "Brightness: 0", lv_color_hex(0x6cd4ff), 100);
   refresh_brightness_label();
 
   lv_obj_t* level_btn = make_button(screen_, "Level +1", demo_button_x, demo_button_y);

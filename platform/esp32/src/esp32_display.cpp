@@ -167,7 +167,8 @@ Error Esp32Display::init() noexcept {
     return vendor_result;
   }
 
-  // 方向：厂商 LVGL 驱动的 ROT_90 配方（swap_xy + mirror(true,true)）。
+  // 方向：厂商 LVGL 驱动的 ROT_NONE 配方（swap_xy(false) + mirror(true,false)）——
+  // 面板原生就是竖屏 240×320，框架直接用它，不做旋转。
   // 注意顺序 —— 这几个 API 都会重写 MADCTL，必须放在 init() 之后。
   error = esp_lcd_panel_swap_xy(panel_, lcd_swap_xy);
   if (error != ESP_OK) {
@@ -201,7 +202,7 @@ Error Esp32Display::init() noexcept {
     (void)set_backlight(backlight_default_percent);
   }
 
-  ELOG_INFO("ST7789 就绪：{}×{} 横屏，SPI {} MHz，BGR={}，像素小端={}，反色={}",
+  ELOG_INFO("ST7789 就绪：{}×{} 竖屏，SPI {} MHz，BGR={}，像素小端={}，反色={}",
             static_cast<unsigned>(embark::display_width),
             static_cast<unsigned>(embark::display_height),
             static_cast<unsigned>(lcd_pixel_clock_hz / 1000000U), lcd_rgb_element_order_bgr ? 1 : 0,

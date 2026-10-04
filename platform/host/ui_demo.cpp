@@ -14,7 +14,7 @@
  *   --switch          合成两次点击验证前台切换：帧 30/32 点 settings 的 "Level +1"（亮度消息
  *                     广播给 clock），帧 50/52 点 "Back to clock"（同一中心，两个前台 App 各中一个按钮）
  *   --screenshot FILE 最后一帧把窗口内容存成 BMP（用 Python/Pillow 转 PNG 便于查看）
- *   --scale S         窗口放大倍数（默认 1 = 320×240 与面板像素 1:1，画面不糊）
+ *   --scale S         窗口放大倍数（默认 1 = 240×320 与面板像素 1:1，画面不糊）
  *   --delay MS        每帧间隔（默认 5）
  *   --quit-at N       第 N 帧推一个关窗事件（验收「关窗干净退出」用）
  *   --help            打印用法
@@ -51,16 +51,16 @@ namespace {
 
 // 合成点击的帧号：先移动+按下，隔两帧再抬起 ——
 // 让 LVGL 分两个读周期处理，点一下就是完整的一次"按下 → 抬起"。
-constexpr int click_move_frame = 20;  // 点 clock 屏的 "Settings"（中心 160,170）
+constexpr int click_move_frame = 20;  // 点 clock 屏的 "Settings"（中心 120,220）
 constexpr int click_release_frame = click_move_frame + 2;
 constexpr int switch_move_frame = 30;  // 点 settings 屏的 "Level +1"（同一坐标，焦点已换）
 constexpr int switch_release_frame = switch_move_frame + 2;
-constexpr int back_move_frame = 50;  // "Back to clock"（settings 屏，下排按钮 160,215）
+constexpr int back_move_frame = 50;  // "Back to clock"（settings 屏，下排按钮 120,265）
 constexpr int back_release_frame = back_move_frame + 2;
 
 struct Options {
   int frames = 0;
-  int scale = 1;  ///< 默认 1:1（窗口就是 320×240）；N ≥ 2 是整数倍最近邻放大
+  int scale = 1;  ///< 默认 1:1（窗口就是 240×320）；N ≥ 2 是整数倍最近邻放大
   int delay_ms = 5;
   const char* screenshot = nullptr;
   bool click = false;
@@ -80,7 +80,7 @@ void print_usage() {
       "  --own-task         验证 own_task 后台 App（TickerApp 的消息要被 UI 收到）\n"
       "  --quit-at N        第 N 帧推一个关窗事件（验收「关窗干净退出」用）\n"
       "  --screenshot FILE  最后一帧存 BMP 截图\n"
-      "  --scale S          窗口放大倍数（默认 1 = 320×240 1:1；N ≥ 2 为整数倍最近邻放大）\n"
+      "  --scale S          窗口放大倍数（默认 1 = 240×320 1:1；N ≥ 2 为整数倍最近邻放大）\n"
       "  --delay MS         每帧间隔毫秒（默认 5）\n"
       "  --help             显示本帮助\n",
       embark::demo::demo_click_center_x, embark::demo::demo_click_center_y);
@@ -274,7 +274,7 @@ void ui_main(void* argument) noexcept {
 
     if (options->switch_mode) {
       if (frames_run == switch_move_frame) {
-        // settings 屏的 "Level +1"（与 clock 屏 "Settings" 同一中心 (160,170)，证明焦点已换）。
+        // settings 屏的 "Level +1"（与 clock 屏 "Settings" 同一中心 (120,220)，证明焦点已换）。
         ELOG_INFO("合成点击：切换按钮 ({},{})", embark::demo::demo_click_center_x,
                   embark::demo::demo_click_center_y);
         push_motion_and_press(options->scale, embark::demo::demo_click_center_x,
@@ -351,7 +351,7 @@ void ui_main(void* argument) noexcept {
   }
   if (exit_code == 0 && options->switch_mode) {
     // 切换验收：clock→settings→clock 恰好 2 次；onEnter 只在第一次，切回走 onResume；
-    // 帧 30/32 的合成点击落在 (160,170)：与 --click 叠加时焦点已在 settings，点中的是
+    // 帧 30/32 的合成点击落在 (120,220)：与 --click 叠加时焦点已在 settings，点中的是
     // "Level +1"（App 间消息要真被 clock 收到）；单独 --switch 时焦点还在 clock，点中的是
     // "Settings" 按钮本身——此时不应有任何亮度消息（brightness 必须 0）；
     // clock 后台节拍必须要跑过（spec §14.1：后台 tick 可观测）。

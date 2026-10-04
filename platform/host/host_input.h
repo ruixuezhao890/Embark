@@ -3,8 +3,8 @@
  *
  * 鼠标 → move/press/release，键盘 → press/release（key = SDL scancode 的低字节），
  * 时间戳走 HAL 时间轴（hal::ITime::now_ms）。坐标用
- * SDL_RenderWindowToLogical() 从窗口像素换算到 320×240 的逻辑坐标 —— 窗口被放大、
- * 甚至被改成非 4:3 时都不用在这里操心换算规则（那正是 setLogicalSize 的作用）。
+ * SDL_RenderWindowToLogical() 从窗口像素换算到 240×320 的逻辑坐标 —— 窗口被放大、
+ * 甚至被改成其它比例时都不用在这里操心换算规则（那正是 setLogicalSize 的作用）。
  *
  * 为什么"退出"也在这里：SDL 只有一个事件队列，泵事件的职责在 poll()。窗口关闭
  * （SDL_QUIT 或点窗口 X）不是输入事件，但它是队列里的事件，捎带记下来最省事 ——

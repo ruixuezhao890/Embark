@@ -9,7 +9,7 @@ App、LVGL 端口代码（`platform/common/`），差别只在后端实现与任
 | 项目 | 值 |
 | --- | --- |
 | 模组 | ESP32-S3R8：16 MB flash（W25Q128JVSI）+ 8 MB 八线（OPI）PSRAM |
-| 屏幕 | ST7789，原生 240×320 竖屏 → 框架按 **320×240 横屏** 使用（ROT_90） |
+| 屏幕 | ST7789，原生 240×320 竖屏 → 框架按 **240×320 竖屏** 使用（不旋转，ROT_NONE），与宿主模拟窗口同向 |
 | 触摸 | CST328，I2C 地址 `0x1A`，直连 `i2c_master`（不走 `esp_lcd_touch`） |
 | LCD SPI | `SPI3_HOST`，80 MHz，MOSI 45 / SCLK 40 / CS 42 / DC 41 / RST 39 |
 | 背光 | LEDC 13 位 / 5 kHz / GPIO 5（duty = `percent × 8191 / 100`） |
@@ -88,12 +88,12 @@ cmake -S . -B build -DEMBARK_BUILD_ESP32=ON   # 出现 embark_esp32_hint / embar
 
 ## 5. 实机 bring-up 清单（上板前无法验证的项，全在这里）
 
-1. **屏幕方向**：`lcd_swap_xy` / `lcd_mirror_x` / `lcd_mirror_y`（默认 `true/true/true` = 厂商 ROT_90 配方，
-   即 320×240 横屏）。整屏旋转 90° 或镜像了，只翻这三个开关。
+1. **屏幕方向**：`lcd_swap_xy` / `lcd_mirror_x` / `lcd_mirror_y`（默认 `false/true/false` = 厂商 ROT_NONE 配方，
+   即 240×320 竖屏，与面板原生方向一致）。整屏旋转 90° 或镜像了，只翻这三个开关。
 2. **颜色**：红蓝互换 → 翻 `lcd_rgb_element_order_bgr`；画面"发花/像 16 位错位" → 第一个怀疑
    `lcd_data_little_endian`（厂商初始化 `0xB0=0xE8` 的 bit3 要求小端）；像底片 → 翻 `lcd_invert_color`。
-3. **触摸方向**：启动日志会打 CST328 自报的 `RES_X / RES_Y`（例：`CST328 就绪：地址 0x1A，自报分辨率 X=320 / Y=240`）。
-   它自报的轴就是面板原始轴；方向不对动 `touch_swap_xy` / `touch_mirror_x` / `touch_mirror_y`。
+3. **触摸方向**：启动日志会打 CST328 自报的 `RES_X / RES_Y`（例：`CST328 就绪：地址 0x1A，自报分辨率 X=240 / Y=320`）。
+   面板是竖屏，所以 x 是短轴（0..239）、y 是长轴（0..319）；方向不对动 `touch_swap_xy` / `touch_mirror_x` / `touch_mirror_y`。
 4. **触摸复位时序**：`touch_reset_low_ms = 20` / `touch_reset_high_ms = 120`（先低后高，厂商口径）。
 5. **背光**：`backlight_pwm_hz = 5000` / `backlight_pwm_bits = 13` / `backlight_default_percent = 70`。
 6. **FreeRTOS 计时**：`CONFIG_FREERTOS_HZ=1000` 是硬要求（默认 100 Hz 下 `pdMS_TO_TICKS(5) == 0`，
@@ -121,9 +121,9 @@ cmake -S . -B build -DEMBARK_BUILD_ESP32=ON   # 出现 embark_esp32_hint / embar
 ## 8. 串口能看到什么
 
 ```
-I (312) embark: Embark 0.1.0 启动（平台 esp32）：显示 320×240，NVS 容量 2048 字节；UI 任务栈 2048 字，周期 5 ms
-I (418) embark: CST328 就绪：地址 0x1A，自报分辨率 X=320 / Y=240（屏幕 320x240；方向不对先看这几个数）
-I (512) embark: ST7789 就绪：320×240 横屏，SPI 80 MHz，BGR=1，像素小端=1，反色=1
+I (312) embark: Embark 0.1.0 启动（平台 esp32）：显示 240×320，NVS 容量 2048 字节；UI 任务栈 2048 字，周期 5 ms
+I (418) embark: CST328 就绪：地址 0x1A，自报分辨率 X=240 / Y=320（屏幕 240x320；方向不对先看这几个数）
+I (512) embark: ST7789 就绪：240×320 竖屏，SPI 80 MHz，BGR=1，像素小端=1，反色=1
 I (640) embark: 框架就绪：4 个 App，默认前台 clock；LVGL 8.3.11，绘制缓冲 40 行，LVGL 静态池 49152 字节
 I (10420) embark: 心跳：2000 帧；堆空余 268435456 字节，UI 栈余 6824 字节；LVGL 池未回收 9978 / 峰值 12480 字节；刷新 214 次，触摸按下 3 次
 ```

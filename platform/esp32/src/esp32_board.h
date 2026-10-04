@@ -38,11 +38,12 @@ inline constexpr std::uint16_t lcd_native_height = 320;
 inline constexpr std::uint16_t lcd_offset_x = 0;
 inline constexpr std::uint16_t lcd_offset_y = 0;
 
-// 方向：正式口径是 320×240 横屏（config/embark_limits.h 的 display_width/height）。
-// 组合取自厂商 LVGL 驱动的旋转表（ROT_90 ⇒ swap_xy(true) + mirror(true,true)）。
-inline constexpr bool lcd_swap_xy = true;
+// 方向：正式口径是竖屏 240×320 —— 就是面板的原生方向，所以不做任何旋转
+// （厂商旋转表的 ROT_NONE = swap_xy(false) + mirror(true,false)，与宿主窗口同向）。
+// 实机若整屏转了 90° 或左右/上下镜像了，只翻这三个开关。
+inline constexpr bool lcd_swap_xy = false;
 inline constexpr bool lcd_mirror_x = true;
-inline constexpr bool lcd_mirror_y = true;
+inline constexpr bool lcd_mirror_y = false;
 // 面板需要反色（厂商初始化序列里有 0x21 INVON）—— 不反色的话画面会像底片。
 inline constexpr bool lcd_invert_color = true;
 // 颜色分量顺序：厂商 IDF demo 用 BGR（LCD_RGB_ENDIAN_BGR）⇒ MADCTL 的 BGR 位置 1。
@@ -82,7 +83,9 @@ inline constexpr std::uint16_t touch_point_bytes = 27;  // 0xD000 一次读回�
 // 轮询周期：10 ms（100 Hz）。触摸不需要更快 —— CST328 自己也有内部滤波，
 // 而每次读都是两次 I2C 事务，采样再密只会白占 CPU 与总线。
 inline constexpr std::uint32_t touch_poll_period_ms = 10;
-// CST328 的原始 x 就是长轴（厂商 demo 用 x_max=320 / y_max=240），与横屏坐标天然一致。
+// CST328 原始坐标与面板同向（竖屏）：x 是短轴（0..239）、y 是长轴（0..319）。
+// 实机若 x/y 互换 → 打开 touch_swap_xy；方向反了 → 打开对应的 touch_mirror_*。
+// 启动日志会打印 CST328 自报的 RES_X / RES_Y，先用它判定轴方向再动这几个开关。
 inline constexpr bool touch_swap_xy = false;
 inline constexpr bool touch_mirror_x = false;
 inline constexpr bool touch_mirror_y = false;

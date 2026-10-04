@@ -72,7 +72,7 @@ Error HostDisplay::init() noexcept {
     return Error::io_failure;
   }
 
-  // 逻辑尺寸 = 面板尺寸：渲染时由 SDL 把 320×240 放大到窗口，后端不用自己算。
+  // 逻辑尺寸 = 面板尺寸：渲染时由 SDL 把 240×320 放大到窗口，后端不用自己算。
   if (SDL_RenderSetLogicalSize(renderer_, static_cast<int>(display_width),
                                static_cast<int>(display_height)) != 0) {
     ELOG_ERROR("显示：SDL_RenderSetLogicalSize 失败（{}）", SDL_GetError());

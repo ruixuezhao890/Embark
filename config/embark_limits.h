@@ -31,13 +31,16 @@ inline constexpr std::size_t persistence_max_slots = 32;
 // --- 显示（issues/04、05）----------------------------------------------------
 // 全仓库只认一种像素格式：16 位 RGB565（与 config/lv_conf.h 的 LV_COLOR_DEPTH 一致）。
 // 宿主窗口、LVGL 画布、目标 ST7789 三者都是这个尺寸，中间不做任何格式转换。
-inline constexpr std::size_t display_width = 320;
-inline constexpr std::size_t display_height = 240;
+// 方向：竖屏 240×320 —— 这正是 ST7789 面板的原生方向（真机用 ROT_NONE，不做旋转）。
+// 宿主窗口与真机同向，于是"模拟器里看到的"和"板子上看到的"是同一个布局；
+// 宿主窗口默认 1:1（宿主按面板像素显示，见 platform/host/host_display.h 的 window_scale）。
+inline constexpr std::size_t display_width = 240;
+inline constexpr std::size_t display_height = 320;
 inline constexpr std::size_t display_bytes_per_pixel = 2;
 inline constexpr std::size_t display_stride_bytes = display_width * display_bytes_per_pixel;
 
 // --- LVGL（issue 05）---------------------------------------------------------
-// 绘制缓冲：静态分配，行数 × 一行字节数就是它的占用（40 × 320 × 2 = 25 KB）。
+// 绘制缓冲：静态分配，行数 × 一行字节数就是它的占用（40 × 240 × 2 ≈ 19 KB）。
 // 行数越多一次能刷的带宽越大，越小则越省 SRAM；目标板上按 SRAM 预算调（issue 11）。
 inline constexpr std::size_t lvgl_draw_buf_lines = 40;
 

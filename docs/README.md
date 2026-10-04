@@ -21,11 +21,11 @@ ctest --test-dir build --output-on-failure  # 单元测试（85 用例 / 629 断
 ./build/platform/host/embark_host_ui      # 宿主 UI demo（Windows: .\build\platform\host\embark_host_ui.exe）
 ```
 
-看到 320×240 的 LVGL 窗口（标题 "Embark demo"，默认前台是 clock App）就跑起来了。
+看到 240×320 的 LVGL 窗口（竖屏，标题 "Embark demo"，默认前台是 clock App）就跑起来了。
 关窗退出。想要"跑够帧数自己退"或验证参数，看下一步。
 
 日志是整对象风格（issue 13）：类型自己在声明处登记怎么打，调用点直接填空，
-比如启动时的 `HAL 就绪：显示 embark::hal::DisplayInfo { width = 320, height = 240, ... }`、
+比如启动时的 `HAL 就绪：显示 embark::hal::DisplayInfo { width = 240, height = 320, ... }`、
 每个 App 的 `后台配置 embark::AppSettings { background = ..., period_ms = 100, ... }`。
 加字段不用改日志行；新类型怎么登记见 [common-pitfalls.md](common-pitfalls.md) 的
 "派生打印"一节（含 384 字节单行上限）。

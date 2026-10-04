@@ -35,21 +35,22 @@
 
 namespace embark::demo {
 
-// --- 按钮几何（面板坐标；100×40，无人值守验收的合成点击锚点，ui_demo.cpp 引用）----
-// ClockApp 的 "Settings" 与 SettingsApp 的 "Level +1" 用同一个中心 (160,170)：
+// --- 按钮几何（面板坐标；140×40，无人值守验收的合成点击锚点，ui_demo.cpp 引用）----
+// 竖屏 240×320：按钮水平居中（x = (240-140)/2 = 50），落在下半屏。
+// ClockApp 的 "Settings" 与 SettingsApp 的 "Level +1" 用同一个中心 (120,220)：
 // 同一坐标点落在不同 App 的屏幕上 —— 正好证明"输入焦点真的换了"。
-inline constexpr int demo_button_x = 110;
-inline constexpr int demo_button_y = 150;
-inline constexpr int demo_button_width = 100;
+inline constexpr int demo_button_x = 50;
+inline constexpr int demo_button_y = 200;
+inline constexpr int demo_button_width = 140;
 inline constexpr int demo_button_height = 40;
 
-inline constexpr int demo_click_center_x = demo_button_x + demo_button_width / 2;   // 160
-inline constexpr int demo_click_center_y = demo_button_y + demo_button_height / 2;  // 170
+inline constexpr int demo_click_center_x = demo_button_x + demo_button_width / 2;   // 120
+inline constexpr int demo_click_center_y = demo_button_y + demo_button_height / 2;  // 220
 
 // SettingsApp 的 "Back to clock" 按钮（在 "Level +1" 正下方）。
-inline constexpr int demo_switch_button_y = demo_button_y + demo_button_height + 5;         // 195
-inline constexpr int demo_switch_center_x = demo_click_center_x;                            // 160
-inline constexpr int demo_switch_center_y = demo_switch_button_y + demo_button_height / 2;  // 215
+inline constexpr int demo_switch_button_y = demo_button_y + demo_button_height + 5;         // 245
+inline constexpr int demo_switch_center_x = demo_click_center_x;                            // 120
+inline constexpr int demo_switch_center_y = demo_switch_button_y + demo_button_height / 2;  // 265
 
 /// 示例 App 之间的消息（App 间只走消息，不互相 include —— spec §7 / issue 08 验收）。
 /// id 0x21 是 demo 私有区（框架保留 0xFE 给跨任务信封，勿撞）。

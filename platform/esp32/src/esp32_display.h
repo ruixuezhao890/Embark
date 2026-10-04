@@ -2,9 +2,8 @@
  * Embark ESP32-S3 · 显示后端（issues/11）
  *
  * 面板：240×320 原生竖屏的 ST7789，走 SPI3（80 MHz）。
- * 对外口径：**320×240 横屏 RGB565**（与 config/embark_limits.h 一致），
- * 方向由 MADCTL 的 swap_xy + mirror_x/y 组合实现，取值与厂商 LVGL 驱动的
- * ROT_90 配方一致（swap_xy=true, mirror=(true,true)）。
+ * 对外口径：**竖屏 240×320 RGB565**（与 config/embark_limits.h 一致）——正是面板原生
+ * 方向，所以方向开关取厂商旋转表的 ROT_NONE 配方（swap_xy=false, mirror=(true,false)）。
  *
  * 两个被官方资料钉死的细节（都写在 esp32_board.h 的开关里，改板只动那里）：
  *   - 颜色分量顺序：BGR（厂商 IDF demo 的 `LCD_RGB_ENDIAN_BGR`）；

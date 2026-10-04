@@ -4,6 +4,7 @@
 #pragma once
 
 #include <embark/hal/display.h>
+#include <embark_limits.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -61,7 +62,11 @@ class FakeDisplay final : public hal::IDisplay {
 
   // 旋钮与观测点。
   Error init_error = Error::none;
-  hal::DisplayInfo info_value{320, 240, hal::PixelFormat::rgb565, 640};
+  // 默认面板尺寸直接引用框架的编译期常量：改分辨率只需要动 config/embark_limits.h。
+  hal::DisplayInfo info_value{static_cast<std::uint16_t>(embark::display_width),
+                              static_cast<std::uint16_t>(embark::display_height),
+                              hal::PixelFormat::rgb565,
+                              static_cast<std::uint16_t>(embark::display_stride_bytes)};
   std::size_t init_calls = 0;
   bool ready = false;
   std::size_t flush_count = 0;
