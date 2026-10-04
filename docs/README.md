@@ -17,12 +17,20 @@ Windows（MinGW + Ninja）与 Linux（apt 装 `ninja-build libsdl2-dev`）同一
 git submodule update --init --recursive   # 拉齐 ETL / efmt-elog / LVGL / FreeRTOS / doctest
 cmake -G Ninja -B build                   # 配置（宿主 + 测试；SDL2 找不到只跳过 UI demo）
 cmake --build build                       # 构建（零警告要求）
-ctest --test-dir build --output-on-failure  # 单元测试（85 用例 / 629 断言）
+ctest --test-dir build --output-on-failure  # 单元测试（86 用例 / 666 断言）
 ./build/platform/host/embark_host_ui      # 宿主 UI demo（Windows: .\build\platform\host\embark_host_ui.exe）
+./build/platform/host/embark_host_tour    # 系统用例：从启动看到任务切换（同上 Windows 加 .exe）
 ```
 
 看到 240×320 的 LVGL 窗口（竖屏，标题 "Embark demo"，默认前台是 clock App）就跑起来了。
 关窗退出。想要"跑够帧数自己退"或验证参数，看下一步。
+
+`embark_host_tour` 是"一条用例看完整系统"：不加参数就会自己走完
+**启动 → 后台节拍 → 合成点击切前台 → App 间消息 → 再切回来 → 关窗收尾**，
+边跑边在控制台用中文解说每一步（前台是谁、谁收到了消息、钩子跑了几次），
+最后打一张 8 项自检清单；全部通过退出码 0，任一项不满足退出码 2。
+同一条流程的**无窗口版本**是 doctest 用例 `系统用例：从启动到任务切换走一遍`
+（`tests/kernel/test_system_tour.cpp`），在 CLion 里单跑那一条即可从上往下读日志。
 
 日志是整对象风格（issue 13）：类型自己在声明处登记怎么打，调用点直接填空，
 比如启动时的 `HAL 就绪：显示 embark::hal::DisplayInfo { width = 240, height = 320, ... }`、

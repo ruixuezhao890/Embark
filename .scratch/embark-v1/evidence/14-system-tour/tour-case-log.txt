@@ -1,0 +1,53 @@
+﻿[doctest] doctest version is "2.4.11"
+[doctest] run with "--help" for options
+
+===== 系统用例：启动 → 后台节拍 → 消息 → 前台切换 → 收尾 =====
+
+── ① 假 HAL：七个能力端点就绪（display/input/time/storage/log/system/bus）
+  hal.init() → none
+
+── ② 框架装配：UI 端口 + 两个 App，然后 boot()
+  boot 前：booted = 0，foreground = 65535（invalid_app_id），frames = 0
+  · clock    onCreate
+  · settings onCreate
+  · clock    onEnter
+  boot 后：前台 = clock（默认取注册表第 0 个），两个 App 都已 onCreate
+
+── ③ 后台节拍：clock 是 tick 策略，period_ms = 40（每 8 帧一拍）
+  clock.settings()  = { background = tick, period_ms = 40 }
+  settings 用默认策略（suspend）：退场后不跑节拍，只等消息
+  走了 7 帧：clock 节拍 0 次（还差一拍）
+  · clock    onBackgroundTick(now_ms = 35)  ← 后台节拍
+  第 8 帧：clock 节拍 1 次（周期到期触发），settings 仍是 0 次
+
+── ④ App 间消息：publish 广播给所有 App，post 走收件箱下一帧派发
+  · clock    onMessage(payload = 7)  ← 广播通知
+  · settings onMessage(payload = 7)  ← 广播通知
+  publish 后：clock 收到 1 条、settings 收到 1 条（广播，前台后台都算）
+  post 后（尚未 step）：只进收件箱，帧数还是 8
+  · clock    onMessage(from_app = 1, seq = 42)  ← 跨任务信封
+  · settings onMessage(from_app = 1, seq = 42)  ← 跨任务信封
+  step 后：两个 App 都收到信封（跨任务消息在下一帧派发，内容不丢）
+
+── ⑤ 前台切换：request_switch(settings) 在下一帧的循环边界生效
+  请求已受理：此刻前台仍是 clock（切换不在请求里发生）
+  · clock    onPause
+  · settings onEnter
+  step 后：前台 = settings，累计切换 1 次
+
+── ⑥ 再切回 clock：第二次进前台走 onResume，不再走 onEnter
+  · settings onPause
+  · clock    onResume
+  step 后：前台 = clock（clock.onEnter 仍是 1 次、clock.onResume 1 次）
+
+── ⑦ shutdown()：前台 onPause → 全 App onExit → UI 端口 shutdown
+  · clock    onPause
+  · clock    onExit
+  · settings onExit
+  收尾：帧数 11，UI pump 11 次 / process 11 次，切换 2 次，收件箱溢出 0
+===== 全流程走完：注册 → boot → 节拍 → 消息 → 切换 → 收尾 =====
+
+===============================================================================
+[doctest] test cases:  86 |  86 passed | 0 failed | 0 skipped
+[doctest] assertions: 666 | 666 passed | 0 failed |
+[doctest] Status: SUCCESS!

@@ -111,6 +111,26 @@ ctest --test-dir build --output-on-failure
 ./build/platform/host/embark_host_ui --frames 150 --own-task
 ```
 
+### 一条用例看完整系统：`embark_host_tour`
+
+单元测试是按契约切开的（注册表、boot 顺序、切换、消息、own_task 各一条），要看
+"系统装起来是什么样"，用这个目标 —— **不加参数就完整跑一遍**：
+
+```sh
+./build/platform/host/embark_host_tour     # Windows: .\build\platform\host\embark_host_tour.exe
+```
+
+它在真平台后端上（同一个 UI 任务、真 LVGL、真输入、真 FreeRTOS 任务）按 9 步走完
+**进程入口 → HAL → 框架 boot → 后台节拍 → 合成点击切到 settings → 亮度消息回到后台的 clock
+→ 再切回 clock（onResume）→ own_task 回流 → 关窗收尾**，每一步都用中文解说发生了什么
+（前台是谁、钩子跑了几次、消息第几帧到达），最后打一张 8 项自检清单：全部通过退出码 0，
+任一项不满足退出码 2（日志里 `[失败]` 会说出期望值与实测值）。开关只有
+`--scale / --delay / --frames / --screenshot / --help`（`--help` 有清单）。
+
+同一条流程还有**无窗口版本**（纯假后端，适合放在 CI 或想读断言的时候）：
+doctest 用例 `系统用例：从启动到任务切换走一遍（跟着日志读）`，源码在
+`tests/kernel/test_system_tour.cpp`，在 CLion 里单跑那一条即可从上往下读日志。
+
 ## ESP32-S3 构建
 
 真机后端在 `platform/esp32/`，以 ESP-IDF 5.4 工程的形式接入（同一个仓库、
@@ -182,10 +202,10 @@ ELOG_INFO("HAL 就绪：显示 {}", display_info);
 | --- | --- |
 | `include/embark/` | 框架公开头文件（上层只依赖这里，见 spec §11） |
 | `src/` | 内核实现（Framework、日志、错误等） |
-| `platform/host/` | 宿主后端（SDL2 显示/输入、LVGL 端口、宿主文件存储、FreeRTOS 配置与 UI 任务、演示 UI 入口） |
+| `platform/host/` | 宿主后端（SDL2 显示/输入、LVGL 端口、宿主文件存储、FreeRTOS 配置与 UI 任务、演示 UI 入口 `ui_demo.cpp`、系统用例入口 `ui_tour.cpp`） |
 | `platform/esp32/` | ESP32-S3 后端（以 ESP-IDF 组件形式接入） |
 | `app/` | 自带示例 App（clock/settings/ticker 三种后台策略各一 + hello 最简模板；不含平台头） |
-| `tests/` | 宿主单元测试（doctest）：`tests/hal/` 按能力分文件，`tests/fakes/` 是 HAL 假后端，`tests/detail/` 是内部工具，`tests/kernel/` 是 App 注册表与 Framework 契约测试 |
+| `tests/` | 宿主单元测试（doctest）：`tests/hal/` 按能力分文件，`tests/fakes/` 是 HAL 假后端，`tests/detail/` 是内部工具，`tests/kernel/` 是 App 注册表与 Framework 契约测试（含无窗口的系统用例 `test_system_tour.cpp`） |
 | `config/` | 编译期宏、`lv_conf.h` 与固定容量上限（单一事实来源） |
 | `cmake/` | 构建辅助（`middleware/` 视图生成、SDL2 探测与运行时拷贝、FreeRTOS 内核目标） |
 | `third_party/` | 依赖（submodule） |

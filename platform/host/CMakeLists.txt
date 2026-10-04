@@ -68,6 +68,15 @@ if(EMBARK_HOST_SDL2_FOUND)
   target_link_libraries(embark_host_ui PRIVATE embark::platform_host_ui embark::demo_apps)
 
   embark_copy_sdl2_runtime(embark_host_ui)
+
+  # 系统用例：不加参数就完整走一遍"启动 → 后台节拍 → 前台切换 → App 间消息 →
+  # own_task 消息回流 → 关窗收尾"，每步打一行中文解说，末尾给一张 ✓/✗ 自检清单。
+  # 它不是单元测试（不进 ctest），而是给人从启动看到任务切换的可运行说明。
+  add_executable(embark_host_tour ui_tour.cpp)
+
+  target_link_libraries(embark_host_tour PRIVATE embark::platform_host_ui embark::demo_apps)
+
+  embark_copy_sdl2_runtime(embark_host_tour)
 else()
   message(STATUS "  宿主 UI 目标（embark_host_ui）已跳过：没有 SDL2，显示/输入后端与 LVGL 端口不参与构建。")
 endif()

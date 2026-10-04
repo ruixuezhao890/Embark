@@ -1,0 +1,90 @@
+﻿[info] [host_display.cpp:97 init] 显示：SDL 窗口 240×320，可绘制区 240×320（放大 1×，纹理 RGB565）
+[info] [ui_demo.cpp:232 ui_main] HAL 就绪：显示 embark::hal::DisplayInfo { width = 240, height = 320, format = embark::hal::PixelFormat::rgb565, stride_bytes = 480 }，输入 就绪，持久化 E:\01_Workspace\00_Active_projects\00_code\0_embedded_project\0_esp32_project\simulation_project_development\build\platform\host\embark_host_kv.bin
+[info] [ui_demo.cpp:234 ui_main] 整屏区域 embark::hal::Rect { x = 0, y = 0, width = 240, height = 320 }
+[info] [demo_apps.cpp:78 onCreate] App clock onCreate（后台策略 = tick 100 ms）
+[info] [demo_apps.cpp:145 enter_blinking_on] clock 状态机 -> led on
+[info] [demo_apps.cpp:174 onCreate] App settings onCreate（后台策略 = suspend）
+[info] [demo_apps.cpp:237 onCreate] App ticker onCreate（own_task，周期 50 ms，栈 256 字，优先级 4）
+[info] [hello_app.cpp:17 onCreate] App hello onCreate
+[info] [demo_apps.cpp:100 onEnter] App clock 进入前台（enter 1, resume 0, 累计 1 次）
+[info] [framework.cpp:62 boot] App clock 后台配置 embark::AppSettings { background = embark::BackgroundPolicy::tick, period_ms = 100, task_stack_words = 0, task_priority = 0 }
+[info] [framework.cpp:62 boot] App settings 后台配置 embark::AppSettings { background = embark::BackgroundPolicy::suspend, period_ms = 0, task_stack_words = 0, task_priority = 0 }
+[info] [framework.cpp:62 boot] App ticker 后台配置 embark::AppSettings { background = embark::BackgroundPolicy::own_task, period_ms = 50, task_stack_words = 256, task_priority = 4 }
+[info] [framework.cpp:62 boot] App hello 后台配置 embark::AppSettings { background = embark::BackgroundPolicy::suspend, period_ms = 0, task_stack_words = 0, task_priority = 0 }
+[info] [ui_demo.cpp:248 ui_main] 框架就绪：4 个 App，默认前台 clock；LVGL 8.3.11，绘制缓冲 40 行，LVGL 堆预算 262144 字节
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 1 }（now=403 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 1 }，累计收 1 条
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 2 }（now=468 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 2 }，累计收 2 条
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 3 }（now=529 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 3 }，累计收 3 条
+[info] [demo_apps.cpp:150 enter_blinking_off] clock 状态机 -> led off
+[info] [ui_demo.cpp:268 ui_main] 合成点击：移动 + 按下 (120,220)
+[info] [demo_apps.cpp:167 on_settings_button] 请求切到 SettingsApp：embark::Error::none
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 4 }（now=590 ms）
+[info] [demo_apps.cpp:106 onPause] App clock 离开前台（enter 1, resume 0）
+[info] [demo_apps.cpp:195 onEnter] App settings 进入前台（enter 1, resume 0, 累计 1 次）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 4 }，累计收 4 条
+[info] [ui_demo.cpp:278 ui_main] 合成点击：切换按钮 (120,220)
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 5 }（now=653 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 5 }，累计收 5 条
+[info] [demo_apps.cpp:134 onMessage] clock 收到 BrightnessMessage：亮度档 -> 1
+[info] [demo_apps.cpp:220 on_level_plus] 设置页：亮度档 -> 1（已广播 BrightnessMessage）
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 6 }（now=715 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 6 }，累计收 6 条
+[info] [demo_apps.cpp:145 enter_blinking_on] clock 状态机 -> led on
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 7 }（now=779 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 7 }，累计收 7 条
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 8 }（now=840 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 8 }，累计收 8 条
+[info] [ui_demo.cpp:287 ui_main] 合成点击：返回按钮 (120,265)
+[info] [demo_apps.cpp:226 on_back] 请求切回 ClockApp：embark::Error::none
+[info] [demo_apps.cpp:201 onPause] App settings 离开前台（enter 1, resume 0）
+[info] [demo_apps.cpp:111 onResume] App clock 回到前台（enter 1, resume 1）
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 9 }（now=904 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 9 }，累计收 9 条
+[info] [demo_apps.cpp:150 enter_blinking_off] clock 状态机 -> led off
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 10 }（now=965 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 10 }，累计收 10 条
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 11 }（now=1031 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 11 }，累计收 11 条
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 12 }（now=1091 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 12 }，累计收 12 条
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 13 }（now=1154 ms）
+[info] [demo_apps.cpp:145 enter_blinking_on] clock 状态机 -> led on
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 13 }，累计收 13 条
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 14 }（now=1215 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 14 }，累计收 14 条
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 15 }（now=1279 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 15 }，累计收 15 条
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 16 }（now=1340 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 16 }，累计收 16 条
+[info] [demo_apps.cpp:150 enter_blinking_off] clock 状态机 -> led off
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 17 }（now=1406 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 17 }，累计收 17 条
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 18 }（now=1467 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 18 }，累计收 18 条
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 19 }（now=1528 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 19 }，累计收 19 条
+[info] [demo_apps.cpp:145 enter_blinking_on] clock 状态机 -> led on
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 20 }（now=1592 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 20 }，累计收 20 条
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 21 }（now=1653 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 21 }，累计收 21 条
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 22 }（now=1717 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 22 }，累计收 22 条
+[info] [demo_apps.cpp:150 enter_blinking_off] clock 状态机 -> led off
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 23 }（now=1779 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 23 }，累计收 23 条
+[info] [demo_apps.cpp:257 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 24 }（now=1840 ms）
+[info] [demo_apps.cpp:268 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 24 }，累计收 24 条
+[info] [ui_demo.cpp:312 ui_main] 跑满 150 帧，正常退出
+[info] [ui_demo.cpp:327 ui_main] 统计（显示/前台）：帧 150，刷新 86 次（1582932 字节），Present 86 次，前台 clock（切换 2 次），clock ticks 7/brightness 1，settings enter 1/resume 0
+[info] [ui_demo.cpp:333 ui_main] 统计（后台/消息）：丢输入 0，忽略按键 0，ticker 发送 24 条 / UI 收到 24 条，总线发布 25 条 / 无人接收 0 条，收件箱溢出 0 次，UI 任务栈余量 2045 字
+[info] [ui_demo.cpp:340 ui_main] LVGL 堆：分配 344 次，峰值 13672 字节，退出前未回收 10294 字节（预算 262144）
+[info] [demo_apps.cpp:106 onPause] App clock 离开前台（enter 1, resume 1）
+[info] [demo_apps.cpp:116 onExit] App clock onExit
+[info] [demo_apps.cpp:211 onExit] App settings onExit
+[info] [demo_apps.cpp:272 onExit] App ticker onExit
+[info] [hello_app.cpp:45 onExit] App hello onExit
+[info] [lvgl_ui_port.cpp:59 shutdown] UI 端口收尾：LVGL 未回收 10294 字节（预算 262144）

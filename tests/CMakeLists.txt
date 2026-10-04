@@ -28,6 +28,7 @@ add_executable(embark_tests
         kernel/test_app_registry.cpp
         kernel/test_framework.cpp
         kernel/test_framework_messaging.cpp
+        kernel/test_system_tour.cpp
         kernel/test_bus.cpp
         kernel/test_message_queue.cpp
         kernel/test_format_derive.cpp
