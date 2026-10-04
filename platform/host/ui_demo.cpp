@@ -42,6 +42,7 @@
 #include "host_lvgl_mem.h"
 #include "lvgl_port.h"
 #include "lvgl_ui_port.h"
+#include "own_task_spawner.h"
 #include "ui_task.h"
 
 namespace {
@@ -65,6 +66,7 @@ struct Options {
   int click_y = embark::platform::host::demo_click_center_y;
   int quit_at = 0;  ///< >0 时在第 N 帧推一个 SDL_QUIT（等价于用户点窗口的关闭按钮）
   bool switch_mode = false;
+  bool own_task = false;  ///< 验证 own_task 后台 App：TickerApp 的消息要能被 UI 收到
 };
 
 void print_usage() {
@@ -73,6 +75,7 @@ void print_usage() {
       "  --frames N         跑 N 帧后退出（默认 0：一直跑到关窗）\n"
       "  --click [X,Y]      合成一次鼠标点击（默认点按钮中心 %d,%d）\n"
       "  --switch           合成两次点击验证前台切换（counter→switch→counter）\n"
+      "  --own-task         验证 own_task 后台 App（TickerApp 的消息要被 UI 收到）\n"
       "  --quit-at N        第 N 帧推一个关窗事件（验收「关窗干净退出」用）\n"
       "  --screenshot FILE  最后一帧存 BMP 截图\n"
       "  --scale S          窗口放大倍数（默认 2）\n"
@@ -112,6 +115,8 @@ Options parse_options(int argc, char** argv) {
       }
     } else if (std::strcmp(arg, "--switch") == 0) {
       options.switch_mode = true;
+    } else if (std::strcmp(arg, "--own-task") == 0) {
+      options.own_task = true;
     } else if (std::strcmp(arg, "--help") == 0 || std::strcmp(arg, "-h") == 0) {
       print_usage();
       std::exit(0);
@@ -177,8 +182,9 @@ bool save_screenshot(embark::platform::host::HostDisplay& display, const char* p
 
 namespace embark::platform::host {
 
-// 整个可执行文件只出现一次的 App 注册表：CounterApp 是默认前台，SwitchApp 待命。
-EMBARK_APP_TABLE(CounterApp, SwitchApp)
+// 整个可执行文件只出现一次的 App 注册表：CounterApp 是默认前台，SwitchApp 待命，
+// TickerApp 是纯后台（own_task 策略，issue 07 的消息回 UI 演示）。
+EMBARK_APP_TABLE(CounterApp, SwitchApp, TickerApp)
 
 }  // namespace embark::platform::host
 
@@ -207,7 +213,9 @@ void ui_main(void* argument) noexcept {
             input.is_ready() ? "就绪" : "未就绪", hal.storage_path());
 
   hp::LvglUiPort ui_port(hal.context(), display, input);
-  Framework framework(hal.context(), hp::embark_apps(), &ui_port);
+  // own task 的后台任务槽位（BSS，不占 UI 任务栈）：进程级一个实例。
+  static hp::HostTaskSpawner spawner;
+  Framework framework(hal.context(), hp::embark_apps(), &ui_port, &spawner);
   if (const Error boot_error = framework.boot(); boot_error != Error::none) {
     std::fprintf(stderr, "框架启动失败：%s\n", embark::to_string(boot_error));
     hp::exit_process(1);
@@ -277,13 +285,19 @@ void ui_main(void* argument) noexcept {
 
   const hp::CounterApp& counter = *static_cast<const hp::CounterApp*>(framework.app(0));
   const hp::SwitchApp& switch_app = *static_cast<const hp::SwitchApp*>(framework.app(1));
+  const hp::TickerApp& ticker = *static_cast<const hp::TickerApp*>(framework.app(2));
 
-  ELOG_INFO("统计：帧 {}，刷新 {} 次（{} 字节），Present {} 次，前台 {}（切换 {} 次），点击 {} 次，"
-            "counter 前台 enter {}/resume {}，switch 前台 enter {}/resume {}，丢输入 {}，忽略按键 {}，UI 任务栈余量 {} 字",
+  // 拆两条统计（efmt 的 format 参数上限 16，观测项多）
+  ELOG_INFO("统计（显示/前台）：帧 {}，刷新 {} 次（{} 字节），Present {} 次，前台 {}（切换 {} 次），点击 {} 次，"
+            "counter enter {}/resume {}，switch enter {}/resume {}",
             frames_run, ui_port.port().refreshes(), ui_port.port().flush_bytes(), display.presents(),
             framework.apps().at(framework.foreground())->name(), framework.switches(), counter.clicks(),
-            counter.enters(), counter.resumes(), switch_app.enters(), switch_app.resumes(),
+            counter.enters(), counter.resumes(), switch_app.enters(), switch_app.resumes());
+  ELOG_INFO("统计（后台/消息）：丢输入 {}，忽略按键 {}，ticker 发送 {} 条 / UI 收到 {} 条，"
+            "总线发布 {} 条 / 无人接收 {} 条，收件箱溢出 {} 次，UI 任务栈余量 {} 字",
             ui_port.port().dropped_input_events(), ui_port.port().ignored_key_events(),
+            ticker.sent(), ticker.received(), framework.bus().published(), framework.bus().unknown(),
+            framework.inbox_overflows(),
             static_cast<unsigned long>(uxTaskGetStackHighWaterMark(nullptr)));
   ELOG_INFO("LVGL 堆：分配 {} 次，峰值 {} 字节，退出前未回收 {} 字节（预算 {}）", hp::lvgl_allocations(),
             hp::lvgl_peak_bytes(), hp::lvgl_outstanding_bytes(), embark::lvgl_alloc_budget_bytes);
@@ -303,6 +317,17 @@ void ui_main(void* argument) noexcept {
                    "switch enter %u/resume %u（期望 1/0）\n",
                    framework.switches(), counter.enters(), counter.resumes(), switch_app.enters(),
                    switch_app.resumes());
+      exit_code = 2;
+    }
+  }
+
+  if (exit_code == 0 && options->own_task) {
+    // own_task 验收：TickerApp 的后台任务至少发出一条，且 UI 任务真的收到了。
+    // （sent() 是跨线程观测读取：own task 单写者，v1 接受；received() 在 UI 线程读）
+    if (ticker.sent() == 0 || ticker.received() == 0) {
+      std::fprintf(stderr,
+                   "own_task 验收失败：后台发送 %u 条 / UI 收到 %u 条（期望都 > 0）\n",
+                   ticker.sent(), ticker.received());
       exit_code = 2;
     }
   }

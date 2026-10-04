@@ -56,15 +56,17 @@ ctest --test-dir build --output-on-failure
 ```
 
 窗口是 320×240 的 LVGL 界面按 `--scale`（默认 2）放大显示。运行在唯一 UI 任务里
-（FreeRTOS 静态任务，5 ms 一跳）：UI 端口 → 输入泵 → 循环边界的前台切换 → `lv_timer_handler()`。
-默认前台是 `CounterApp`（计数按钮），`SwitchApp` 是第二个 App —— 按钮互切前台，
-输入焦点跟着 App 走。命令行开关：
+（FreeRTOS 静态任务，5 ms 一跳）：UI 端口 → 输入泵 → 循环边界的前台切换 → 消息/后台节拍 →
+`lv_timer_handler()`。三个演示 App：`CounterApp`（计数按钮）与 `SwitchApp`（互切前台，
+输入焦点跟着 App 走），外加 `TickerApp`——`own_task` 策略的后台 App（周期 50 ms），
+自己的任务每拍发一条 `CrossTaskMessage`，UI 任务收到后经总线回派给 App 自己。命令行开关：
 
 | 开关 | 作用 |
 | --- | --- |
 | `--frames N` | 跑满 N 帧就退出（默认 0 = 一直跑到关窗） |
 | `--click [X,Y]` | 第 20 帧合成一次点击（默认点按钮中心 160,170；走 SDL 真事件队列）；按钮没被触发则退出码 2 |
 | `--switch` | 合成两次点击验证前台切换（第 30/32 帧点"切到 App 2"，第 50/52 帧点"返回 App 1"）；钩子序或切换次数不对则退出码 2 |
+| `--own-task` | 验证 own_task 后台 App：TickerApp 发出的每条消息都必须被 UI 任务收到（不丢不乱序）；发送或收到为 0 则退出码 2 |
 | `--screenshot FILE` | 最后一帧存成 BMP |
 | `--quit-at N` | 第 N 帧合成关窗事件（等价于点窗口 ×，用来验收"干净退出"） |
 | `--scale S` / `--delay MS` | 窗口放大倍数（默认 2）/ 每帧让出的毫秒数（默认 5） |
@@ -81,6 +83,13 @@ ctest --test-dir build --output-on-failure
 
 ```sh
 ./build/platform/host/embark_host_ui --frames 80 --switch
+```
+
+消息与后台任务验收（退出码 0 + 日志里 `ticker 发送 23 条 / UI 收到 23 条`、总线发布与
+收件箱溢出均为 0）：
+
+```sh
+./build/platform/host/embark_host_ui --frames 150 --own-task
 ```
 
 ## 目录

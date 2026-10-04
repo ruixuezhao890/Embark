@@ -24,11 +24,7 @@ namespace embark {
 
 class Framework;
 
-/// App 的编号：注册表下标（0..size-1）。消息投递、request_switch 都用它。
-using AppId = std::uint8_t;
-
-/// 无效 App 编号（find 失败时返回）。
-inline constexpr AppId invalid_app_id = 0xFFU;
+// AppId / invalid_app_id 定义在 <embark/message.h>（消息投递也用它们），见下。
 
 /// 后台策略（spec §5、§6）：每 App 一个配置，App 自己声明自己是哪种后台。
 enum class BackgroundPolicy : std::uint8_t {

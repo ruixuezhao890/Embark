@@ -2,11 +2,12 @@
 #
 # 现在有：版本信息、错误码表、日志装配、App 契约 + 编译期注册表、Framework
 # （装配/唯一 UI 循环/前台切换/退出路径）（issues/04、06）。
-# 消息派发与后台定时器按 issue 07 补。
+# 消息派发与后台定时器已随 issue 07 落地（bus/framework 内部）。
 
 add_library(embark_core STATIC
         embark/error.cpp
         embark/framework.cpp
+        embark/bus.cpp
         embark/log.cpp
         embark/version.cpp)
 

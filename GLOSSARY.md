@@ -22,6 +22,26 @@ _Avoid_: 挂起的任务、休眠任务
 每个 App 的自有设置，决定它退到后台之后的行为：挂起、按周期跑轻量逻辑，或拥有自己的任务。
 _Avoid_: 优先级、调度策略
 
+**Background tick（后台节拍）**：
+`BackgroundPolicy::tick` 策略的落地方式：框架在 UI 任务里用 `etl::callback_timer` 按 per-App 周期调用 `onBackgroundTick(now_ms)`；周期以 UI 循环周期（宿主 5 ms）为粒度向上取整，`period_ms == 0` 就是不跑。
+_Avoid_: 软件定时器、任务轮询
+
+**Bus（消息总线）**：
+`embark::Bus`（基于 `etl::message_bus`）在框架内做同步广播；同一任务内 `Framework::publish()` 直达订阅者，无人订阅的消息丢弃并计数 + WARN。
+_Avoid_: 事件系统、信号槽
+
+**MessageQueue（消息队列）**：
+跨任务单向消息队列（单生产者单消费者）：`etl::circular_buffer` 满时覆盖最旧 + `etl::mutex`；框架用它收 own task 发来的信封消息，在 UI 任务里抽干回派。
+_Avoid_: 邮箱、管道、ring buffer
+
+**Own task（自拥任务）**：
+`BackgroundPolicy::own_task` 逃生舱：框架经 `ITaskSpawner` 接口（不 include FreeRTOS）创建 App 自己的任务，周期跑 `onBackgroundTick`；发往 UI 的消息走 `post(CrossTaskMessage)` 入队，由 UI 任务统一派发。
+_Avoid_: 线程、工作线程、协程
+
+**CrossTaskMessage（跨任务信封）**：
+own task → UI 的唯一消息型：定长（`from_app` + `seq`）、可平凡拷贝；v1 约定跨任务只走这一型，载荷语义由收发双方约定。
+_Avoid_: 自定义消息直传、共享指针
+
 **UI Task（UI 任务）**：
 全局唯一的 FreeRTOS 任务，承载前台 App 的事件循环与全部 UI 渲染；宿主上由 `start_ui_task()` 静态创建（TCB 与栈都在 BSS），5 ms 一跳。
 _Avoid_: 主任务、GUI 线程、主循环

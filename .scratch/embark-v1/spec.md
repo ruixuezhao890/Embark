@@ -133,6 +133,17 @@ public:
 - 待实测（接入时确认，不猜）：`etl::mutex` / `etl::atomic` 的宏开关与后端选择（`ETL_HAS_MUTEX` 按 OS 与编译器分派，`ETL_HAS_ATOMIC` 同）；`message_bus` 同一 message id 挂多个订阅者时的派发顺序。
 - **版本风险（已消）**：原风险是「本机副本 20.40.0 与上游 20.49.0 差约 9 个小版本，而 20.39.4 → 20.40.0 之间发生过破坏性变更（`queue::emplace` 返回值 `void` → `reference`、`message_packet` 的非虚消息支持、`error_handler.h` 新增 `ETL_USE_ASSERT_FUNCTION`）」。20.49.0 已按 §16.3 的 12 条逐条复核（零回归 + `expected` 组合子 + `mutex_freertos.h` 认 ESP-IDF 布局），仓库已切到 20.49.0，本节经此复核定稿；以后再换版本请重跑 §16 复核（`config/embark_config.h` 的 static_assert 会在版本被换掉时直接编译报错）。
 
+**落地实况（issue 07，与上表有偏差的地方以此为准）**：
+
+- **订阅派发**：没有采用 `etl::message_router<TDerived, T1..T16>` 的编译期路由。落地 = 框架（`framework.cpp`）为每个 App 造一个 `AppAdapter : etl::imessage_router`（`is_consumer() == true`、`accepts()` 恒 true），boot 时全部 `subscribe` 到 `embark::Bus`；`receive()` 转调 `App::onMessage(const Message&)`，App 自己在 `onMessage` 里按 `message.get_message_id()` 分发（v1 简化：全部 App 收全部消息，声明式订阅留给后续版本）。理由：路由中继需要额外存储，且 per-App 路由表与「App 是逻辑模块、框架管装配」的架构不合。
+- **总线**：`embark::Bus : etl::message_bus<embark::max_bus_subscribers>`，自带参数 `publish(const etl::imessage&)`：无人订阅（镜像表按 `accepts` 数 == 0）→ 丢弃 + `unknown_` 计数 + 一条 WARN（覆盖 ETL「静默丢弃」的口径）；有订阅者 → 走基类广播。ETL 的 `subscribe` 按 router id 排序插入**且不查重**（重复订阅会重复插），所以 Bus 自持镜像表先查重。
+- **跨任务信封**：own task → UI 单向队列的元素是**定长信封** `CrossTaskMessage`（`cross_task_message_id = 0xFE`，成员 `from_app` + `seq`，可平凡拷贝）。v1 约束：跨任务只走这一个信封类型（载荷语义由收发双方约定，如 TickerApp 用 `seq` 计数）；自定义消息类型只用于同任务内 `Framework::publish`。
+- **队列语义**：`MessageQueue<T, MaxSize, TMutex = etl::mutex>` 用 `etl::circular_buffer`（容量 = MaxSize），满时覆盖**最旧**且 FIFO 相对顺序保持；溢出 = `push` 前 `full()` → 计数 + 一条 WARN。跨任务实例默认带 `etl::mutex`（FreeRTOS 静态信号量）；不动 ETL 的 `queue_spsc_*`（它们的语义是满时丢**新**元素）。
+- **后台节拍**：`etl::callback_timer<max_background_timers>`（宏 `ETL_CALLBACK_TIMER_USE_ATOMIC_LOCK` 已定义于 `config/embark_config.h`）；UI 任务每帧喂 `timers_.tick(1)`，周期以 `ui_loop_period_ms` 为粒度向上取整（`period_ticks = (period_ms + ui_loop_period_ms - 1U) / ui_loop_period_ms`，即周期精度 = UI 循环周期）。**构造后必须先 `timers_.enable(true)` 再 `start()`**（构造默认 `enabled = false`）。`period_ms == 0` 不注册定时器（等价 suspend）。
+- **own task 逃生舱**：框架不 include FreeRTOS —— 任务创建走注入接口 `embark::ITaskSpawner`（`spawn_task(name, entry, argument, stack_words, priority)`，纯虚）；宿主实现 `HostTaskSpawner`（BSS 静态槽：`max_own_tasks` 个 TCB + `own_task_stack_words` 字栈，App 配置栈深超出槽 → `no_space`）。boot 时机：全部 `onCreate` → 默认前台 `onEnter` → spawn own task。任务体 = `while (true) { delay(period_ms); onBackgroundTick(now_ms); }` 永不返回；v1 不做优雅停止（宿主 `_Exit` 兜底，真机停止策略留给 issue 09/11）。
+- **日志串行化**：维持 §7 口径（宿主 `EMBARK_LOG_SERIALIZE=0` 不加锁；真机 issue 11 置 1 走 `etl::mutex`）；中断不打日志（v1 不提供中断日志缓冲）。
+- **其余已实测**：`etl::mutex`（FreeRTOS 分支）构造即 `xSemaphoreCreateMutexStatic`（静态信号量，无需调度器），`take/give` 在单线程测试里走快路径不挂；`message_bus` 同 id 多订阅者按 router id 升序派发（订阅插入即排序）。
+
 ## 8. HAL 接口清单（v1）
 
 | 能力 | 接口要点 | 宿主后端 | 目标后端 |

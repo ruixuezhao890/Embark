@@ -160,4 +160,52 @@ void SwitchApp::on_back(lv_event_t* event) noexcept {
   ELOG_INFO("请求切回 App 1：{}", to_string(err));
 }
 
+// ================================= TickerApp =================================
+
+// 后台 App（own_task 策略）：没有屏幕、不进前台，全程只有钩子与消息。
+// onBackgroundTick 跑在它自己的 FreeRTOS 任务里（非 UI 任务），
+// onMessage 跑在 UI 任务里 —— 线程切换点就是 fw_->post() 的收件箱。
+
+void TickerApp::onCreate(Framework& fw) {
+  fw_ = &fw;
+  ELOG_INFO("App {} onCreate（own_task，周期 {} ms，栈 {} 字，优先级 {}）", name(),
+            settings().period_ms, settings().task_stack_words,
+            static_cast<int>(settings().task_priority));
+}
+
+void TickerApp::onEnter() {
+  ELOG_INFO("App {} 进入前台（不该发生：它是纯后台 App）", name());
+}
+
+void TickerApp::onPause() {
+  ELOG_INFO("App {} 离开前台", name());
+}
+
+void TickerApp::onResume() {
+  ELOG_INFO("App {} 回到前台", name());
+}
+
+void TickerApp::onBackgroundTick(std::uint32_t now_ms) {
+  const std::uint32_t sequence = ++sent_;
+  const AppId self_id = fw_->id_of(*this);
+  ELOG_INFO("ticker 后台任务：发送第 {} 条（from_app={}，now={} ms）", sequence,
+            static_cast<unsigned>(self_id), now_ms);
+  // 跨任务投递：post() 只入收件箱（锁在队列内部），UI 循环在派发段广播。
+  fw_->post(CrossTaskMessage(self_id, sequence));
+}
+
+void TickerApp::onMessage(const Message& msg) {
+  if (msg.get_message_id() != cross_task_message_id) {
+    return;
+  }
+  ++received_;
+  const auto& envelope = static_cast<const CrossTaskMessage&>(msg);
+  ELOG_INFO("UI 收到 ticker 消息：seq {}（from_app={}），累计收 {} 条", envelope.seq,
+            static_cast<unsigned>(envelope.from_app), received_);
+}
+
+void TickerApp::onExit() {
+  ELOG_INFO("App {} onExit", name());
+}
+
 }  // namespace embark::platform::host

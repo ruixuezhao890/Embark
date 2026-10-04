@@ -50,6 +50,17 @@ inline constexpr std::size_t lvgl_alloc_budget_bytes = 256 * 1024;
 // 满了丢最旧并计数（与消息队列同一条纪律：宁可丢输入，不阻塞渲染）。
 inline constexpr std::size_t lvgl_input_queue_depth = 16;
 
+// --- 消息、总线与后台任务（issues/07）-------------------------------------------
+// 总线的订阅者上限（= etl::message_bus 的 MAX_ROUTERS；镜像订阅表同容量）。
+inline constexpr std::size_t max_bus_subscribers = 8;
+
+// own_task 策略的后台任务数上限（每个 App 至多一个任务，槽位静态分配）。
+inline constexpr std::size_t max_own_tasks = 2;
+
+// 后台任务的默认栈深（单位：StackType_t 字；宿主 512 字 = 2 KB）。
+// App 的 settings().task_stack_words 为 0 时用它；真机按 SRAM 预算重排（issue 11）。
+inline constexpr std::size_t own_task_stack_words = 512;
+
 // --- 唯一 UI 任务（issues/06）--------------------------------------------------
 // 全工程只有一个 UI 任务（spec §6，宿主 = FreeRTOS 静态任务，真机同构）。
 // 栈深单位是 StackType_t 字（宿主 4 字节）：2048 字 = 8 KB。留给 LVGL 回调 +

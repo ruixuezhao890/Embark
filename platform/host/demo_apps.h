@@ -1,11 +1,13 @@
 /**
- * Embark 宿主 · 演示 App（issues/06）
+ * Embark 宿主 · 演示 App（issues/06、07）
  *
- * 两个 App 证明 spec §5/§6 的机制：
+ * 三个 App 证明 spec §5/§6/§7 的机制：
  *   - CounterApp（默认前台）：issue 05 的界面（计数 + 点击）+ 一个"切到 App 2"按钮；
- *   - SwitchApp：自己的界面 + "切回 App 1"按钮，同时展示 onEnter/onResume 的计数。
+ *   - SwitchApp：自己的界面 + "切回 App 1"按钮，同时展示 onEnter/onResume 的计数；
+ *   - TickerApp（后台，own_task 策略）：自己的 FreeRTOS 任务按 50 ms 周期发
+ *     CrossTaskMessage 回 UI —— 证明"后台长活不阻塞 UI"与"消息经收件箱回 UI"。
  *
- * 两个 App 都遵守 App 契约：屏幕自己建（onCreate）、自己装（onEnter/onResume），
+ * 三个 App 都遵守 App 契约：屏幕自己建（onCreate）、自己装（onEnter/onResume），
  * 前台切换只通过 fw.request_switch() 请求，框架在循环边界执行 —— 本文件不直接
  * 调任何 LVGL 的屏幕切换 API 之外的框架接口。
  *
@@ -100,6 +102,40 @@ class SwitchApp final : public App {
   lv_obj_t* foregrounds_label_ = nullptr;
   std::uint32_t enters_ = 0;
   std::uint32_t resumes_ = 0;
+};
+
+/// 演示 App 3：后台策略 = own_task 的完整例子（issue 07）。
+/// 自己的 FreeRTOS 任务每 50 ms 发一条 CrossTaskMessage 回 UI —— 同时证明
+/// "own task 的长活不阻塞 UI 任务"和"消息经收件箱回 UI"两条机制。
+/// 观测线程纪律：sent_ 只被 own task 写，received_ 只被 UI 任务写（单写者，
+/// 不需要原子；验收时在 UI 任务里读 sent_ 是观测性读取，v1 接受）。
+class TickerApp final : public App {
+ public:
+  TickerApp() noexcept = default;
+
+  [[nodiscard]] const char* name() const override { return "ticker"; }
+
+  [[nodiscard]] AppSettings settings() const override {
+    // own_task：50 ms 周期；栈 256 字（1 KB）；优先级 4（低于 UI 任务的 5）。
+    return AppSettings{BackgroundPolicy::own_task, 50U, 256U, 4U};
+  }
+
+  void onCreate(Framework& fw) override;
+  void onEnter() override;
+  void onPause() override;
+  void onResume() override;
+  void onBackgroundTick(std::uint32_t now_ms) override;
+  void onMessage(const Message& msg) override;
+  void onExit() override;
+
+  // --- 验收观测 --------------------------------------------------------------
+  [[nodiscard]] std::uint32_t sent() const noexcept { return sent_; }        // own task 线程
+  [[nodiscard]] std::uint32_t received() const noexcept { return received_; }  // UI 任务线程
+
+ private:
+  Framework* fw_ = nullptr;
+  std::uint32_t sent_ = 0;
+  std::uint32_t received_ = 0;
 };
 
 }  // namespace embark::platform::host
