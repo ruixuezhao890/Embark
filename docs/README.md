@@ -154,7 +154,7 @@ cmake --build build
 | [hal-backend-guide.md](hal-backend-guide.md) | 怎么写一个 HAL 后端：宿主骨架（照 platform/host/）、共享层（platform/common/）与真机实现（platform/esp32/，含 IDF 坑清单） |
 | [../platform/esp32/README.md](../platform/esp32/README.md) | ESP32-S3 真机端口：板级参数、构建/烧录命令、bring-up 清单、串口日志样例 |
 | [common-pitfalls.md](common-pitfalls.md) | 常见坑：ETL 定容行为、消息非聚合、保留 id、无异常/无堆、MinGW 对齐分配、日志 384 字节上限、派生打印（E_FMT_DERIVE）、宏前置条件…… |
-| [adr/](adr/) | 架构决策记录：单一 UI 任务（0001）、HAL 能力粒度（0002）、零堆无异常（0003）、后台节拍与状态范式（0004） |
+| [adr/](adr/) | 架构决策记录：单一 UI 任务（0001）、HAL 能力粒度（0002）、零堆无异常（0003）、后台节拍与状态范式（0004）、任务创建静态槽位与池化升级路径（0005） |
 | [agents/](agents/) | 面向 agent 的仓库约定（领域模型、issue 追踪规则） |
 
 交叉参考：内核契约测试在 `tests/kernel/`（发消息、切前台、节拍、own_task

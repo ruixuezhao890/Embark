@@ -180,6 +180,7 @@ public:
 - App 层默认同规则；宿主仿真可用编译开关放开（开关名实现时定）。
 - LVGL：**已按此配置落地（issue 05）**——`config/lv_conf.h` 由本仓库自持（锁 8.3.11，只钉影响内存/尺寸/构图/可观测性的项，其余交给 `lv_conf_internal.h` 的 `#ifndef` 默认）；`LV_MEM_CUSTOM 1` + 我们自己的 `embark_lvgl_alloc/free/realloc`（`platform/host/host_lvgl_mem.cpp`，真机换成静态池实现），**带记账与预算上限**（`config/embark_limits.h` 的 `lvgl_alloc_budget_bytes`，默认 256 KB；超预算或分配失败返回 nullptr，由 `LV_USE_ASSERT_MALLOC` 带分配点行号进 `embark::fatal`）。真机上"UI 对象总量有上限"仍待 issue 11 用实测数字定，宿主侧已有 `lvgl_outstanding_bytes()` / `lvgl_peak_bytes()` 两个观测点。两处硬约束：`lv_conf.h` 的头护栏必须叫 `LV_CONF_H`；`LV_ASSERT_HANDLER` 宏必须自带结尾分号（LVGL 的展开是裸语句）。
 - 每个容器的容量上限必须是**代码里可查的常量**，集中放在 `config/`。
+- **任务创建：静态槽位为默认，运行期增删走固定块池（2026-10-04 记录，ADR 0005）**。现状：所有任务都用 `xTaskCreate*Static`（UI 任务在 `platform/host/ui_task.cpp` / `platform/esp32/src/esp32_ui_task.cpp`，App 的 own_task 走 `ITaskSpawner`，槽位 = `max_own_tasks × own_task_stack_words`）；宿主配 `configSUPPORT_STATIC_ALLOCATION 1` + `configSUPPORT_DYNAMIC_ALLOCATION 0` 且 `heap_4.c` 刻意不参与编译，所以 `pvPortMalloc/vPortFree` 在**符号层面就不存在** —— 零动态分配是结构保证而非纪律。取舍：静态把"内存够不够"从运行期问题挪成链接期问题（账目在 map 文件 / 真机 `check_sizes.py` 里可核对、0 碎片、0 堆锁、唯一失败点是 boot 时的容量不足返回 `Error::no_space`），代价是预留即占用（2 × 512 字 = 4 KB）与栈尺寸一刀切（App 声明的栈深超过 `own_task_stack_words` 直接 `no_space`）。**升级路径已定**：将来需要"运行期创建、完成即回收"时（首个真实用例：WiFi 非阻塞连接 —— 发起连接时创建任务，成功或超时后任务自行结束并归还资源），把 `ITaskSpawner` 的实现换成"固定块池 + 空闲链"（池复用 `platform/common/static_pool.h` 的 `StaticPool`，仍然调 `xTaskCreateStatic`，接口增加 `release_task`，回收必须能确认任务真的已结束）。静态 vs 动态的逐项对比在 `docs/adr/0005-static-task-slots-and-pool.md`，工作项见 `.scratch/embark-v1/issues/15-runtime-task-lifecycle.md`。
 
 ## 11. 目录结构与构建
 
@@ -246,6 +247,7 @@ embark/
 - **真机侧还有两件事必须人工确认**（本机没有板子，issue 11 只能做到"编得过"）：① 烧写后能显示 demo 第一屏（`idf.py -C platform/esp32/project -B build-esp32 flash monitor`）② 触摸/按键能切前台。判定与调法都在 `platform/esp32/README.md` 的 bring-up 清单里：启动日志会打出 CST328 自报的 `RES_X/RES_Y`，据此定轴方向。
 - 宿主 FreeRTOS port 来自 `lvgl_template_laste`：**已在 GCC 15.1 上验证可编可跑（2026-10-04，见 `issues/02`）**，源码清单 / CMake 片段 / `FreeRTOSConfig.h` 必改项都在该 issue 的 `## Answer`，证据与探针源码留档在 `.scratch/embark-v1/spikes/02-host-freertos/`。残留两个小项（不阻塞）：① 该端口 tick 比墙钟慢约 2×（见 §3 / §13）；② vendor 进仓库后是否顺手消掉上游的 2 条严格警告（`queue.c:489`、`port.c:249`）。
 - LVGL 补丁版号：**已定 v8.3.11（2026-10-04，issue 05）**。8.3 线上游已停更，选它是因为它与既有两代工程（8.3.6 / 8.3.x）的 API 一致、且是 8.3 线最后的补丁；`LV_MEM_CUSTOM 1` 下上游**没有 `lv_deinit`**（`lv_obj.h:206-214` 的门是 `LV_ENABLE_GC || !LV_MEM_CUSTOM`），所以进程内 LVGL 只初始化一次、退出时靠 `lvgl_outstanding_bytes()` 观测是否有泄漏。
+- **运行时任务生命周期（创建 / 回收）尚未支持（2026-10-04 记录，不阻塞 v1）**：当前任务集合在编译期定死、own_task 常驻不退役（纪律见 `include/embark/task_spawner.h` 头部），`ITaskSpawner` 没有 `release_task`。用户已明确"未来会出现运行期创建任务的情况，例如 WiFi 非阻塞连接（连接时创建任务、完成后删除任务）"，因此升级路径与验收草案先落成工单：`.scratch/embark-v1/issues/15-runtime-task-lifecycle.md`（设计决定见 `docs/adr/0005-static-task-slots-and-pool.md`）。v1 的实现按现状不动。
 
 ## 16. ETL 可复用组件清单（开工前定稿，避免边写边改）
 
