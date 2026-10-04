@@ -16,6 +16,7 @@
 add_executable(embark_tests
         smoke/main.cpp
         detail/test_allocation_counter.cpp
+        detail/zero_alloc_hooks.cpp
         fakes/fakes.cpp
         hal/test_bus.cpp
         hal/test_display.cpp
@@ -28,7 +29,8 @@ add_executable(embark_tests
         kernel/test_framework.cpp
         kernel/test_framework_messaging.cpp
         kernel/test_bus.cpp
-        kernel/test_message_queue.cpp)
+        kernel/test_message_queue.cpp
+        kernel/test_zero_alloc.cpp)
 
 # 测试内部用 "fakes/fakes.h" 这种从 tests/ 起算的相对包含。
 target_include_directories(embark_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
