@@ -23,6 +23,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <embark_limits.h>
+
 namespace embark::platform::esp32 {
 
 // --- LCD：ST7789（SPI，只写不读）---------------------------------------------
@@ -112,6 +114,16 @@ inline constexpr std::uint8_t own_task_core = 0;
 // 宿主给的是 256 KB（那边是真实 malloc + 计数器），真机只有 SRAM，按实测收窄：
 // 宿主演示跑满一轮的 LVGL 未回收量不到 10 KB，48 KB 对四个 demo App 绰绰有余。
 inline constexpr std::size_t lvgl_pool_bytes = 48U * 1024U;
+
+// 任务栈预算。框架里的 *_stack_words 是按**宿主的字长**调的（x86-64 的 StackType_t = size_t
+// = 8 字节：2048 字 = 16 KB），而真机的 StackType_t 是 uint8_t（1 字 = 1 字节）——
+// 照字面乘过去只剩 1/8：UI 任务只拿到 2 KB，栈指针会掉到栈缓冲**下面**，
+// 先踩掉紧邻的 App 注册表与 efmt 的格式化上下文（.scratch/embark-v1/issues/21 的寄存器现场）。
+// 所以真机按 stack_word_bytes 换算，让每个任务拿到**与宿主相同的字节数**；
+// 要省 SRAM 就只动这一行，改完看心跳里的栈高水位（ui_task_stack_high_water_bytes）再收。
+inline constexpr std::size_t stack_word_bytes = 8U;
+inline constexpr std::size_t ui_task_stack_bytes = embark::ui_task_stack_words * stack_word_bytes;
+inline constexpr std::size_t own_task_stack_bytes = embark::own_task_stack_words * stack_word_bytes;
 
 }  // namespace embark::platform::esp32
 

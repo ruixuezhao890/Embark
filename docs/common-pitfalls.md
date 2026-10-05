@@ -72,10 +72,26 @@ struct BrightnessMessage : public embark::MessageT<0x21> {  // 有基类！
   （`platform/host/ui_demo.cpp:319-330`，"显示与前台"一条、"启动器"一条、"后台/消息"一条）。
   拆完发现少了半行、或者某条日志凭空不见，先量长度。
 - 这块缓冲是 `log_at` 里的局部数组 `char record[384 + 1]`（`elog.hpp:203`）：
-  每打一行，调用者栈上就占 385 字节。`own_task` 的栈只有 `own_task_stack_words`
-  （默认 512 字，`config/embark_limits.h`），两边要一起算 —— 注意"字"是 `StackType_t` 字：
-  宿主 1 字 = 8 字节（512 字 = 4 KB），真机 xtensa 1 字 = 1 字节（512 字 = 512 字节），
-  同一个常量在两种口径下差 8 倍。
+  每打一行，调用者栈上就占 385 字节。但它只是**零头**，大头是下面这条（issue 22 实测）。
+- **efmt 的 `std::ostringstream` 兜底一次吃掉 ~1.9 KB 栈**（issue 22 实测：1936 字节）：
+  efmt 对没有原生格式化器的类型走流式兜底（`efmt/core/format_traits.hpp:343`；
+  `EFMT_ENABLE_HOSTED` 在 ESP-IDF 上默认 1 ⇒ `EFMT_ENABLE_STREAM_FALLBACK = 1`）。
+  现场：`own_task` 请求 256 字（= 2048 字节）的栈，一条打印 `AppId`（`std::uint16_t`，
+  2 字节整型**没有**原生格式化器）的 `ELOG_INFO` 就踩穿栈缓冲底、把自己的 TCB 写坏 ⇒
+  core 0 在 SysTick 的 `xTaskIncrementTick` 里 `LoadProhibited`（回溯与寄存器现场见
+  issue 22）。所以在 `own_task` 或小栈任务里打日志要按这几条办：
+  - 会进日志的字段**别用 `std::uint16_t`**（以及任何无原生格式化器的类型）；
+    优先 `std::uint32_t` / `std::uint64_t` / `int`。`AppId`、`AppSettings` 的成员
+    是被 issue 13 的 1 字节问题坑成 2 字节的，2 字节正好落在流式兜底上 —— 两头都要记。
+  - 要打日志就按 **≥ 3 KB 栈**准备（`task_stack_words >= 384`）：1.9 KB 给这条日志 +
+    调用者自己的帧；4 KB（512 字）是留出余量的低线。
+  - 想彻底堵住：真机关掉 `EFMT_ENABLE_HOSTED`，没有原生格式化器就编译报错，
+    运行期不会再有这条路径（取舍见 issue 22）。
+- 栈预算的单位：框架的 `*_stack_words` 一律按**宿主字长**算（x86-64 1 字 = 8 字节，
+  512 字 = 4 KB），真机在 `platform/esp32/src/esp32_board.h` 里用
+  `stack_word_bytes = 8` 换算成字节再交给 IDF —— 因为 IDF 的 `ulStackDepth` 是**字节**，
+  而 xtensa 的 `StackType_t` 是 `uint8_t`，直接照搬字数只剩 1/8（issue 21 就是这么把
+  16 KB 的 UI 任务变成 2 KB 的）。所以同一个常量在宿主和真机上都是同样的字节数。
 - 想调大就改 `ELOG_MAX_RECORD_SIZE`（`config/embark_config.h` 里登记了这件事），
   但栈成本同步上涨。
 
@@ -131,9 +147,12 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
   拖住空闲任务、触发任务看门狗。后端另有"0 tick 退化成 1 tick"兜底，
   但底子还是 1 kHz。
 - **栈深的单位**：IDF 的 `xTaskCreate*` 收**字节**（`xTaskCreateStaticPinnedToCore`
-  也一样），`uxTaskGetStackHighWaterMark()` 返回**字**。框架的 `*_stack_words`
-  是字，两处换算分别在 `platform/esp32/src/esp32_ui_task.cpp`（创建与水位）与
-  `esp32_system.cpp`（水位）里做掉了。
+  也一样），`uxTaskGetStackHighWaterMark()` 返回**字**（xtensa 上 1 字 = 1 字节，
+  所以数值上等于字节）。框架的 `*_stack_words` 按宿主字长（8 字节）算，唯一的换算点是
+  `platform/esp32/src/esp32_board.h` 的 `stack_word_bytes`：UI 任务走
+  `ui_task_stack_bytes`（`esp32_ui_task.cpp` 直接收字节），`own_task` 的栈数组
+  `Esp32Task::stack[own_task_stack_bytes]` 与 `xTaskCreate` 的深度都从那里取。
+  别在别处再乘一次 `sizeof(StackType_t)` —— issue 21 的原始 bug 就是它等于乘 1。
 - **`uint32_t` 不等于 `unsigned int`**：xtensa GCC 下 `uint32_t` =
   `long unsigned int`，所以 `lv_label_set_text_fmt(label, "%u", ticks)` 这类
   **printf 风格**调用会被 IDF 的 `-Werror=format` 拦下（宿主 MinGW 上两者同类型，

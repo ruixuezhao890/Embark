@@ -23,10 +23,12 @@ namespace embark::platform::esp32 {
 /// UI 任务入口：跑起来就不返回（返回 = UI 任务死了，按 fatal 处理）。
 using UiTaskEntry = void (*)(void* argument) noexcept;
 
-/// 任务参数（默认值 = config/embark_limits.h 的宿主值 + 落核 1）。
+/// 任务参数（默认值 = esp32_board.h 的真机字节预算 + 落核 1）。
+/// 栈深口径是**字节**：真机的 StackType_t 是 uint8_t，IDF 的 ulStackDepth 本来就是字节
+/// （见 esp32_task_spawner.h 文件头第 2 点）—— 照字面搬宿主的字数只剩 1/8（issue 21）。
 struct UiTaskConfig {
   const char* name = "embark-ui";
-  std::uint16_t stack_words = static_cast<std::uint16_t>(embark::ui_task_stack_words);
+  std::uint16_t stack_bytes = static_cast<std::uint16_t>(ui_task_stack_bytes);
   std::uint8_t priority = embark::ui_task_priority;
   std::uint8_t core = ui_task_core;
 };
@@ -35,7 +37,7 @@ struct UiTaskConfig {
  * 创建唯一 UI 任务（静态存储，零堆）。
  *
  * 返回：none = 起来了；busy = 已经建过（唯一 UI 任务已经有主）；
- *       invalid_argument = entry 空 / 名字空 / 栈深为 0 或超过静态槽位上限；
+ *       invalid_argument = entry 空 / 名字空 / 栈深为 0 或超过 ui_task_stack_bytes；
  *       no_space = 内核拒绝（理论不发生，防御）。
  */
 [[nodiscard]] Error start_ui_task(UiTaskEntry entry, void* argument,

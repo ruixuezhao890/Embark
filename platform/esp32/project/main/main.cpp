@@ -103,9 +103,9 @@ extern "C" void app_main(void) {
   }
 
   const embark::hal::DisplayInfo display_info = hal.display().info();
-  ELOG_INFO("Embark {} 启动（平台 {}）：显示 {}，NVS 容量 {} 字节；UI 任务栈 {} 字，周期 {} ms",
+  ELOG_INFO("Embark {} 启动（平台 {}）：显示 {}，NVS 容量 {} 字节；UI 任务栈 {} 字节，周期 {} ms",
             embark::version_string(), embark::platform_name(), display_info,
-            hal.storage().capacity_bytes(), embark::ui_task_stack_words, embark::ui_loop_period_ms);
+            hal.storage().capacity_bytes(), ep::ui_task_stack_bytes, embark::ui_loop_period_ms);
 
   const Error task_error = ep::start_ui_task(&ui_main, nullptr);
   if (task_error != Error::none) {

@@ -230,7 +230,10 @@ void SettingsApp::refresh_brightness_label() noexcept {
 
 void TickerApp::onCreate(Framework& fw) {
   fw_ = &fw;
-  ELOG_INFO("App {} onCreate（own_task，周期 50 ms，栈 256 字，优先级 4）", name());
+  // 数值一律取自 settings()：以前这里硬编码过"栈 256 字"，改成 512 后日志会说谎。
+  const AppSettings configured = settings();
+  ELOG_INFO("App {} onCreate（own_task，周期 {} ms，栈 {} 字，优先级 {}）", name(),
+            configured.period_ms, configured.task_stack_words, configured.task_priority);
 }
 
 void TickerApp::onEnter() {
@@ -250,6 +253,9 @@ void TickerApp::onBackgroundTick(std::uint32_t now_ms) {
   const AppId self_id = fw_->id_of(*this);
   const CrossTaskMessage envelope(self_id, sequence);
   // 整对象打（issue 13）：字段名来自 message.h 里的 E_FMT_FIELDS，加字段不用改这行。
+  // 栈预算警告（issue 22）：这条日志实测要 ~1.9 KB 栈——AppId 是 std::uint16_t，efmt 没有它的
+  // 原生格式化器，走的是 std::ostringstream 兜底。TickerApp::settings() 给的 512 字（4 KB）
+  // 是量出来的最低值，别调小（调小 = 踩穿自己的 TCB，core 0 的 SysTick 里 LoadProhibited）。
   ELOG_INFO("ticker 后台任务：{}（now={} ms）", envelope, now_ms);
   // 跨任务投递：post() 只入收件箱（锁在队列内部），UI 循环在派发段广播。
   fw_->post(envelope);

@@ -13,7 +13,9 @@ namespace {
 
 // 整固件只有一个 UI 任务：槽位就是一个（BSS，零堆）。
 StaticTask_t ui_task_tcb = {};
-StackType_t ui_task_stack[embark::ui_task_stack_words] = {};
+// 栈缓冲按**字节**开：真机的 StackType_t 是 uint8_t，IDF 的 ulStackDepth 也是字节
+// （预算来自 esp32_board.h —— 照搬宿主的字数只有 1/8，issue 21）。
+StackType_t ui_task_stack[ui_task_stack_bytes] = {};
 TaskHandle_t ui_task_handle = nullptr;
 
 // 入口与参数在创建之前存好，蹦床函数再去取（只有一个任务，不需要每槽上下文）。
@@ -37,17 +39,17 @@ Error start_ui_task(UiTaskEntry entry, void* argument, const UiTaskConfig& confi
   if (entry == nullptr || config.name == nullptr) {
     return Error::invalid_argument;
   }
-  if (config.stack_words == 0U || config.stack_words > embark::ui_task_stack_words) {
+  if (config.stack_bytes == 0U || config.stack_bytes > ui_task_stack_bytes) {
     return Error::invalid_argument;  // 静态槽位就这么大，不能要更多
   }
 
   ui_entry = entry;
   ui_argument = argument;
 
-  // ESP-IDF 的栈深单位是**字节**（与 vanilla FreeRTOS 的字不同，见 esp32_task_spawner.h 的说明）。
+  // ESP-IDF 的栈深单位是**字节**（与 vanilla FreeRTOS 的字不同，见 esp32_task_spawner.h 的说明）：
+  // config.stack_bytes 已经是字节，直接交给内核。
   ui_task_handle = xTaskCreateStaticPinnedToCore(
-      &ui_task_trampoline, config.name,
-      static_cast<std::uint32_t>(config.stack_words) * sizeof(StackType_t), nullptr,
+      &ui_task_trampoline, config.name, static_cast<std::uint32_t>(config.stack_bytes), nullptr,
       config.priority, ui_task_stack, &ui_task_tcb, config.core);
   if (ui_task_handle == nullptr) {
     ui_entry = nullptr;

@@ -5,11 +5,13 @@
  * PooledTaskSpawner（platform/common/pooled_task_spawner.h）里。真机与宿主的差别只有三点：
  *   1) 落核：用 xTaskCreateStaticPinnedToCore()，后台任务固定落核 0（UI 落核 1），
  *      一边一个核，互不抢。
- *   2) **栈深口径**：框架的 stack_words 是 StackType_t 字（与宿主一致），而 ESP-IDF 的
- *      xTaskCreate* 收的是**字节** —— IDF 头文件原文："@param ulStackDepth The size of
- *      the task stack specified as the NUMBER OF BYTES. Note that this differs from
- *      vanilla FreeRTOS." 所以这里乘一次 sizeof(StackType_t)（xtensa 上 StackType_t 是
- *      uint8_t，1 字 = 1 字节；宿主 64 位是 size_t，1 字 = 8 字节）。
+ *   2) **栈深口径**：框架的 stack_words 是"栈字"，而 ESP-IDF 的 xTaskCreate* 收的是**字节**
+ *      —— IDF 头文件原文："@param ulStackDepth The size of the task stack specified as the
+ *      NUMBER OF BYTES. Note that this differs from vanilla FreeRTOS."。框架那套字数（含
+ *      config/embark_limits.h 的默认值）是按**宿主的字长**（x86-64 = 8 字节）调的，而真机的
+ *      StackType_t 是 uint8_t —— 乘 sizeof(StackType_t) 等于乘 1，算出来的栈深只有宿主的
+ *      1/8（issue 21 实测：UI 任务 2 KB 栈的栈指针直接掉到缓冲外面）。所以乘 esp32_board.h
+ *      的 stack_word_bytes，让真机拿到与宿主相同的字节预算。
  *   3) 停放判据：SMP 内核里 eTaskGetState() 没有"自己 = eRunning"那条捷径
  *      （IDF tasks.c:2511-2518 把它包在 configNUMBER_OF_CORES == 1 里），所以"是不是
  *      还在某个核上跑"必须显式查 pxCurrentTCBs[own_task_core]。
@@ -34,7 +36,8 @@
  *   没人 resume，两条都成立之后状态**永久稳定**。
  *
  * 容量：arena 在池里（.bss 的 alignas(16) 数组），槽类型 Esp32Task 在这里定义。
- * 一个槽 = 登记项 + StaticTask_t + 栈数组；栈 512 字 = 512 字节（xtensa 的 StackType_t 是 uint8_t）。
+ * 一个槽 = 登记项 + StaticTask_t + 栈数组；栈按 esp32_board.h 的 own_task_stack_bytes 开
+ * （= 框架的 own_task_stack_words 字在宿主机字长下的字节数：512 字 → 4 KB）。
  */
 #ifndef EMBARK_PLATFORM_ESP32_TASK_SPAWNER_H
 #define EMBARK_PLATFORM_ESP32_TASK_SPAWNER_H
@@ -61,7 +64,7 @@ struct Esp32Task final {
   /// 静态 TCB。xTaskCreateStatic*() 会把它整个 memset 成 0 再初始化（IDF tasks.c:1300）。
   StaticTask_t tcb{};
   /// 静态栈。IDF 收字节数，这里按字数组声明（口径见文件头第 2 点）。
-  alignas(16) StackType_t stack[embark::own_task_stack_words]{};
+  alignas(16) StackType_t stack[own_task_stack_bytes]{};
 };
 
 /// 真机的任务内核：ESP-IDF（FreeRTOS SMP）上的"建 / 查停放 / 删 / 自停"。
@@ -92,9 +95,10 @@ struct Esp32TaskKernel final {
     auto* const task = new (storage) Task();
     task->header = record;
 
-    // IDF 的 ulStackDepth 是字节数：乘一次 sizeof(StackType_t) 才是"字"的正确换算。
+    // IDF 的 ulStackDepth 是字节数：框架的字数按宿主字长折算成真机字节数（见 esp32_board.h）。
     TaskHandle_t handle = xTaskCreateStaticPinnedToCore(
-        trampoline, name, static_cast<std::uint32_t>(stack_words) * sizeof(StackType_t), task,
+        trampoline, name,
+        static_cast<std::uint32_t>(stack_words) * static_cast<std::uint32_t>(stack_word_bytes), task,
         priority, task->stack, &task->tcb, embark::platform::esp32::own_task_core);
     if (handle == nullptr) {
       task->~Task();  // 静态创建理论不失败；真失败就把槽还原成未构造的样子

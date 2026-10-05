@@ -22,10 +22,13 @@ set(EMBARK_APP_SOURCES
         "${EMBARK_ROOT}/app/hello_app.cpp")
 
 # --- 宿主与真机共用的胶水：必须与 platform/common/CMakeLists.txt 的列表一致 ---
+# nav_shell.cpp 是 issue 16 新增的框架导航壳（状态行 + 返回键），由 lvgl_ui_port.cpp
+# 引用；漏在这里的后果不是编译错误而是**链接期** undefined reference，见 issue 20。
 set(EMBARK_COMMON_SOURCES
         "${EMBARK_ROOT}/platform/common/static_pool.cpp"
         "${EMBARK_ROOT}/platform/common/lvgl_port.cpp"
-        "${EMBARK_ROOT}/platform/common/lvgl_ui_port.cpp")
+        "${EMBARK_ROOT}/platform/common/lvgl_ui_port.cpp"
+        "${EMBARK_ROOT}/platform/common/nav_shell.cpp")
 
 # --- ESP32 后端（platform/esp32/src/）------------------------------------------
 set(EMBARK_ESP32_SOURCES
@@ -49,11 +52,11 @@ idf_component_register(
              "${EMBARK_ROOT}/include"              # embark/*.h
              "${EMBARK_ROOT}/config"               # embark_config.h / embark_limits.h / lv_conf.h
              "${EMBARK_ROOT}/app"                  # demo_apps.h / hello_app.h
-             "${EMBARK_ROOT}/platform/common"      # lvgl_port.h / lvgl_ui_port.h / static_pool.h
+             "${EMBARK_ROOT}/platform/common"      # lvgl_port.h / lvgl_ui_port.h / nav_shell.h / static_pool.h
              "${EMBARK_ROOT}/platform/esp32/src"   # esp32_*.h
              "${CMAKE_BINARY_DIR}/include"         # middleware 视图（<middleware/etl|efmt|elog/...>）
              "${EMBARK_ROOT}/third_party/etl/include"  # <etl/...>（ETL 是 header-only）
-        REQUIRES lvgl nvs_flash esp_timer esp_lcd driver)
+        REQUIRES lvgl embark_font nvs_flash esp_timer esp_lcd driver)
 
 # 内核与 App 的编译口径（与宿主 embark_kernel_flags 对齐：C++17、无异常、无 RTTI）。
 set_property(TARGET ${COMPONENT_LIB} PROPERTY CXX_STANDARD 17)

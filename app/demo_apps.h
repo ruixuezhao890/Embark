@@ -173,8 +173,10 @@ class TickerApp final : public App {
   // 无图标：启动器取标题首字符"心"兜底（字库已含"心跳"两字）。
 
   [[nodiscard]] AppSettings settings() const override {
-    // own_task：50 ms 周期；栈 256 字（1 KB）；优先级 4（低于 UI 任务的 5）。
-    return AppSettings{BackgroundPolicy::own_task, 50U, 256U, 4U};
+    // own_task：50 ms 周期；栈 512 字 × 8 字节/字 = 4 KB；优先级 4（低于 UI 任务的 5）。
+    // 4 KB 是 bring-up 实测值：一条含 uint16 字段的 ELOG（CrossTaskMessage::from_app）会走
+    // efmt 的 stream 兜底（std::ostringstream），2 KB 栈装不下——真机上实测把 TCB 冲坏。
+    return AppSettings{BackgroundPolicy::own_task, 50U, 512U, 4U};
   }
 
   void onCreate(Framework& fw) override;
