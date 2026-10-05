@@ -1,0 +1,31 @@
+# 21 修好之后的串口抓取节选（embark_serial2.txt 第 55-82 行）：UI 任务已经是 16384 字节，
+# 但 TickerApp 的 own task（256 字 = 2048 字节）仍在第一条 ELOG 上炸掉 —— Core 0、
+# EXCVADDR 0xf09ffaa0，回溯入口 xTaskIncrementTick（映射见同目录 addr2line-mapping.txt）。
+<1B>[34m[info] [esp32_display.cpp:205 init] ST7789 就绪：240×320 竖屏，SPI 80 MHz，BGR=1，像素小端=1，反色=1<1B>[0m
+
+I (992) gpio: GPIO[2]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+
+<1B>[34m[info] [esp32_input.cpp:146 init] CST328 就绪：地址 0x1A，自报分辨率 X=240 / Y=320（屏幕 240×320；方向不对先看这几个数）<1B>[0m
+
+<1B>[34m[info] [main.cpp:106 app_main] Embark 0.1.0 启动（平台 esp32）：显示 embark::hal::DisplayInfo { width = 240, height = 320, format = embark::hal::PixelFormat::rgb565, stride_bytes = 480 }，NVS 容量 2048 字节；UI 任务栈 16384 字节，周期 5 ms<1B>[0m
+
+I (1167) main_task: Returned from app_main()
+
+<1B>[34m[info] [nav_shell.cpp:99 init] 导航壳就绪：状态行高 28，返回键中心 (15, 14)，时间源 1 s 定时器<1B>[0m
+
+<1B>[34m[info] [demo_apps.cpp:81 onCreate] App clock onCreate（后台策略 = tick 100 ms）<1B>[0m
+
+<1B>[34m[info] [demo_apps.cpp:148 enter_blinking_on] clock 状态机 -> led on<1B>[0m
+
+<1B>[34m[info] [demo_apps.cpp:179 onCreate] App settings onCreate（后台策略 = suspend）<1B>[0m
+
+<1B>[34m[info] [demo_apps.cpp:233 onCreate] App ticker onCreate（own_task，周期 50 ms，栈 256 字，优先级 4）<1B>[0m
+
+<1B>[34m[info] [hello_app.cpp:17 onCreate] App hello onCreate<1B>[0m
+
+<1B>[34m[info] [demo_apps.cpp:103 onEnter] App clock 进入前台（enter 1, resume 0, 累计 1 次）<1B>[0m
+
+<1B>[34m[info] [framework.cpp:62 boot] App clock 后台配置 embark::AppSettings { background = embark::BackgroundPolicy::tick, period_ms = 100, task_stack_words = 0, task_priority = 0 }<1B>[0m
+
+<1B>[34m[info] [framework.cpp:62 boot] App settings 后台配置 embark::AppSettings { background = embark::BackgroundPolicy::suspend, period_ms = 0, task_stack_words = 0, task_priority = 0 }<1B>[0m
+

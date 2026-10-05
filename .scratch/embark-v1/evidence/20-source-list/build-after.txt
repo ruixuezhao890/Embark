@@ -1,0 +1,17 @@
+# issue 20 验收：组件源列表补齐后的链接结果（idf.py -C platform/esp32/project -B build-esp32 build）
+[9/11] Linking CXX executable embark_esp32.elf
+[10/11] Generating binary image from built executable
+Successfully created esp32s3 image.
+Generated .../build-esp32/embark_esp32.bin
+embark_esp32.bin binary size 0xc14a0 bytes. Smallest app partition is 0x300000 bytes. 0x23eb60 bytes (75%) free.
+Project build complete.
+BUILD-EXIT=0
+# 唯一告警是上游 LVGL 的枚举位运算：
+# third_party/lvgl/src/core/lv_obj_style.h:94:48: warning: bitwise operation between different
+# enumeration types '<unnamed enum>' and '<unnamed enum>' is deprecated [-Wdeprecated-enum-enum-conversion]
+#
+# 复现这个 issue：删掉 platform/esp32/project/components/embark/CMakeLists.txt 里
+#   ${EMBARK_ROOT}/platform/common/nav_shell.cpp（EMBARK_COMMON_SOURCES 里那一行）
+# 以及 REQUIRES 里的 embark_font，重新 build ⇒ 编译期全绿，在 Linking CXX executable
+# embark_esp32.elf 处报 undefined reference（nav_shell 的符号 / 字库符号没有定义）。
+# 链接能过不代表源列表对：宿主 CI 用的是 platform/common 那份清单，抓不到真机这半边。

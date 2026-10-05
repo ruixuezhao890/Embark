@@ -1,0 +1,50 @@
+# 预修版本的串口抓取节选（COM3 115200，embark_serial.txt 第 1-46 行）
+# 构建：HEAD 8abc70a 的栈口径（stack_words * sizeof(StackType_t) == stack_words 字节）
+# 关键：L20 打印 UI 任务栈 2048 字（真机实际字节数 = 2048），L34 起 Core 1 LoadProhibited，
+#       每次复位后逐字节重复（该文件共 18 次 panic / 16 个启动周期）。
+I (782) efuse_init: Chip rev:         v0.2<0D>
+I (786) heap_init: Initializing. RAM available for dynamic allocation:<0D>
+I (792) heap_init: At 3FCAE258 len 0003B4B8 (237 KiB): RAM<0D>
+I (797) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM<0D>
+I (802) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM<0D>
+I (807) heap_init: At 600FE11C len 00001ECC (7 KiB): RTCRAM<0D>
+I (813) esp_psram: Adding pool of 8192K of PSRAM memory to heap allocator<0D>
+I (820) spi_flash: detected chip: winbond<0D>
+I (823) spi_flash: flash io: dio<0D>
+I (826) sleep_gpio: Configure to isolate all GPIO pins in sleep state<0D>
+I (832) sleep_gpio: Enable automatic switching of GPIO sleep configuration<0D>
+I (839) main_task: Started on CPU0<0D>
+I (842) esp_psram: Reserving pool of 32K of internal memory for DMA/internal allocations<0D>
+I (850) main_task: Calling app_main()<0D>
+I (856) gpio: GPIO[41]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 <0D>
+I (862) gpio: GPIO[39]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 <0D>
+<1B>[34m[info] [esp32_display.cpp:205 init] ST7789 就绪：240<D7>320 竖屏，SPI 80 MHz，BGR=1，像素小端=1，反色=1<1B>[0m<0D>
+I (992) gpio: GPIO[2]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 <0D>
+<1B>[34m[info] [esp32_input.cpp:146 init] CST328 就绪：地址 0x1A，自报分辨率 X=240 / Y=320（屏幕 240<D7>320；方向不对先看这几个数）<1B>[0m<0D>
+<1B>[34m[info] [main.cpp:106 app_main] Embark 0.1.0 启动（平台 esp32）：显示 embark::hal::DisplayInfo { width = 240, height = 320, format = embark::hal::PixelFormat::rgb565, stride_bytes = 480 }，NVS 容量 2048 字节；UI 任务栈 2048 字，周期 5 ms<1B>[0m<0D>
+I (1167) main_task: Returned from app_main()<0D>
+<1B>[34m[info] [nav_shell.cpp:99 init] 导航壳就绪：状态行高 28，返回键中心 (15, 14)，时间源 1 s 定时器<1B>[0m<0D>
+<1B>[34m[info] [demo_apps.cpp:81 onCreate] App clock onCreate（后台策略 = tick 100 ms）<1B>[0m<0D>
+<1B>[34m[info] [demo_apps.cpp:148 enter_blinking_on] clock 状态机 -> led on<1B>[0m<0D>
+<1B>[34m[info] [demo_apps.cpp:179 onCreate] App settings onCreate（后台策略 = suspend）<1B>[0m<0D>
+<1B>[34m[info] [demo_apps.cpp:233 onCreate] App ticker onCreate（own_task，周期 50 ms，栈 256 字，优先级 4）<1B>[0m<0D>
+<1B>[34m[info] [hello_app.cpp:17 onCreate] App hello onCreate<1B>[0m<0D>
+<1B>[34m[info] [demo_apps.cpp:103 onEnter] App clock 进入前台（enter 1, resume 0, 累计 1 次）<1B>[0m<0D>
+<1B>[34m[info] [framework.cpp:62 boot] App clock 后台配置 embark::AppSettings { background = embark::BackgroundPolicy::tick, period_ms = 100, task_stack_words = 0, task_priority = 0 }<1B>[0m<0D>
+<1B>[34m[info] [framework.cpp:62 boot] App  �<0D>
+< 后台配置 embark::AppSettings { background = embark::BackgroundPolicy::92, period_ms = 1070182772, task_stack_words = 24708, task_priority = 15369 }<1B>[0m<0D>
+<1B>[34m[info] [framework.cpp:62 boot] App ticker 后台配置 embark::AppSettings { background = embark::BackgroundPolicy::own_task, period_ms = 50, task_stack_words = 256, task_priority = 4 }<1B>[0m<0D>
+<1B>[34m[info] [framework.cpp:62 boot] App hello 后台配置 embark::AppSettings { background = embark::BackgroundPolicy::suspend, period_ms = 0, task_stack_words = 0, task_priority = 0 }<1B>[0m<0D>
+Guru Meditation Error: Core  1 panic'ed (LoadProhibited). Exception was unhandled.<0D>
+<0D>
+Core  1 register dump:<0D>
+PC      : 0x4205ecb0  PS      : 0x00060230  A0      : 0x8205f700  A1      : 0x3fc9b0a0  <0D>
+A2      : 0x3fc9b1dc  A3      : 0x3c0a1e70  A4      : 0x00000001  A5      : 0x00000020  <0D>
+A6      : 0x3fc9b170  A7      : 0x00000022  A8      : 0xa5a5a5a5  A9      : 0x3fc9b080  <0D>
+A10     : 0x00000020  A11     : 0x00000001  A12     : 0x3fca7b94  A13     : 0x3c096084  <0D>
+A14     : 0x3fc9ada0  A15     : 0x3c0a1bf0  SAR     : 0x00000010  EXCCAUSE: 0x0000001c  <0D>
+EXCVADDR: 0xa5a5a5b1  LBEG    : 0x40056f08  LEND    : 0x40056f12  LCOUNT  : 0x00000000  <0D>
+<0D>
+<0D>
+Backtrace: 0x4205ecad:0x3fc9b0a0 0x4205f6fd:0x3fc9b0c0 0x4205f853:0x3fc9b120 0x4200e825:0x3fc9b160 0x4200d5ed:0x3fc9b1b0 0x4201260d:0x3fc9b800 0x4037da59:0x3fc9b820<0D>
+<0D>

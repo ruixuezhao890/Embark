@@ -1,0 +1,37 @@
+# issue 22 验收：干净启动 20 s（COM3 115200，embark_serial8.log 122637 字节 → 908 行）
+# 镜像：构建 0xc14a0 字节、无 DIAG 探针；App version 8abc70a-dirty，ELF SHA256 426ba3a30…
+#
+TOTAL LINES 908
+DIAG                     ->    0
+Guru                     ->    0
+panic                    ->    0
+abort                    ->    0
+stack overflow           ->    0
+ticker 后台任务            ->  377   first=[45, 47]   last=[904, 907]
+UI 收到 ticker            ->  368   first=[46, 48]   last=[903, 905]
+心跳：                     ->    1   first=[847]
+框架就绪                    ->    1   first=[44]
+App ticker 后台配置         ->    1   first=[42]
+--- banner / boot ---
+   6: I (760) app_init: App version:      8abc70a-dirty
+   8: I (770) app_init: ELF file SHA256:  426ba3a30...
+  31: [main.cpp:106 app_main] Embark 0.1.0 启动（平台 esp32）：显示 embark::hal::DisplayInfo { width = 240, height = 320, format = rgb565, stride_bytes = 480 }，NVS 容量 2048 字节；UI 任务栈 16384 字节，周期 5 ms
+  33: [nav_shell.cpp:99 init] 导航壳就绪：状态行高 28，返回键中心 (15, 14)，时间源 1 s 定时器
+  44: [main.cpp:68 ui_main] 框架就绪：4 个 App，默认前台 clock；LVGL 8.3.11，绘制缓冲 40 行，LVGL 静态池 49120 字节
+--- 前 3 条 tick ---
+  45: [demo_apps.cpp:259 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 1 }（now=534 ms）
+  47: [demo_apps.cpp:259 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 2 }（now=586 ms）
+  49: [demo_apps.cpp:259 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 3 }（now=638 ms）
+--- 心跳 ---
+ 847: [main.cpp:80 ui_main] 心跳：2000 帧；堆空余 267159 字节，UI 栈余 11612 字节；LVGL 池未回收 6802 / 峰值 7263 字节；刷新 848 次，触摸按下 0 次
+--- 末尾 ---
+  [demo_apps.cpp:270 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 367 }，累计收 367 条
+  [demo_apps.cpp:259 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 368 }（now=19707 ms）
+  [demo_apps.cpp:270 onMessage] UI 收到 ticker 消息：embark::CrossTaskMessage { from_app = 2, seq = 368 }，累计收 368 条
+  [demo_apps.cpp:153 enter_blinking_off] clock 状态机 -> led off
+  [demo_apps.cpp:259 onBackgroundTick] ticker 后台任务：embark::CrossTaskMessage { from_app = 2, seq = 369 }（now=19759 ms）
+#
+# 复位方式（这块板子的坑）：USB-JTAG 的 DTR/RTS 序列会把芯片留在 download 模式
+# （rst:0x15 (USB_UART_CHIP_RESET), boot:0x23 (DOWNLOAD(USB/UART0))），应用不会起来；必须
+#   python -m esptool --chip esp32s3 -p COM3 --after watchdog_reset flash_id
+# 之后再抓（日志里是 "Hard resetting with a watchdog..."）。

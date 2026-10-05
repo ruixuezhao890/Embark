@@ -1,0 +1,24 @@
+# issue 22 实测：own task 里一条整对象 ELOG 的栈开销（COM3 115200，探针版本 embark_serial7.txt）
+#
+# 探针：临时在 TickerApp::onBackgroundTick() 里用 uxTaskGetStackHighWaterMark(NULL)（IDF 的
+# xTaskCreate* 收字节，水位在 xtensa 上数值上也等于字节），打印前后各一次。探针已删除
+# （提交前全仓库 grep 零命中），这里是留档数据。
+#
+# 栈 512 字（= 4096 字节，issue 21 的口径）时的原始行：
+DIAG tick 1 pre hwm=3280
+DIAG tick 1 post hwm=1344
+DIAG tick 2 pre hwm=1344
+DIAG tick 2 post hwm=1344
+DIAG tick 3 pre hwm=1344
+DIAG tick 3 post hwm=1344
+#
+# 读法：4096 - 3280 = 816 B 是任务进 onBackgroundTick() 之前的常驻占用；
+# 4096 - 1344 = 2752 B 是这一条 ELOG 的峰值总占用 ⇒ 单条日志 ≈ 1936 B 栈，
+# 与 efmt 的 std::ostringstream 兜底（efmt/core/format_traits.hpp:343）量级一致。
+#
+# 对照：栈 256 字（= 2048 字节）时，同一个任务在第一条 ELOG 上直接 panic（Core 0 LoadProhibited；
+# 回溯见同目录 addr2line-mapping.txt 的 stream_formatter<unsigned short> 帧）—— 那"多出来的"
+# 1344 B 余量正是"2 KB 栈不够"的量化证据。
+#
+# 同一份探针抓取里的计数：ticker 后台任务 277 条 / UI 收到 ticker 276 条 / Guru 0 条
+# （embark_serial7.txt，692 行，约 15 s）。

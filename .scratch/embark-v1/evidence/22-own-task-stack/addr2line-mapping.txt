@@ -1,0 +1,19 @@
+﻿0x4037efe6: xTaskIncrementTick at E:/00_Software/03_Dev_Env/IDF/components/freertos/FreeRTOS-Kernel/tasks.c:3378
+0x4037efe3: xTaskIncrementTick at E:/00_Software/03_Dev_Env/IDF/components/freertos/FreeRTOS-Kernel/tasks.c:3378
+0x8037e2a2: ?? ??:0
+0x4037e29f: xPortSysTickHandler at E:/00_Software/03_Dev_Env/IDF/components/freertos/port_systick.c:224
+0x4037e321: SysTickIsrHandler at E:/00_Software/03_Dev_Env/IDF/components/freertos/port_systick.c:148
+0x403776b5: _xt_lowint1 at E:/00_Software/03_Dev_Env/IDF/components/xtensa/xtensa_vectors.S:1240
+0x4200d310: std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::~basic_string() at E:/00_Software/03_Dev_Env/Espressif/tools/tools/xtensa-esp-elf/esp-14.2.0_20241119/xtensa-esp-elf/xtensa-esp-elf/include/c++/14.2.0/bits/basic_string.h:809
+ (inlined by) e_fmt::detail::stream_formatter<unsigned short>::format(e_fmt::detail::format_context&, e_fmt::detail::format_specs const&, unsigned short const&) at E:/01_Workspace/00_Active_projects/00_code/0_embedded_project/0_esp32_project/simulation_project_development/build-esp32/include/middleware/efmt/core/format_traits.hpp:347
+0x4200d321: e_fmt::detail::default_formatter<unsigned short, void>::format(e_fmt::detail::format_context&, e_fmt::detail::format_specs const&, unsigned short const&) at E:/01_Workspace/00_Active_projects/00_code/0_embedded_project/0_esp32_project/simulation_project_development/build-esp32/include/middleware/efmt/core/format_traits.hpp:386
+ (inlined by) e_fmt::detail::formatter<unsigned short>::format(e_fmt::detail::format_context&, e_fmt::detail::format_specs const&, unsigned short const&) at E:/01_Workspace/00_Active_projects/00_code/0_embedded_project/0_esp32_project/simulation_project_development/build-esp32/include/middleware/efmt/core/format_traits.hpp:212
+ (inlined by) void e_fmt::detail::derive_write<unsigned short>(e_fmt::detail::format_context&, e_fmt::detail::format_specs const&, unsigned short const&) at E:/01_Workspace/00_Active_projects/00_code/0_embedded_project/0_esp32_project/simulation_project_development/build-esp32/include/middleware/efmt/core/format_derive.hpp:2427
+0x3fc9a89d: ?? ??:0
+0x4037e64a: prvSelectHighestPriorityTaskSMP at E:/00_Software/03_Dev_Env/IDF/components/freertos/FreeRTOS-Kernel/tasks.c:3622
+0x4037e647: prvSelectHighestPriorityTaskSMP at E:/00_Software/03_Dev_Env/IDF/components/freertos/FreeRTOS-Kernel/tasks.c:3608 (discriminator 1)
+0x8037f0bd: ?? ??:0
+0x4037f0ba: vTaskSwitchContext at E:/00_Software/03_Dev_Env/IDF/components/freertos/FreeRTOS-Kernel/tasks.c:3712
+0x4037df04: _frxt_dispatch at E:/00_Software/03_Dev_Env/IDF/components/freertos/FreeRTOS-Kernel/portable/xtensa/portasm.S:451
+0x4037defa: _frxt_int_exit at E:/00_Software/03_Dev_Env/IDF/components/freertos/FreeRTOS-Kernel/portable/xtensa/portasm.S:246
+0x3fcbfbd9: ?? ??:0
