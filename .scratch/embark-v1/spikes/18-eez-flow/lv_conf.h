@@ -84,19 +84,17 @@
 #define LV_ASSERT_HANDLER embark_lvgl_assert_failed();
 
 /*=========================================================================
-   字体：默认 14 号 + EEZ 生成代码用到的 5 个字号（issue 19 / ADR 0008）
+   字体：只留默认那一个
  *========================================================================*/
 #define LV_FONT_MONTSERRAT_14 1
-#define LV_FONT_DEFAULT &lv_font_montserrat_14
-/* EEZ Studio 导出页面（app/eez_ui/screens.c）引用的 Montserrat 字号：18/20/24/32/48。
- * 不开它们，EEZ 页面的文字全落到默认 14 号（不是报错，只是字号不对）。
- * 缺字审计（issue 17）相应扩展到 app/eez_ui/；Montserrat 覆盖完整 ASCII，
- * EEZ 页面文字保持 ASCII 即可，CJK 页面文字需要另行评估（v1 不在 EEZ 页面用 CJK）。 */
+/* ↓ spike 18 追加：EEZ 样例生成代码（screens.c）引用这 5 个字号，仓库配置只开 14。
+ * 字体是 const 数组不进堆，不影响堆增量测量；生产适配由 issue 17 缺字审计收敛。 */
 #define LV_FONT_MONTSERRAT_18 1
 #define LV_FONT_MONTSERRAT_20 1
 #define LV_FONT_MONTSERRAT_24 1
 #define LV_FONT_MONTSERRAT_32 1
 #define LV_FONT_MONTSERRAT_48 1
+#define LV_FONT_DEFAULT &lv_font_montserrat_14
 /* 其余 LV_FONT_* 由 lv_conf_internal.h 兜为 0（已核实，例如 :994-998 MONTSERRAT_8）。
 
  * 静态子集字库 embark_zh_14（tools/font/gen_font.mjs 生成，assets/fonts/embark_zh_14.c）

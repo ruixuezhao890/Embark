@@ -20,6 +20,7 @@
  *       onBackgroundTick 就返回；平台记 finished 并 park，框架在 step 的回收段归还槽位，
  *       于是"创建 → 跑完 → 回收 → 再创建"能反复走（issue 15 的任务生命周期）。
  *       它只挂在系统用例（platform/host/ui_tour.cpp）的注册表里。
+ *   - EezDemoApp（EEZ Studio 生成 UI，issue 19 / ADR 0008）：见 eez_demo_app.h。
  *
  * App 元数据（issue 16）：title() 中文标题 / icon() LV_SYMBOL 码点（可选）/
  * accent() 强调色（可选，默认全局强调色），随 EMBARK_APP_TABLE 编译期注册，

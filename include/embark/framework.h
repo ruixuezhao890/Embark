@@ -14,7 +14,10 @@
  *                都不会被调用）。幂等：重复调用直接返回 none。
  *   - step()     唯一的循环体，一次一帧。顺序是 spec §6 定死的：
  *                1 UI tick → 2 输入抽干 → 3 （循环边界上的）切换生效 →
- *                4 界面工作 → 5 后台节拍（tick 策略） → 6 消息派发
+ *                4 界面工作（lv_timer_handler → 前台 App 的 LVGL 回调）
+ *                → 4b 前台节拍（onForegroundTick，issue 19 / ADR 0008：当前台
+ *                App 每帧一次，EEZ App 用它驱动 eez_flow_tick）
+ *                → 5 后台节拍（tick 策略） → 6 消息派发
  *                （own task 收件箱抽干 → 总线广播） → 7 own task 回收
  *                （issue 15：入口已返回的任务由持有者归还槽位） → ++frames。
  *   - request_switch(id)  只登记"想要哪个 App 当前台"；真正执行在下一个循环

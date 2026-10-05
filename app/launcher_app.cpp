@@ -158,8 +158,8 @@ void LauncherApp::build_panel() noexcept {
   lv_obj_clear_flag(highlight_, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
 
   // --- 槽：圆 + 图标 + 标题 ---------------------------------------------------
-  static_assert(embark::launcher::max_slots >= 5U,
-                "启动器要能装下 4 个 demo App + 自己（issue 16 契约）");
+  static_assert(embark::launcher::max_slots >= 7U,
+                "启动器要能装下 6 个 demo App + 自己（issue 16 契约；issue 19 加 EezDemoApp）");
   for (int i = 0; i < slot_count_; ++i) {
     App* const app = fw_->apps().at(i);
 

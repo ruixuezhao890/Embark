@@ -20,15 +20,25 @@ target_link_libraries(embark_apps INTERFACE
         embark_kernel_flags)
 target_include_directories(embark_apps INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 
+# EEZ Studio 生成代码（issue 19 / ADR 0008）：app/eez_ui/，编译口径见该目录 CMakeLists.txt。
+add_subdirectory(eez_ui)
+
 embark_find_sdl2(EMBARK_APP_SDL2_FOUND)
 
 if(EMBARK_APP_SDL2_FOUND)
-  add_library(embark_demo_apps STATIC launcher_app.cpp demo_apps.cpp hello_app.cpp)
+  add_library(embark_demo_apps STATIC launcher_app.cpp demo_apps.cpp hello_app.cpp
+          eez_demo_app.cpp eez_ui_bridge.cpp)
   add_library(embark::demo_apps ALIAS embark_demo_apps)
 
   # PUBLIC：demo_apps.h 公开 include <embark/app.h> 与 <lvgl.h>，使用方需要
   # 内核与 LVGL 的 include 根（spec §11）。
   target_link_libraries(embark_demo_apps PUBLIC embark_apps embark::core embark_lvgl)
+
+  # EEZ 生成代码与薄桥（issue 19）：PRIVATE —— 静态库依赖以 LINK_ONLY 透传给
+  # 宿主可执行文件，但 eez 的 include 根不进消费者的编译面。
+  target_link_libraries(embark_demo_apps PRIVATE embark_eez_ui embark_eez)
+  # 生成代码头写死 <lvgl/lvgl.h>：需要 third_party/ 作为 include 根（spike 18 同款）。
+  target_include_directories(embark_demo_apps SYSTEM PRIVATE "${PROJECT_SOURCE_DIR}/third_party")
 else()
   message(STATUS "  示例 App 库（embark_demo_apps）已跳过：没有 SDL2，LVGL 不可用。")
 endif()

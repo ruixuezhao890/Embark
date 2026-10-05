@@ -82,6 +82,9 @@ public:
     virtual void onExit() = 0;                         // 退出（v1 只在关机路径触发）
     // 以下有默认实现：
     virtual void onBackgroundTick(std::uint32_t now_ms) {}  // 后台节拍，必须轻量
+    virtual void onForegroundTick(std::uint32_t now_ms) {}  // 前台节拍（issue 19 / ADR 0008）：
+                                                            // 前台 App 每帧一次，在 lv_timer_handler 之后；
+                                                            // EEZ App 用它驱动 eez_flow_tick()
     virtual void onMessage(const Message& msg) {}           // 框架投递的消息
     virtual AppSettings settings() const;                   // 后台策略等 per-App 配置
 };

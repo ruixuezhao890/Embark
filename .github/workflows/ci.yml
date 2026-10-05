@@ -12,6 +12,7 @@
 #   - .scratch/embark-v1/spikes/**  实验存档不格式化
 #   - config/lv_conf.h         LVGL 官方配置模板
 #   - platform/host/freertos/FreeRTOSConfig.h  FreeRTOS 官方配置模板
+#   - app/eez_ui/**             EEZ Studio 生成代码（issue 19），重导出即覆盖
 name: CI
 
 on:
@@ -82,5 +83,5 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y clang-format
       - name: Dry-run
         run: |
-          FILES=$(git ls-files '*.cpp' '*.h' '*.hpp' '*.cc' | grep -v -E '^(third_party/|\.scratch/embark-v1/spikes/|config/lv_conf\.h$|platform/host/freertos/FreeRTOSConfig\.h$)')
+          FILES=$(git ls-files '*.cpp' '*.h' '*.hpp' '*.cc' | grep -v -E '^(third_party/|\.scratch/embark-v1/spikes/|config/lv_conf\.h$|platform/host/freertos/FreeRTOSConfig\.h$|app/eez_ui/)')
           clang-format --dry-run --Werror $FILES

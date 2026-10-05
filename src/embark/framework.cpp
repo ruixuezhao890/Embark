@@ -123,6 +123,12 @@ void Framework::step() noexcept {
     ui_->process();  // 4. 界面工作（lv_timer_handler → 前台 App 的 LVGL 回调）
   }
 
+  // 4b. 前台节拍（issue 19 / ADR 0008）：当前台 App 每帧一次，紧跟 lv_timer_handler
+  //     之后——EEZ App 在这里调 eez_flow_tick()（Flow 引擎与 LVGL 同帧推进）。
+  if (apps_.valid(foreground_)) {
+    apps_.at(foreground_)->onForegroundTick(hal_.time.now_ms());
+  }
+
   // 5. 后台节拍：tick 策略的 App 按各自周期触发 onBackgroundTick（framework 线程）。
   timers_.tick(1);
 

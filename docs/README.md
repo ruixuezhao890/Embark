@@ -148,6 +148,18 @@ cmake --build build
 > 注意：界面文案用英文（LVGL 内置字体无中文字形，见 common-pitfalls）；
 > 日志中文没问题。
 
+### 用 EEZ Studio 画界面（不用手写 LVGL）
+
+不想手写控件？用 EEZ Studio + EEZ Flow 画界面，生成代码照常入库：
+
+1. 装 EEZ Studio，新建 240×320 工程，加页面 / 控件 / User Action / Flow 变量。
+2. 导出代码到 `app/eez_ui/`（`embark_eez_ui` 目标，生成代码照 5 步注册，模板是
+   `app/eez_demo_app.{h,cpp}`：onCreate→`eez_ui_bridge_init`，onEnter/onResume→
+   `eez_ui_bridge_load_current_screen`，onForegroundTick→`eez_ui_bridge_tick`）。
+3. 重新构建跑起来，验收开关 `--eez` 走完登录 Flow 与 User Action。
+
+完整流程见 [eez-studio-guide.md](eez-studio-guide.md)。
+
 ## 文档索引
 
 | 文档 | 内容 |
@@ -155,6 +167,7 @@ cmake --build build
 | [messages-and-background.md](messages-and-background.md) | 消息（总线 / 收件箱信封）与三种后台策略怎么用，含示例代码；`own_task` 的生命周期（入口返回 = 结束、每帧回收、运行期再创建）也在这里 |
 | [hal-backend-guide.md](hal-backend-guide.md) | 怎么写一个 HAL 后端：宿主骨架（照 platform/host/）、共享层（platform/common/）与真机实现（platform/esp32/，含 IDF 坑清单） |
 | [../platform/esp32/README.md](../platform/esp32/README.md) | ESP32-S3 真机端口：板级参数、构建/烧录命令、bring-up 清单、串口日志样例 |
+| [eez-studio-guide.md](eez-studio-guide.md) | EEZ Studio 一条龙：装 Studio、导出代码入库、App 侧接线（issue 19 落地模板） |
 | [common-pitfalls.md](common-pitfalls.md) | 常见坑：ETL 定容行为、消息非聚合、保留 id、无异常/无堆、MinGW 对齐分配、日志 384 字节上限、派生打印（E_FMT_DERIVE）、宏前置条件…… |
 | [adr/](adr/) | 架构决策记录：单一 UI 任务（0001）、HAL 能力粒度（0002）、零堆无异常（0003）、后台节拍与状态范式（0004）、静态槽位与任务池（0005） |
 | [agents/](agents/) | 面向 agent 的仓库约定（领域模型、issue 追踪规则） |

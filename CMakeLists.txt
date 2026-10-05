@@ -9,10 +9,14 @@
 #   ctest --test-dir build --output-on-failure
 cmake_minimum_required(VERSION 3.24)
 
+# LANGUAGES 里显式带 C：LVGL 与 eez-framework 的 project() 会在 third_party/ 子作用域
+# 隐式启用 C，app/eez_ui/ 的生成代码也是 C 源——不在顶层声明的话，C 工具链变量
+# （CMAKE_C_COMPILE_OBJECT 等）只存在于 third_party/ 作用域，app/ 下的 C 目标在
+# Generate step 报 "Missing variable is: CMAKE_C_COMPILE_OBJECT"（issue 19 实测）。
 project(embark
         VERSION 0.1.0
         DESCRIPTION "Embark —— 单一 UI 任务 + 逻辑 App 的可移植嵌入式框架"
-        LANGUAGES CXX)
+        LANGUAGES C CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(embark_middleware)

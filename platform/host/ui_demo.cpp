@@ -19,6 +19,10 @@
  *                    → Settings → Level+1（消息广播）→ 导航壳返回键回 LauncherApp，
  *                    全程断言 switches==3 与各 App 钩子序。
  *   --own-task      验证 own_task 后台 App：TickerApp 的消息要能被 UI 收到。
+ *   --eez           EEZ App 验收（issue 19 / ADR 0008）：拖 5 槽选 EezDemoApp → 启动
+ *                    → 点 Login（Flow 导航到 HOME）→ 点 +（action+变量桥）→
+ *                    导航壳返回键回启动器；断言 switches==2、eez enters==1
+ *                    resumes==0、foreground_ticks>0、counter==1、home_requests==1。
  *   --screenshot FILE 最后一帧把窗口内容存成 BMP（用 Python/Pillow 转 PNG 便于查看）
  *   --frames N / --scale S / --delay MS / --quit-at N / --help 同旧版。
  *
@@ -42,6 +46,8 @@
 #include <embark_limits.h>
 
 #include "demo_apps.h"
+#include "eez_demo_app.h"
+#include "eez_ui_bridge.h"
 #include "hello_app.h"
 #include "host_context.h"
 #include "host_display.h"
@@ -78,6 +84,12 @@ constexpr int click_back_frame = 96;      // 导航壳返回键 → LauncherApp
 constexpr int launch_quit_frame = 110;
 constexpr int launch_frames = 115;
 
+// --eez 故事线帧号（issue 19）：槽 5 = EezDemoApp（6 App 注册表里第 6 个）。
+// 拖 dy=-50 → target=5；settle 后点选中槽启动；Login 在 EEZ 主屏 (120,235)；
+// + 在 HOME 屏 (70,138)（action_inc_counter，变量桥）；返回键 (15,14) 回启动器。
+constexpr int eez_quit_frame = 210;
+constexpr int eez_frames = 220;
+
 // --click 两段式点按：先"点非选中槽只转正"，弹簧转正后再点选中槽启动
 constexpr int click_rotate_frame = 20;
 constexpr int click_launch_frame = 64;
@@ -88,6 +100,8 @@ struct Options {
   int scale = 1;
   int delay_ms = 5;
   const char* screenshot = nullptr;
+  int shot_frame = 0;      // --shot-frame N FILE：第 N 帧截图（任意模式）
+  const char* shot_path = nullptr;
   bool click = false;
   int click_x = embark::demo::demo_click_center_x;
   int click_y = embark::demo::demo_click_center_y;
@@ -97,6 +111,7 @@ struct Options {
   bool launch = false;
   int quit_at = 0;
   bool own_task = false;
+  bool eez = false;
 };
 
 void print_usage() {
@@ -107,7 +122,9 @@ void print_usage() {
       "  --drag X1,Y1,X2,Y2 合成长拖动（帧 15 按下 → 帧 23 抬起；默认 120,220 → 120,210 = 10px = 1 槽）\n"
       "  --launch            完整验收故事（拖动→启动 clock→Settings→Level+1→返回键回启动器）\n"
       "  --own-task          验证 own_task 后台 App（TickerApp 消息回流）\n"
+      "  --eez               EEZ App 验收（issue 19）：拖 5 槽→启动→Login（Flow 导航）→+（变量桥）→返回键\n"
       "  --screenshot FILE  最后一帧存 BMP\n"
+      "  --shot-frame N FILE 第 N 帧存 BMP（配 --eez 等故事线抓中途屏）\n"
       "  --scale S           窗口放大倍数（默认 1 = 240×320 1:1）\n"
       "  --delay MS          每帧间隔（默认 5）\n"
       "  --quit-at N         第 N 帧推关窗事件\n"
@@ -175,7 +192,7 @@ namespace embark::platform::host {
 // 之后是 ClockApp/SettingsApp/TickerApp/HelloApp（注册顺序 = 启动器槽位顺序，
 // spec/issue 16：启动器必须第一位）。demo App 本体在 app/。
 EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp,
-                 embark::demo::TickerApp, embark::demo::HelloApp)
+                 embark::demo::TickerApp, embark::demo::HelloApp, embark::demo::EezDemoApp)
 
 }  // namespace embark::platform::host
 
@@ -199,6 +216,10 @@ Options parse_options(int argc, char** argv) {
     else if (std::strcmp(arg, "--scale") == 0 && !next_is_flag()) { options.scale = std::atoi(argv[++i]); }
     else if (std::strcmp(arg, "--delay") == 0 && !next_is_flag()) { options.delay_ms = std::atoi(argv[++i]); }
     else if (std::strcmp(arg, "--screenshot") == 0 && !next_is_flag()) { options.screenshot = argv[++i]; }
+    else if (std::strcmp(arg, "--shot-frame") == 0 && i + 2 < argc) {
+      options.shot_frame = std::atoi(argv[++i]);
+      options.shot_path = argv[++i];
+    }
     else if (std::strcmp(arg, "--quit-at") == 0 && !next_is_flag()) { options.quit_at = std::atoi(argv[++i]); }
     else if (std::strcmp(arg, "--click") == 0) {
       options.click = true;
@@ -216,6 +237,7 @@ Options parse_options(int argc, char** argv) {
     }
     else if (std::strcmp(arg, "--launch") == 0) { options.launch = true; }
     else if (std::strcmp(arg, "--own-task") == 0) { options.own_task = true; }
+    else if (std::strcmp(arg, "--eez") == 0) { options.eez = true; }
     else if (std::strcmp(arg, "--help") == 0) { print_usage(); std::exit(0); }
   }
   return options;
@@ -259,6 +281,7 @@ void ui_main(void* argument) noexcept {
     else if (options->click) { frames_limit = 110; }
     else if (options->drag) { frames_limit = 80; }
     else if (options->own_task) { frames_limit = 80; }
+    else if (options->eez) { frames_limit = eez_frames; }
   }
 
   int frames_run = 0;
@@ -283,6 +306,26 @@ void ui_main(void* argument) noexcept {
       if (frames_run == click_back_frame) { push_motion_and_press(options->scale, nav_back_x, nav_back_y); }
       if (frames_run == click_back_frame + click_release_delta) { push_release(options->scale, nav_back_x, nav_back_y); }
       if (frames_run == launch_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
+    } else if (options->eez) {
+      // 拖 5 槽：dy=-50 → target=5（EezDemoApp），与 --launch 同款插值节奏。
+      if (frames_run == drag_press_frame) { push_motion_and_press(options->scale, 120, 220); }
+      if (frames_run == drag_move_frame) { push_motion(options->scale, 120, 203); }
+      if (frames_run == drag_move_frame + 2) { push_motion(options->scale, 120, 186); }
+      if (frames_run == drag_move_frame + 4) { push_motion(options->scale, 120, 170); }
+      if (frames_run == drag_release_frame) { push_release(options->scale, 120, 170); }
+      // 选中槽（槽 5 已转正）启动 EezDemoApp。
+      if (frames_run == click_selected_frame) { push_motion_and_press(options->scale, launcher_top_x, launcher_top_y); }
+      if (frames_run == click_selected_frame + click_release_delta) { push_release(options->scale, launcher_top_x, launcher_top_y); }
+      // EEZ 主屏点 Login（Flow 切到 HOME；200 ms 淡入 ≈ 40 帧）。
+      if (frames_run == click_settings_frame + 12) { push_motion_and_press(options->scale, 120, 235); }
+      if (frames_run == click_settings_frame + 14) { push_release(options->scale, 120, 235); }
+      // HOME 屏点 +（action_inc_counter → counter 变 1，验证 action+变量桥）。
+      if (frames_run == 150) { push_motion_and_press(options->scale, 70, 138); }
+      if (frames_run == 152) { push_release(options->scale, 70, 138); }
+      // 导航壳返回键 → request_home → LauncherApp。
+      if (frames_run == 180) { push_motion_and_press(options->scale, nav_back_x, nav_back_y); }
+      if (frames_run == 182) { push_release(options->scale, nav_back_x, nav_back_y); }
+      if (frames_run == eez_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
     } else if (options->click) {
       if (frames_run == click_rotate_frame) { push_motion_and_press(options->scale, slot1_unselected_x, slot1_unselected_y); }
       if (frames_run == click_rotate_frame + click_release_delta) { push_release(options->scale, slot1_unselected_x, slot1_unselected_y); }
@@ -296,6 +339,9 @@ void ui_main(void* argument) noexcept {
       if (frames_run == drag_move_frame + 2) { push_motion(options->scale, options->drag_x1 + (options->drag_x2 - options->drag_x1) * 2 / 3, options->drag_y1 + (options->drag_y2 - options->drag_y1) * 2 / 3); }
       if (frames_run == drag_move_frame + 4) { push_motion(options->scale, options->drag_x2, options->drag_y2); }
       if (frames_run == drag_release_frame) { push_release(options->scale, options->drag_x2, options->drag_y2); }
+    }
+    if (options->shot_path != nullptr && frames_run == options->shot_frame) {
+      if (!save_screenshot(display, options->shot_path)) { hp::exit_process(1); }
     }
     if (options->quit_at > 0 && frames_run == options->quit_at) {
       SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit);
@@ -315,6 +361,7 @@ void ui_main(void* argument) noexcept {
   const auto* clock = static_cast<const embark::demo::ClockApp*>(framework.app(1));
   const auto* settings = static_cast<const embark::demo::SettingsApp*>(framework.app(2));
   const auto* ticker = static_cast<const embark::demo::TickerApp*>(framework.app(3));
+  const auto* eez_app = static_cast<const embark::demo::EezDemoApp*>(framework.app(5));
 
   ELOG_INFO("显示与前台：{} 帧；前台 {}；switches={}；导航壳返回键 {}（home_requests={}）",
             frames_run, framework.apps().at(framework.foreground())->name(), framework.switches(),
@@ -364,6 +411,26 @@ void ui_main(void* argument) noexcept {
     const bool ticked_ok = ticker->sent() > 0 && ticker->received() > 0;
     ELOG_INFO(ticked_ok ? "〔own-task 验收通过〕" : "〔own-task 验收失败〕");
     if (!ticked_ok) { exit_code = 2; }
+  }
+  if (options->eez) {
+    // 拖 5 槽 → 启动 eezdemo（switches 1）→ 返回键回启动器（switches 2）；
+    // Flow 导航在 App 内部，不算框架切换。counter 只点了一次 +（=1）；
+    // onForegroundTick 在 eezdemo 前台期间每帧被调（foreground_ticks>0）。
+    const bool eez_ok = framework.switches() == 2 && launcher->enters() == 1 &&
+                        launcher->resumes() == 1 && launcher->settled() &&
+                        launcher->selected() == 5 &&
+                        eez_app->enters() == 1 && eez_app->resumes() == 0 &&
+                        eez_app->foreground_ticks() > 0 &&
+                        embark::demo::eez_ui_bridge_counter() == 1 &&
+                        ui_port.nav_shell().home_requests() == 1 &&
+                        !ui_port.nav_shell().back_visible() &&
+                        ui_port.nav_shell().foreground() == 0;
+    ELOG_INFO("eez: switches={} selected={} enters={} resumes={} ticks={} counter={} home={}",
+              framework.switches(), launcher->selected(), eez_app->enters(), eez_app->resumes(),
+              eez_app->foreground_ticks(), embark::demo::eez_ui_bridge_counter(),
+              ui_port.nav_shell().home_requests());
+    ELOG_INFO(eez_ok ? "〔eez 验收通过〕" : "〔eez 验收失败〕");
+    if (!eez_ok) { exit_code = 2; }
   }
 
   framework.shutdown();

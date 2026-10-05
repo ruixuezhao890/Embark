@@ -37,6 +37,9 @@ Blocked by: —
 
 ### 缺字审计（CI 门禁）
 - 扫描范围：app/ + 框架壳字符串（src/embark、platform/common 导航壳文案）。
+  注（issue 19 落地时补充）：EEZ Studio 生成代码 `app/eez_ui/` 的运行时文案
+  （`screens.c` 里的 `lv_label_set_text`）也在此范围——生成文案全 ASCII，
+  需与静态子集清单一起过门禁。
 - 规则：源码字符串逐字符对照覆盖清单，字库外字符 → 构建失败（明确报字符 + 所在文件行）。
 - CI：新增一个 job（复用现有检查 job 或新 job）；audit 脚本失败即红。
 

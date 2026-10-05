@@ -134,6 +134,18 @@ _Avoid_: 运行时描述符、注册文件
 命名化视觉常量（底色/面板/文字/强调色、圆角、间距、线宽），手写 LVGL 的唯一取色来源；框架壳与启动器共用，风格为深色科技风。
 _Avoid_: 魔法颜色、主题对象
 
+**EEZ App（EEZ 应用）**：
+页面由 EEZ Studio 工程导出（生成代码入库）、交互与外观由 EEZ Flow 描述、业务逻辑由 C++ 实现的 App；它仍遵守 App 契约（onCreate 里建树 + eez_flow_init，onForegroundTick 里跑 eez_flow_tick），跨 App 切换仍走 request_switch。制作页面的默认方式。
+_Avoid_: Studio 页面、生成式 App、Flow 应用
+
+**Style scope（样式域）**：
+样式定义的归属边界：手写 C++ 只用 design tokens；EEZ 页面只在 Studio 工程里集中定义样式（导出为 styles.c，随工程入库）。同一视觉常量不得跨域散落。
+_Avoid_: 魔法颜色、主题对象
+
+**Foreground tick（前台节拍）**：
+App 契约的可选钩子 onForegroundTick(now_ms)：框架在 UI 任务每跳调用前台 App 的它（在 lv_timer_handler 之后）；EEZ App 用它驱动 eez_flow_tick。默认空实现，手写 App 可忽略。
+_Avoid_: UI tick、渲染回调
+
 **Static subset font（静态子集字库）**：
 lv_font_conv 生成、编译进 flash 的 C 数组字库，只收录 UI 实际用到的字符（启动器与框架壳文本全走它）；覆盖范围由清单文件声明、构建期审计。
 _Avoid_: 全量字库、外挂字体文件

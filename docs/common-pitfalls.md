@@ -171,6 +171,17 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
   `#include_next is a GCC extension`、匿名结构体、柔性数组等警告（宿主上这些头是
   SYSTEM include，IDF 侧没有这层区分）。我们自己的代码在宿主侧仍受 `-Wpedantic` 管。
 
+## CMake：C 语言工具链变量不外泄
+
+- 子目录 `project()` 隐式启用 C 语言时，`CMAKE_C_COMPILE_OBJECT` /
+  `CMAKE_C_ARCHIVE_CREATE/FINISH` 等工具链规则变量只在**该子目录作用域**装载
+  （由 `Modules/CMakeCInformation.cmake` 装载，从不写进 `CMakeCCompiler.cmake`）。
+  兄弟作用域建纯 C 库会生成期报「Missing variable is: CMAKE_C_COMPILE_OBJECT」。
+- 修法：根 `project()` 显式 `LANGUAGES C CXX`（本仓库已做，CMakeLists.txt 顶部
+  有注释）；不要在子目录里挪 `C_STANDARD` / `target_compile_features` 试图"修"它
+  ——那是红鲱鱼。
+- `EMBARK_PLATFORM_HAS_FREERTOS` 这类 `option()` 不会自愈已有 cache 条目：
+  改默认值后要删 cache 或显式 `-D...=ON` 重配。
 ## 宿主特有
 
 - SDL2 找不到：`embark_host_ui` 目标被跳过（STATUS 提示），内核与测试照常
@@ -192,3 +203,19 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
 
 LVGL 内置字体只有 Montserrat（无中文字形），v1 界面文案用英文；中文显示
 需要另配 CJK 字体（未纳入 v1）。框架与日志的中文不受影响（那是宿主侧输出）。
+## EEZ Studio 生成代码（issue 19）
+
+- 生成代码的 UI 文本进 `app/eez_ui/screens.c`（`lv_label_set_text` 调用），不叫
+  "页面资源"；尺寸写死在生成代码里（样例 800×480，本仓库 240×320 已改写），
+  换屏分辨率要同步改。
+- Flow 的 **User Action / 变量** 由 `actions.cpp` / `vars.cpp` 落地（C++），是
+  应用与生成代码之间唯一的桥；`vars.cpp` 的变量是全局 `int32_t`（非 extern "C"），
+  读值从 `app/eez_ui_bridge.cpp` 走，别从生成代码头文件绕。
+- 生成代码 6 个 .c 源以 `-w` 编译（上游无害警告不归零）；C++ 侧也**必须** `-w`
+  （actions.cpp 的 unused parameter 等），否则违反宿主零警告门禁。
+- 生成代码以 `EEZ_FOR_LVGL` 分支编译；CMake 给 eez_ui 补 `SYSTEM` include：
+  third_party 根（生成代码写死 `<lvgl/lvgl.h>`）与 eez-framework 的
+  src/libs/agg/platform/simulator。
+- 需要 C 语言的注意：顶层 `project()` 已显式 `LANGUAGES C CXX`（见
+  common-pitfalls 的 CMake 小节），子目录再 `project()` 隐式启用 C 的工具链
+  规则变量不外泄。
