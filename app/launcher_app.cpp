@@ -206,7 +206,6 @@ void LauncherApp::rebuild_panel() noexcept {
   if (screen_ == nullptr || slot_count_ <= 0) {
     return;
   }
-  const int selected_slot = embark::launcher::selected_index(pos_, slot_count_);
   for (int i = 0; i < slot_count_; ++i) {
     const float offset = embark::launcher::slot_offset(i, pos_);
     const embark::launcher::Point center = embark::launcher::slot_center(offset);
