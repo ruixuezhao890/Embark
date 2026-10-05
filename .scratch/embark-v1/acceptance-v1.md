@@ -103,7 +103,7 @@ $env:SDL_VIDEODRIVER='dummy'
    段全量链接进来；3 MB app 分区仍余 75%），bootloader 0x5210。
 6. **已推送**：本地提交已在 2026-10-04 首次推送到 `origin/main`（`git push -u origin main`，
    仓库此前是空的）—— 第三节第 2 条的"是否 push"至此结案。
-7. **启动器 + 导航壳 + App 元数据**（issue 16，提交 `COMMIT_HASH`）：宿主 UI 现在以
+7. **启动器 + 导航壳 + App 元数据**（issue 16，提交 `ca42107`）：宿主 UI 现在以
    启动器为默认前台（注册表 5 条：Launcher/Clock/Settings/Ticker/Hello），扇形半环 6 槽；
    验收改用新入口 —— \`embark_host_ui.exe --launch\`（完整故事：拖 1 槽 → 点中槽启动 clock →
    Settings → Level +1 → 返回键回启动器，switches==3）、\`--drag x1,y1,x2,y2\`（合成拖动，

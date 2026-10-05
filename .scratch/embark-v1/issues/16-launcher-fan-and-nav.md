@@ -1,6 +1,6 @@
 # 16 · 启动器：扇形半环 + 导航壳 + App 元数据
 
-Status: open
+Status: resolved
 Type: feature
 Blocked by: —
 来源: /grill-with-docs 多轮设计问答（用户指定参考样式 `06-扇形半环.html`，"风格得换"；
@@ -65,3 +65,37 @@ Blocked by: —
 - 与 issue 17 依赖：中文标题进静态子集字库并过缺字审计；返回值图标的 LV_SYMBOL 码点
   是内置字形，不进字库范围。
 - demo App 元数据示例（实现时定）：clock→LV_SYMBOL_REFRESH 等，无 icon 者首字兜底。
+
+## Answer（2026-10-05，提交 `ca42107`）
+
+已完成：启动器扇形半环 + 框架导航壳 + App 元数据，全部契约项落地。
+
+### 交付物
+| 件 | 位置 | 说明 |
+|---|---|---|
+| 扇形几何（纯数学，可单测） | include/embark/launcher_geometry.h | 支点 (120,270)、R=82、STEP=26°、拖动/弹簧/命中/UTF-8 首字，不碰 LVGL |
+| 设计令牌 | include/embark/design_tokens.h | 深色科技风 9 令牌，LVGL 侧唯一取色来源 |
+| 启动器 App | app/launcher_app.{h,cpp} | 虚线弧轨 + 选中弧段 + 槽圆/图标/标题；拖动/点按/按键；5ms 弹簧 |
+| 框架导航壳 | platform/common/nav_shell.{h,cpp} | lv_layer_top 状态行（墙钟 + 策略名）+ 返回键；跨 lv_scr_load 持久 |
+| 框架接线 | include/embark/{app,framework,ui_port}.h、src/embark/framework.cpp | request_home()、notify_foreground()、take_home_request 循环边界消费、title/icon/accent 虚函数 |
+| 端口接线 | platform/common/lvgl_ui_port.{h,cpp} | NavShell 成员 + 三个转发 |
+| 静态子集字库 | assets/fonts/embark_zh_14.c + tools/font/ | 114 字形（ASCII + 13 汉字 + 5 FA），压缩 bpp4；gen_font.mjs 增 RLE 忠实解码验证与 alpha 提升 |
+| 宿主验收 | platform/host/ui_demo.cpp、ui_tour.cpp | --launch / --click [x,y] / --drag x1,y1,x2,y2 / --own-task；tour 6 App |
+| 单元测试 | tests/kernel/test_launcher_geometry.cpp | 弹簧收敛/单步、槽位偏移/中心、命中判定、drag_target、元数据契约 7 例 |
+
+### 验收对照
+- 宿主截图 + 像素采样核验（Pillow）：选中槽圆形反色、图标/标题实心、环/轨/背景全部命中令牌色。
+- `embark_host_ui.exe --launch`：switches==3（launcher→clock→settings→返回键→launcher），
+  返回键收起、home_requests==1；`--drag 120,220 120,205`：dy=-10 → 目标槽 1；
+  `--own-task`：ticker 13 条回流。全部退出码 0。
+- `embark_host_tour.exe`：119 帧、14 项自检全过（switches==3、launcher 1/1、home_requests==1…）。
+- 单元：108 用例全绿（新增 7 例）；零分配审计保持全绿。
+- 契约：SettingsApp 已移除自绘 "Back to clock"（on_back 与按钮一并删除），切换只走
+  request_switch / request_home；demo App 标题中文、"无 icon 者首字兜底"按契约生效。
+
+### 备注
+- push 尚未执行（需用户同意）；真机 RTC 未接，状态行时间 = 宿主 epoch+8h（契约占位）。
+- 字体：lv_font_conv 1.5.3 小字号 CJK 细笔画偏淡（最大 alpha ~13/15），gen_font.mjs 用
+  gain 2.4 提升（Noto OFL 可改）；LV_USE_FONT_COMPRESSED 已开（压缩字形必需）。
+- 验收文档：acceptance-v1.md 清单更新记录第 7 条、README / common-pitfalls /
+  messages-and-background 已同步。
