@@ -1,28 +1,36 @@
 /**
- * Embark 示例 App（issues/08，spec §14.1 的验收载体）
+ * Embark 示例 App（issues/08，spec §14.1 的验收载体；issue 16 起带启动器元数据）
  *
- * 三个 App 各演示一种后台策略，凑齐 spec §14.1 的"≥2 个 App、可切前台、后台 tick
+ * 四个 App 各演示一种后台策略，凑齐 spec §14.1 的"≥2 个 App、可切前台、后台 tick
  * 可观测"，并顺带示范 spec §16.4 推荐的 etl::state_chart：
- *   - ClockApp（默认前台，后台策略 = tick，周期 100 ms）：
+ *   - LauncherApp（主屏/默认前台，后台策略 = suspend，见 launcher_app.h）：扇形主屏，
+ *       拖动/点按/按键选槽，点选中槽 request_switch 启动 —— issue 16 本体。
+ *   - ClockApp（后台策略 = tick，周期 100 ms）：
  *       闪烁时钟 —— 内部状态用 etl::state_chart 表达（led on/off 两个状态来回切，
  *       on_entry 回调换屏幕背景色）；每拍 +1 拍计数并在界面上刷新；
  *       收 SettingsApp 发来的 BrightnessMessage 更新亮度档（消息驱动，App 间不互
  *       include、不碰对方任何符号）。
  *   - SettingsApp（后台策略 = suspend）：纯前台交互页 —— 按钮 +1 亮度档后发消息
- *       广播；"Back to clock"按钮请求切回 ClockApp。退后台后完全不跑（suspend）。
+ *       广播。回主屏走导航壳的返回键（框架 request_home），自己不画"返回"按钮
+ *       （issue 16 / ADR 0006：切换只走 request_switch 与 request_home）。
  *   - TickerApp（后台策略 = own_task）：自己的 FreeRTOS 任务每 50 ms 发一条
  *       CrossTaskMessage 回 UI —— 证明"后台长活不阻塞 UI"与"消息经收件箱回 UI"
  *       （issue 07 的机制，原样迁移）。
  *   - JobApp（后台策略 = own_task，period_ms = 0）：一次性任务 —— 入口跑一轮
  *       onBackgroundTick 就返回；平台记 finished 并 park，框架在 step 的回收段归还槽位，
  *       于是"创建 → 跑完 → 回收 → 再创建"能反复走（issue 15 的任务生命周期）。
- *       它只挂在系统用例（platform/host/ui_tour.cpp）的注册表里：宿主演示 ui_demo 与
- *       真机固件仍是原来的那 4 个 App（Clock / Settings / Ticker / Hello）。
+ *       它只挂在系统用例（platform/host/ui_tour.cpp）的注册表里。
+ *
+ * App 元数据（issue 16）：title() 中文标题 / icon() LV_SYMBOL 码点（可选）/
+ * accent() 强调色（可选，默认全局强调色），随 EMBARK_APP_TABLE 编译期注册，
+ * 启动器（LauncherApp）拿它们画槽：图标优先，没有图标取标题首个汉字兜底。
+ * 元数据只是虚函数覆写 —— 没有第二张表和 App 表对账，不存在"表长漂移"。
  *
  * 界面的构建/装载纪律与 issue 06 一致：屏幕自己建（onCreate）、自己装
  * （onEnter/onResume），切换只经 fw.request_switch() 请求，框架在循环边界执行。
- * 界面文案是英文（LVGL 内置字体只有 Montserrat，无中文字形；v1 不配 CJK 字体，
- * 中文显示留到后续版本，见 docs/common-pitfalls.md）。
+ * 启动器与导航壳（返回键/状态行）用静态子集字库 embark_zh_14（tools/font/ 生成，
+ * 含这里的全部中文标题 + LV_SYMBOL 码点）；demo App 自己的界面文字沿用英文
+ * （LVGL 默认 Montserrat，v1 不为此扩展字库）。
  *
  * 换后端不动本目录：这里只依赖 embark 公开头、LVGL 与 ETL（middleware），
  * 没有任何 platform/ 后端头（spec §14.5 验收项）。
@@ -44,6 +52,8 @@ namespace embark::demo {
 // 竖屏 240×320：按钮水平居中（x = (240-140)/2 = 50），落在下半屏。
 // ClockApp 的 "Settings" 与 SettingsApp 的 "Level +1" 用同一个中心 (120,220)：
 // 同一坐标点落在不同 App 的屏幕上 —— 正好证明"输入焦点真的换了"。
+// （SettingsApp 曾有的 "Back to clock" 按钮随 issue 16 移除：回主屏走导航壳返回键，
+// 中心点 (120,265) 一并删除。）
 inline constexpr int demo_button_x = 50;
 inline constexpr int demo_button_y = 200;
 inline constexpr int demo_button_width = 140;
@@ -51,11 +61,6 @@ inline constexpr int demo_button_height = 40;
 
 inline constexpr int demo_click_center_x = demo_button_x + demo_button_width / 2;   // 120
 inline constexpr int demo_click_center_y = demo_button_y + demo_button_height / 2;  // 220
-
-// SettingsApp 的 "Back to clock" 按钮（在 "Level +1" 正下方）。
-inline constexpr int demo_switch_button_y = demo_button_y + demo_button_height + 5;         // 245
-inline constexpr int demo_switch_center_x = demo_click_center_x;                            // 120
-inline constexpr int demo_switch_center_y = demo_switch_button_y + demo_button_height / 2;  // 265
 
 /// 示例 App 之间的消息（App 间只走消息，不互相 include —— spec §7 / issue 08 验收）。
 /// id 0x21 是 demo 私有区（框架保留 0xFE 给跨任务信封，勿撞）。
@@ -71,6 +76,9 @@ class ClockApp final : public App {
   ClockApp() noexcept;
 
   [[nodiscard]] const char* name() const override { return "clock"; }
+  [[nodiscard]] const char* title() const override { return "时钟"; }
+  // 图标 = LV_SYMBOL_REFRESH（0xF021，字库已含）；accent 用默认。
+  [[nodiscard]] const char* icon() const override { return LV_SYMBOL_REFRESH; }
 
   [[nodiscard]] AppSettings settings() const override {
     // tick 策略：周期 100 ms。（宿主 UI 循环 5 ms 一拍 → 每 20 拍一颗 tick。）
@@ -124,6 +132,9 @@ class SettingsApp final : public App {
   SettingsApp() noexcept = default;
 
   [[nodiscard]] const char* name() const override { return "settings"; }
+  [[nodiscard]] const char* title() const override { return "设置"; }
+  // 图标 = LV_SYMBOL_SETTINGS（0xF013，字库已含）。
+  [[nodiscard]] const char* icon() const override { return LV_SYMBOL_SETTINGS; }
 
   void onCreate(Framework& fw) override;
   void onEnter() override;
@@ -138,7 +149,6 @@ class SettingsApp final : public App {
 
  private:
   static void on_level_plus(lv_event_t* event) noexcept;  // 亮度 +1 → publish 消息
-  static void on_back(lv_event_t* event) noexcept;        // 请求切回 ClockApp
   void refresh_brightness_label() noexcept;
 
   Framework* fw_ = nullptr;
@@ -158,6 +168,8 @@ class TickerApp final : public App {
   TickerApp() noexcept = default;
 
   [[nodiscard]] const char* name() const override { return "ticker"; }
+  [[nodiscard]] const char* title() const override { return "心跳"; }
+  // 无图标：启动器取标题首字符"心"兜底（字库已含"心跳"两字）。
 
   [[nodiscard]] AppSettings settings() const override {
     // own_task：50 ms 周期；栈 256 字（1 KB）；优先级 4（低于 UI 任务的 5）。
@@ -196,6 +208,8 @@ class JobApp final : public App {
   JobApp() noexcept = default;
 
   [[nodiscard]] const char* name() const override { return "job"; }
+  [[nodiscard]] const char* title() const override { return "任务"; }
+  // 无图标：启动器取标题首字符"任"兜底（字库已含"任务"两字）。
 
   [[nodiscard]] AppSettings settings() const override {
     // own_task + period_ms = 0 = 跑完即结束的短命任务（栈 256 字，优先级 4）。

@@ -19,6 +19,8 @@ class HelloApp final : public App {
   HelloApp() noexcept = default;
 
   [[nodiscard]] const char* name() const override { return "hello"; }
+  // 中文标题（issue 16 元数据）；无图标 → 启动器取"你"字兜底（字库已含）。
+  [[nodiscard]] const char* title() const override { return "你好"; }
 
   void onCreate(Framework& fw) override;
   void onEnter() override;

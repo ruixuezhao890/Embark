@@ -103,6 +103,13 @@ $env:SDL_VIDEODRIVER='dummy'
    段全量链接进来；3 MB app 分区仍余 75%），bootloader 0x5210。
 6. **已推送**：本地提交已在 2026-10-04 首次推送到 `origin/main`（`git push -u origin main`，
    仓库此前是空的）—— 第三节第 2 条的"是否 push"至此结案。
+7. **启动器 + 导航壳 + App 元数据**（issue 16，提交 `COMMIT_HASH`）：宿主 UI 现在以
+   启动器为默认前台（注册表 5 条：Launcher/Clock/Settings/Ticker/Hello），扇形半环 6 槽；
+   验收改用新入口 —— \`embark_host_ui.exe --launch\`（完整故事：拖 1 槽 → 点中槽启动 clock →
+   Settings → Level +1 → 返回键回启动器，switches==3）、\`--drag x1,y1,x2,y2\`（合成拖动，
+   断言目标槽）与 \`--click [x,y]\`；② 表格里的 \`--switch\` 已被 \`--launch\` 取代，历史坐标
+   \`(120,265)\`（Back to clock，issue 16 移除自绘返回后随按钮删除）不再适用于宿主验收；
+   测试基数 86 用例 → **108 用例**；tour 注册表 6 条（+启动器，Job 移到第 5 位）、14 项自检全过。
 
 > 一句话：①–⑥、⑦–⑩ 的判定方式都没变，只是数字与窗口方向更新；第二节里"要你在板子上人工
 > 确认"的两条仍然有效，且方向口径现在是**竖屏、不旋转**。

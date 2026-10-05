@@ -3,8 +3,9 @@
 # 两个角色：
 #   1. embark::apps（INTERFACE）—— 纯约定：App 层的编译规矩（build_options +
 #      kernel_flags + include 根指向本目录），供任何编译"App 代码"的目标用。
-#   2. embark::demo_apps（STATIC）—— 三个 demo App 的编译单元；画 UI 需要 LVGL，
-#      所以只在宿主 SDL2/LVGL 可用时构建（LVGL 由宿主分支带进来）。
+#   2. embark::demo_apps（STATIC）—— 启动器 + 三个 demo App 的编译单元；
+#      LauncherApp（issue 16 主屏）与 demo apps 共用同一份编译规则；画 UI 需要
+#      LVGL，所以只在宿主 SDL2/LVGL 可用时构建（LVGL 由宿主分支带进来）。
 #      App 之间有"换后端不动 app/ 与 include/embark/"的验收（spec §14.5）：
 #      本目录只 include <embark/*>、<lvgl.h> 与 <middleware/etl/*>，
 #      不碰任何 platform/ 后端头；真机（issues/11）把 demo_apps.cpp 编进
@@ -22,7 +23,7 @@ target_include_directories(embark_apps INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 embark_find_sdl2(EMBARK_APP_SDL2_FOUND)
 
 if(EMBARK_APP_SDL2_FOUND)
-  add_library(embark_demo_apps STATIC demo_apps.cpp hello_app.cpp)
+  add_library(embark_demo_apps STATIC launcher_app.cpp demo_apps.cpp hello_app.cpp)
   add_library(embark::demo_apps ALIAS embark_demo_apps)
 
   # PUBLIC：demo_apps.h 公开 include <embark/app.h> 与 <lvgl.h>，使用方需要

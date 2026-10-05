@@ -27,6 +27,12 @@ Error LvglUiPort::init() noexcept {
   const Error error = port_.init();
   if (error == Error::none) {
     ready_ = true;
+    // 导航壳不是核心（没有它框架照跑），失败只记 ERROR、不回滚 ready_：
+    // 无界面平台/CI 单测（FakeUiPort）根本不会走到这，真机只影响状态行与返回键。
+    const Error shell_error = nav_shell_.init(context_);
+    if (shell_error != Error::none) {
+      ELOG_ERROR("导航壳 init 失败（{}），状态行/返回键不可用", shell_error);
+    }
   }
   return error;
 }
@@ -37,6 +43,18 @@ void LvglUiPort::tick() noexcept {
 
 void LvglUiPort::pump_input() noexcept {
   port_.pump_input();
+}
+
+void LvglUiPort::set_foreground(AppId id) noexcept {
+  nav_shell_.set_foreground(id);
+}
+
+void LvglUiPort::set_foreground_policy(AppSettings settings) noexcept {
+  nav_shell_.set_foreground_policy(settings);
+}
+
+bool LvglUiPort::take_home_request() noexcept {
+  return nav_shell_.take_home_request();
 }
 
 void LvglUiPort::process() noexcept {

@@ -1,11 +1,12 @@
 /**
- * Embark 示例 App 实现（issues/08）
+ * Embark 示例 App 实现（issues/08；issue 16 起主屏是启动器，示例 App 只管演示）
  *
- * 三个 App 全程只做三件事：
+ * 本文件四个 App 全程只做三件事：
  *   1. onCreate 里建自己的屏幕（lv_obj_create(nullptr) = 游离屏幕对象），
  *       ClockApp 还在其后启动状态机（chart_.start()：触发初始态的 on_entry）；
  *   2. onEnter/onResume 里 lv_scr_load 换上自己的屏幕（App 自决界面生命周期）；
- *   3. 想离开前台时 request_switch() 请求，框架在循环边界执行切换；
+ *   3. 想离开前台时 request_switch() 请求，框架在循环边界执行切换（回主屏用
+ *      导航壳的返回键 → request_home，SettingsApp 不再自绘"返回"按钮，issue 16）；
  *      JobApp（issue 15）是第四个 App，演示"一次性后台任务"：任务入口跑完就返回，
  *      槽位由框架回收（只出现在系统用例 ui_tour 的注册表里）；
  *      App 之间只走消息（SettingsApp publish → ClockApp onMessage）。
@@ -170,6 +171,8 @@ void ClockApp::on_settings_button(lv_event_t* event) noexcept {
 }
 
 // ================================ SettingsApp ================================
+// （issue 16）本 App 不再有"Back to clock"按钮：回主屏走导航壳的返回键
+// （框架 request_home），切 App 也只经 Layers 里 LauncherApp 的 request_switch。
 
 void SettingsApp::onCreate(Framework& fw) {
   fw_ = &fw;
@@ -187,9 +190,6 @@ void SettingsApp::onCreate(Framework& fw) {
 
   lv_obj_t* level_btn = make_button(screen_, "Level +1", demo_button_x, demo_button_y);
   lv_obj_add_event_cb(level_btn, &SettingsApp::on_level_plus, LV_EVENT_CLICKED, this);
-
-  lv_obj_t* back_btn = make_button(screen_, "Back to clock", demo_button_x, demo_switch_button_y);
-  lv_obj_add_event_cb(back_btn, &SettingsApp::on_back, LV_EVENT_CLICKED, this);
 }
 
 void SettingsApp::onEnter() {
@@ -220,12 +220,6 @@ void SettingsApp::on_level_plus(lv_event_t* event) noexcept {
   // App 之间只走消息：广播给总线（ClockApp 的 onMessage 会收到并更新自己的档位）。
   self->fw_->publish(BrightnessMessage{static_cast<std::uint8_t>(self->level_)});
   ELOG_INFO("设置页：亮度档 -> {}（已广播 BrightnessMessage）", self->level_);
-}
-
-void SettingsApp::on_back(lv_event_t* event) noexcept {
-  auto* self = static_cast<SettingsApp*>(lv_event_get_user_data(event));
-  const Error error = self->fw_->request_switch("clock");
-  ELOG_INFO("请求切回 ClockApp：{}", error);
 }
 
 void SettingsApp::refresh_brightness_label() noexcept {

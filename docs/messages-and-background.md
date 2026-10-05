@@ -128,4 +128,4 @@ const embark::Error err = fw.spawn_own_task(fw.id_of(*this));
 `app/demo_apps.{h,cpp}` 就是最小可读范本：clock（tick + state_chart + 收 `BrightnessMessage`）、
 settings（suspend + `publish` 亮度 + `request_switch`）、ticker（own_task + `post` 信封）、
 job（own_task + `period_ms = 0`：跑完就返回的一次性任务，见下一节）。job 只挂在系统用例
-`platform/host/ui_tour.cpp` 的注册表里，宿主演示 `ui_demo` 与真机固件仍是原来那 4 个 App。
+`platform/host/ui_tour.cpp` 的注册表里；宿主演示 `ui_demo` 已是 5 个（启动器 + 那 4 个 demo App），真机固件仍按 4 个 demo App 注册（首位留给启动器）。

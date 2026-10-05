@@ -1,0 +1,26 @@
+{
+  "fontFile": "assets/fonts/embark_zh_14.c",
+  "symbol": "embark_zh_14",
+  "size": 14,
+  "bpp": 4,
+  "compress": true,
+  "sourceFont": "C:\\Windows\\Fonts\\NotoSansSC-VF.ttf",
+  "chars": {
+    "ascii": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+    "uiText": "启动器时钟设置心跳你好悬任务",
+    "symbols": [
+      "0xF013",
+      "0xF015",
+      "0xF021",
+      "0xF053",
+      "0xF079"
+    ]
+  },
+  "command": "npx lv_font_conv --size 14 --bpp 4 --format lvgl --font C:\\Windows\\Fonts\\NotoSansSC-VF.ttf -r 0x20-0x7F --symbols \"启动器时钟设置心跳你好悬任务\" --font third_party/lvgl/scripts/built_in_font/FontAwesome5-Solid+Brands+Regular.woff -r 0xF013,0xF015,0xF021,0xF053,0xF079 --lv-include lvgl.h --lv-font-name embark_zh_14 -o assets/fonts/embark_zh_14.c",
+  "boost": {
+    "gain": 2.4,
+    "glyphs": 115,
+    "changedGlyphs": 113,
+    "boostedPixels": 3843
+  }
+}

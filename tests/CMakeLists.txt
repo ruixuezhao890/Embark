@@ -27,6 +27,7 @@ add_executable(embark_tests
         hal/test_time.cpp
         kernel/test_app_registry.cpp
         kernel/test_framework.cpp
+        kernel/test_launcher_geometry.cpp
         kernel/test_framework_messaging.cpp
         kernel/test_system_tour.cpp
         kernel/test_bus.cpp

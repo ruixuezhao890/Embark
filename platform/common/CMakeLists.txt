@@ -25,9 +25,22 @@ endif()
 
 add_library(embark_common_ui STATIC
         lvgl_port.cpp
-        lvgl_ui_port.cpp)
+        lvgl_ui_port.cpp
+        nav_shell.cpp)
 
 add_library(embark::common_ui ALIAS embark_common_ui)
+
+
+# 中文字库：静态子集字库（lv_font_conv 生成；清单 tools/font/embark_zh_14.json）。
+# 单独成库、按纯 C 编译：embark_build_options 的强制 -include embark_config.h 会把
+# C++ 头（etl）塞进 C 编译（unknown type name namespace），而这个 TU 只需要 lvgl.h。
+add_library(embark_zh_font STATIC ${PROJECT_SOURCE_DIR}/assets/fonts/embark_zh_14.c)
+target_include_directories(embark_zh_font PRIVATE
+        "${PROJECT_SOURCE_DIR}/config"
+        "${PROJECT_SOURCE_DIR}/third_party/lvgl")
+target_compile_definitions(embark_zh_font PRIVATE LV_CONF_INCLUDE_SIMPLE LV_LVGL_H_INCLUDE_SIMPLE)
+# 只参与最终链接：embark_common_ui 的所有消费者都会带上它。
+target_link_libraries(embark_common_ui PRIVATE embark_zh_font)
 
 # 使用者按 "lvgl_port.h" 引用：本目录必须在 include 路径上（宿主与真机都要）。
 target_include_directories(embark_common_ui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

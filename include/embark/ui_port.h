@@ -13,7 +13,18 @@
  *   - exit_requested()  UI 层是否请求退出（宿主 = 用户关窗）；
  *   - shutdown()     退出路径收尾。
  *
- * 端口实现见 platform/host/lvgl_ui_port.{h,cpp}（宿主）；真机端口在 issue 11。
+ * 导航壳状态（issue 16）：框架的导航壳（返回键 + 状态行，见 platform/common/nav_shell.h）
+ * 由 UI 侧实现，但它的状态来自框架，所以端口上还有三个方法 —— 它们【都有默认实现】，
+ * 不实现壳的端口（测试的 FakeUiPort、以后的无界面平台）一个字都不用改：
+ *
+ *   - set_foreground()      框架在首次前台与每次切换生效后告知前台编号（壳据此决定
+ *                           要不要画返回键）；
+ *   - set_foreground_policy()  同一次通知里带上该 App 的后台配置（状态行右半段）；
+ *   - take_home_request()   壳把"用户按了返回键"交给框架（取走即清；框架在下一个
+ *                           循环边界把它变成一次 request_home）。
+ *
+ * 端口实现见 platform/common/lvgl_ui_port.{h,cpp}（宿主与真机共用；LvglUiPort 就是
+ * 它上面的壳，见 nav_shell.h）；真机端口在 issue 11。
  * 测试用 tests/fakes/fake_ui_port.h。
  *
  * 线程纪律：本端口所有方法只被唯一 UI 任务调用（framework 保证），实现里不需要锁。
@@ -21,7 +32,9 @@
 #ifndef EMBARK_UI_PORT_H
 #define EMBARK_UI_PORT_H
 
+#include <embark/app.h>
 #include <embark/error.h>
+#include <embark/message.h>
 
 namespace embark {
 
@@ -50,6 +63,17 @@ class IUiPort {
 
   /// 退出路径收尾（框架 shutdown 时调用；按需实现，不做强制语义）。
   virtual void shutdown() noexcept = 0;
+
+  // --- 导航壳状态（issue 16；全部有默认实现，见文件头）------------------------
+
+  /// 前台变了（boot 的首次前台 + 每次切换生效后各一次）。壳据此刷新返回键与状态行。
+  virtual void set_foreground(AppId id) noexcept { (void)id; }
+
+  /// 当前前台 App 的后台配置（壳的状态行要显示策略名）。与 set_foreground 同一次通知。
+  virtual void set_foreground_policy(AppSettings settings) noexcept { (void)settings; }
+
+  /// 用户是否要求回主屏（壳上按了返回键）。取走即清：边沿语义，不是电平。
+  [[nodiscard]] virtual bool take_home_request() noexcept { return false; }
 };
 
 }  // namespace embark

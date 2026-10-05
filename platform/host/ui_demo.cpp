@@ -1,28 +1,32 @@
 /**
- * 宿主 · UI 演示可执行文件（issues/06）
+ * 宿主 · UI 演示可执行文件（issues/06，issue 16 改造成启动器验收载具）
  *
  * 从 issue 06 起，这个程序是"唯一 UI 任务"的第一个真实例子：
  *   进程入口 main 只做两件事 —— 起 UI 任务（FreeRTOS 静态任务）+ 进调度器；
  *   真正的启动与主循环全在 ui_main 里（= 那个唯一 UI 任务）：
  *     HAL（SDL 窗口在创建它的线程上泵事件）→ UI 端口（唯一允许调 lv_timer_handler()
- *     的地方）→ Framework（App 注册表 + 前台切换）→ 事件循环。
+ *     的地方）→ Framework（App 注册表 + 前台切换 + 框架导航壳）→ 事件循环。
  *
- * 无人值守验收开关（会自动退出，不需要人去点窗口）：
- *   --frames N        跑 N 帧后退出（默认 0 = 一直跑到关窗）
- *   --click [X,Y]     在第 20 帧合成一次鼠标点击（走 SDL_PushEvent → 真事件队列 → 输入后端；
- *                     点 clock 屏的 "Settings" = 触发一次前台切换）
- *   --switch          合成两次点击验证前台切换：帧 30/32 点 settings 的 "Level +1"（亮度消息
- *                     广播给 clock），帧 50/52 点 "Back to clock"（同一中心，两个前台 App 各中一个按钮）
+ * issue 16 起默认前台是 LauncherApp（扇形主屏）。验收开关分四档：
+ *   --click [X,Y]   演示启动器两段式点按：先点非选中槽（只转正，不启动），
+ *                    弹簧转正后再点选中槽（= 启动目标 App，切到 clock）；
+ *                    最后在 clock 屏上点 (X,Y)（默认 = "Settings" 按钮中心）
+ *                    验证点击落点随前台切换走。
+ *   --drag          合成一次竖直拖动（press → 3 个插值 move → release），
+ *                    验证"1px ≈ 0.1 槽"：拖 10px = 转 1 槽，弹簧收敛后停住；
+ *                    拖动不触发启动（switches()==0）。
+ *   --launch        完整故事线（无人值守验收主路径）：拖动选槽 → 点选中槽切到 clock
+ *                    → Settings → Level+1（消息广播）→ 导航壳返回键回 LauncherApp，
+ *                    全程断言 switches==3 与各 App 钩子序。
+ *   --own-task      验证 own_task 后台 App：TickerApp 的消息要能被 UI 收到。
  *   --screenshot FILE 最后一帧把窗口内容存成 BMP（用 Python/Pillow 转 PNG 便于查看）
- *   --scale S         窗口放大倍数（默认 1 = 240×320 与面板像素 1:1，画面不糊）
- *   --delay MS        每帧间隔（默认 5）
- *   --quit-at N       第 N 帧推一个关窗事件（验收「关窗干净退出」用）
- *   --help            打印用法
+ *   --frames N / --scale S / --delay MS / --quit-at N / --help 同旧版。
  *
- * 界面文案是英文：LVGL 内置字体只有 Montserrat（无中文字形），中文文案要配自定义字体，
- * 那是 issue 12 的事。日志照旧是中文。
+ * 界面文案：demo App 自己的界面沿用英文（LVGL 默认 Montserrat）；启动器与导航壳
+ * （返回键/状态行）用静态子集字库 embark_zh_14（tools/font/gen_font.mjs 生成，
+ * 中文标题与 LV_SYMBOL 码点齐备）。日志照旧是中文。
  *
- * 退出码：0 = 正常；1 = 后端起不来；2 = 验收失败（点了但按钮没响应 / 切换钩子序不对）。
+ * 退出码：0 = 正常；1 = 后端起不来；2 = 验收失败（stderr 写明哪一步）。
  */
 #include <cstdio>
 #include <cstdlib>
@@ -33,6 +37,7 @@
 
 #include <embark/error.h>
 #include <embark/framework.h>
+#include <embark/launcher_geometry.h>
 #include <embark/log.h>
 #include <embark_limits.h>
 
@@ -42,6 +47,7 @@
 #include "host_display.h"
 #include "host_input.h"
 #include "host_lvgl_mem.h"
+#include "launcher_app.h"
 #include "lvgl_port.h"
 #include "lvgl_ui_port.h"
 #include "own_task_spawner.h"
@@ -49,92 +55,67 @@
 
 namespace {
 
-// 合成点击的帧号：先移动+按下，隔两帧再抬起 ——
-// 让 LVGL 分两个读周期处理，点一下就是完整的一次"按下 → 抬起"。
-constexpr int click_move_frame = 20;  // 点 clock 屏的 "Settings"（中心 120,220）
-constexpr int click_release_frame = click_move_frame + 2;
-constexpr int switch_move_frame = 30;  // 点 settings 屏的 "Level +1"（同一坐标，焦点已换）
-constexpr int switch_release_frame = switch_move_frame + 2;
-constexpr int back_move_frame = 50;  // "Back to clock"（settings 屏，下排按钮 120,265）
-constexpr int back_release_frame = back_move_frame + 2;
+// --- 合成输入的帧号与几何 ----------------------------------------------------
+// 每帧 = HAL 一跳（默认 5 ms）。按下后隔两帧抬起，让 LVGL 分两个读周期处理。
+// 启动器几何（launcher_geometry.h）：支点 (120,270)、R=82、STEP=26°。
+// pos=0 时槽 0 在正上方 (120,188)、槽 1 在 26° 处 (156,196)；选中槽时槽 1 在正上方。
+constexpr int launcher_top_x = 120;             // 选中槽中心（正上方）
+constexpr int launcher_top_y = 188;
+constexpr int slot1_unselected_x = 156;         // 未选中时槽 1 的中心（26° 顺时针）
+constexpr int slot1_unselected_y = 196;
+constexpr int nav_back_x = 15;                  // NavShell 返回键中心（lv_layer_top）
+constexpr int nav_back_y = 14;
+
+// --launch 故事线帧号（确定性；间隔足够避开弹簧收敛期的半稳定状态）
+constexpr int drag_press_frame = 15;
+constexpr int drag_move_frame = 17;  // 三个插值 move（每两帧一个）
+constexpr int drag_release_frame = 23;
+constexpr int click_selected_frame = 60;  // 弹簧早已收敛（~帧 52），点选中槽 → clock
+constexpr int click_release_delta = 2;
+constexpr int click_settings_frame = 72;  // clock 屏的 "Settings"
+constexpr int click_level_frame = 84;     // settings 屏的 "Level +1"
+constexpr int click_back_frame = 96;      // 导航壳返回键 → LauncherApp
+constexpr int launch_quit_frame = 110;
+constexpr int launch_frames = 115;
+
+// --click 两段式点按：先"点非选中槽只转正"，弹簧转正后再点选中槽启动
+constexpr int click_rotate_frame = 20;
+constexpr int click_launch_frame = 64;
+constexpr int click_probe_frame = 90;  // 落到 clock 屏（默认点 "Settings" 按钮）
 
 struct Options {
   int frames = 0;
-  int scale = 1;  ///< 默认 1:1（窗口就是 240×320）；N ≥ 2 是整数倍最近邻放大
+  int scale = 1;
   int delay_ms = 5;
   const char* screenshot = nullptr;
   bool click = false;
   int click_x = embark::demo::demo_click_center_x;
   int click_y = embark::demo::demo_click_center_y;
-  int quit_at = 0;  ///< >0 时在第 N 帧推一个 SDL_QUIT（等价于用户点窗口的关闭按钮）
-  bool switch_mode = false;
-  bool own_task = false;  ///< 验证 own_task 后台 App：TickerApp 的消息要能被 UI 收到
+  bool drag = false;
+  int drag_x1 = 120; int drag_y1 = 220;
+  int drag_x2 = 120; int drag_y2 = 210;
+  bool launch = false;
+  int quit_at = 0;
+  bool own_task = false;
 };
 
 void print_usage() {
   std::printf(
       "用法：embark_host_ui [选项]\n"
-      "  --frames N         跑 N 帧后退出（默认 0：一直跑到关窗）\n"
-      "  --click [X,Y]      合成一次鼠标点击（默认点按钮中心 %d,%d；触发 clock 的 Settings 按钮）\n"
-      "  --switch           合成两次点击验证前台切换（clock→settings→clock）\n"
-      "  --own-task         验证 own_task 后台 App（TickerApp 的消息要被 UI 收到）\n"
-      "  --quit-at N        第 N 帧推一个关窗事件（验收「关窗干净退出」用）\n"
-      "  --screenshot FILE  最后一帧存 BMP 截图\n"
-      "  --scale S          窗口放大倍数（默认 1 = 240×320 1:1；N ≥ 2 为整数倍最近邻放大）\n"
-      "  --delay MS         每帧间隔毫秒（默认 5）\n"
-      "  --help             显示本帮助\n",
+      "  --frames N         跑 N 帧后退出（默认按模式：launch 115 / click 110 / drag 80 / own-task 80 / 否则 0 = 一直跑到关窗）\n"
+      "  --click [X,Y]      两段式点按演示（默认点按钮中心 %d,%d；帧 20 点非选中槽转正 → 帧 64 点选中槽切到 clock → 帧 90 在 clock 屏点 (X,Y)）\n"
+      "  --drag X1,Y1,X2,Y2 合成长拖动（帧 15 按下 → 帧 23 抬起；默认 120,220 → 120,210 = 10px = 1 槽）\n"
+      "  --launch            完整验收故事（拖动→启动 clock→Settings→Level+1→返回键回启动器）\n"
+      "  --own-task          验证 own_task 后台 App（TickerApp 消息回流）\n"
+      "  --screenshot FILE  最后一帧存 BMP\n"
+      "  --scale S           窗口放大倍数（默认 1 = 240×320 1:1）\n"
+      "  --delay MS          每帧间隔（默认 5）\n"
+      "  --quit-at N         第 N 帧推关窗事件\n"
+      "  --help              打印用法\n",
       embark::demo::demo_click_center_x, embark::demo::demo_click_center_y);
 }
 
-/// 解析 "X,Y"（失败就用默认值）。
-void parse_point(const char* text, int& x, int& y) {
-  int parsed_x = 0;
-  int parsed_y = 0;
-  if (std::sscanf(text, "%d,%d", &parsed_x, &parsed_y) == 2) {
-    x = parsed_x;
-    y = parsed_y;
-  }
-}
-
-Options parse_options(int argc, char** argv) {
-  Options options;
-  for (int index = 1; index < argc; ++index) {
-    const char* arg = argv[index];
-    if (std::strcmp(arg, "--frames") == 0 && index + 1 < argc) {
-      options.frames = std::atoi(argv[++index]);
-    } else if (std::strcmp(arg, "--scale") == 0 && index + 1 < argc) {
-      options.scale = std::atoi(argv[++index]);
-    } else if (std::strcmp(arg, "--delay") == 0 && index + 1 < argc) {
-      options.delay_ms = std::atoi(argv[++index]);
-    } else if (std::strcmp(arg, "--screenshot") == 0 && index + 1 < argc) {
-      options.screenshot = argv[++index];
-    } else if (std::strcmp(arg, "--quit-at") == 0 && index + 1 < argc) {
-      options.quit_at = std::atoi(argv[++index]);
-    } else if (std::strcmp(arg, "--click") == 0) {
-      options.click = true;
-      if (index + 1 < argc && argv[index + 1][0] != '-') {
-        parse_point(argv[++index], options.click_x, options.click_y);
-      }
-    } else if (std::strcmp(arg, "--switch") == 0) {
-      options.switch_mode = true;
-    } else if (std::strcmp(arg, "--own-task") == 0) {
-      options.own_task = true;
-    } else if (std::strcmp(arg, "--help") == 0 || std::strcmp(arg, "-h") == 0) {
-      print_usage();
-      std::exit(0);
-    }
-  }
-  if (options.scale < 1) {
-    options.scale = 1;
-  }
-  if (options.delay_ms < 0) {
-    options.delay_ms = 0;
-  }
-  return options;
-}
-
-// --- 合成输入：走 SDL 自己的事件队列，等于把"人在窗口上点了一下"喂给整条链路 ---
-
+// --- 合成输入（SDL_PushEvent → 真事件队列 → 输入后端）-------------------------
 void push_motion_and_press(int scale, int panel_x, int panel_y) {
   SDL_Event motion{};
   motion.type = SDL_MOUSEMOTION;
@@ -152,6 +133,15 @@ void push_motion_and_press(int scale, int panel_x, int panel_y) {
   SDL_PushEvent(&press);
 }
 
+/// 拖动中间帧只推 motion（不按不抬）：LVGL 读到的还是"按住移动"。
+void push_motion(int scale, int panel_x, int panel_y) {
+  SDL_Event motion{};
+  motion.type = SDL_MOUSEMOTION;
+  motion.motion.x = panel_x * scale;
+  motion.motion.y = panel_y * scale;
+  SDL_PushEvent(&motion);
+}
+
 void push_release(int scale, int panel_x, int panel_y) {
   SDL_Event release{};
   release.type = SDL_MOUSEBUTTONUP;
@@ -163,15 +153,12 @@ void push_release(int scale, int panel_x, int panel_y) {
   SDL_PushEvent(&release);
 }
 
-/// 把窗口内容存成 BMP（SDL_SaveBMP 只认 BMP；要看图就转 PNG）。
-/// 取像素这段交给显示后端（HostDisplay::capture_surface）—— 它知道正确的读回顺序。
 bool save_screenshot(embark::platform::host::HostDisplay& display, const char* path) {
   SDL_Surface* surface = display.capture_surface();
   if (surface == nullptr) {
     ELOG_ERROR("截图失败：{}", SDL_GetError());
     return false;
   }
-
   const bool ok = SDL_SaveBMP(surface, path) == 0;
   if (!ok) {
     ELOG_ERROR("截图失败：写文件失败（{}）", SDL_GetError());
@@ -184,12 +171,11 @@ bool save_screenshot(embark::platform::host::HostDisplay& display, const char* p
 
 namespace embark::platform::host {
 
-// 整个可执行文件只出现一次的 App 注册表：ClockApp 是默认前台，SettingsApp 待命，
-// TickerApp 是纯后台（own_task 策略，issue 07 的消息回 UI 演示），HelloApp 是
-// 最简模板（issue 12 的新手最短路径，挂在末位不参与验收断言）。
-// demo App 本体在 app/（issues/08 起宿主侧不再自带）。
-EMBARK_APP_TABLE(embark::demo::ClockApp, embark::demo::SettingsApp, embark::demo::TickerApp,
-                 embark::demo::HelloApp)
+// 整个可执行文件只出现一次的 App 注册表：LauncherApp（启动器）首位 = 默认前台，
+// 之后是 ClockApp/SettingsApp/TickerApp/HelloApp（注册顺序 = 启动器槽位顺序，
+// spec/issue 16：启动器必须第一位）。demo App 本体在 app/。
+EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp,
+                 embark::demo::TickerApp, embark::demo::HelloApp)
 
 }  // namespace embark::platform::host
 
@@ -200,16 +186,44 @@ namespace hp = embark::platform::host;
 
 namespace {
 
-/// 宿主的退出来源：SDL 的关窗标志。`hal::IInput` 里没有"退出请求"这个概念
-/// （宿主是关窗、真机可能是按键或压根没有），所以平台共用的 LvglUiPort 收一个回调。
 bool host_exit_query(void* context) noexcept {
   return static_cast<hp::HostInput*>(context)->quit_requested();
 }
 
+Options parse_options(int argc, char** argv) {
+  Options options;
+  for (int i = 1; i < argc; ++i) {
+    const char* arg = argv[i];
+    auto next_is_flag = [&]() { return i + 1 >= argc || argv[i + 1][0] == '-'; };
+    if (std::strcmp(arg, "--frames") == 0 && !next_is_flag()) { options.frames = std::atoi(argv[++i]); }
+    else if (std::strcmp(arg, "--scale") == 0 && !next_is_flag()) { options.scale = std::atoi(argv[++i]); }
+    else if (std::strcmp(arg, "--delay") == 0 && !next_is_flag()) { options.delay_ms = std::atoi(argv[++i]); }
+    else if (std::strcmp(arg, "--screenshot") == 0 && !next_is_flag()) { options.screenshot = argv[++i]; }
+    else if (std::strcmp(arg, "--quit-at") == 0 && !next_is_flag()) { options.quit_at = std::atoi(argv[++i]); }
+    else if (std::strcmp(arg, "--click") == 0) {
+      options.click = true;
+      if (!next_is_flag()) {
+        int x = 0, y = 0;
+        if (std::sscanf(argv[++i], "%d,%d", &x, &y) == 2) { options.click_x = x; options.click_y = y; }
+      }
+    }
+    else if (std::strcmp(arg, "--drag") == 0 && !next_is_flag()) {
+      options.drag = true;
+      int x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+      if (std::sscanf(argv[++i], "%d,%d,%d,%d", &x1, &y1, &x2, &y2) == 4) {
+        options.drag_x1 = x1; options.drag_y1 = y1; options.drag_x2 = x2; options.drag_y2 = y2;
+      }
+    }
+    else if (std::strcmp(arg, "--launch") == 0) { options.launch = true; }
+    else if (std::strcmp(arg, "--own-task") == 0) { options.own_task = true; }
+    else if (std::strcmp(arg, "--help") == 0) { print_usage(); std::exit(0); }
+  }
+  return options;
+}
+
 }  // namespace
 
-/// 唯一 UI 任务。SDL 的窗口与事件泵要求同线程，LVGL 只允许一条线上跑，
-/// 所以 HAL 初始化、UI 端口、App 前台、事件循环全都在这一个任务里（spec §6）。
+/// 唯一 UI 任务（spec §6：唯一能碰 LVGL 的线程，窗口事件也在它上面泵）。
 void ui_main(void* argument) noexcept {
   const Options* options = static_cast<const Options*>(argument);
 
@@ -224,19 +238,8 @@ void ui_main(void* argument) noexcept {
     std::fprintf(stderr, "HAL 初始化失败：%s\n", embark::error_text(text, hal_error));
     hp::exit_process(1);
   }
-  // 整对象打日志的示范（issue 13）：DisplayInfo 里嵌着 PixelFormat，字段名与取值名
-  // 都来自 hal/types.h 的 E_FMT_DERIVE(_ENUM) 声明；加字段不用改这一行。
-  // 注意 elog 单行上限（ELOG_MAX_RECORD_SIZE，默认 384 字节）：整行放不下会被整体
-  // 丢弃（不输出半行），所以这里把 Rect 拆成下一条 —— 两条都在上限内。
-  const embark::hal::DisplayInfo display_info = display.info();
-  ELOG_INFO("HAL 就绪：显示 {}，输入 {}，持久化 {}", display_info,
-            input.is_ready() ? "就绪" : "未就绪", hal.storage_path());
-  ELOG_INFO("整屏区域 {}", embark::hal::Rect{0, 0, display_info.width, display_info.height});
 
-  // UI 端口在 platform/common（宿主与真机共用）：显示/输入从 HAL Context 取，
-  // 退出来源由平台注入（这里是"用户关窗"）。
   embark::platform::LvglUiPort ui_port(hal.context(), &host_exit_query, &input);
-  // own task 的后台任务槽位（BSS，不占 UI 任务栈）：进程级一个实例。
   static hp::HostTaskSpawner spawner;
   Framework framework(hal.context(), hp::embark_apps(), &ui_port, &spawner);
   if (const Error boot_error = framework.boot(); boot_error != Error::none) {
@@ -244,142 +247,123 @@ void ui_main(void* argument) noexcept {
     std::fprintf(stderr, "框架启动失败：%s\n", embark::error_text(text, boot_error));
     hp::exit_process(1);
   }
-  // LVGL_VERSION_* 是整数宏（third_party/lvgl/lvgl.h:16-18），拼字符串要逐个占位。
-  ELOG_INFO("框架就绪：{} 个 App，默认前台 {}；LVGL {}.{}.{}，绘制缓冲 {} 行，LVGL 堆预算 {} 字节",
-            framework.apps().size(), framework.apps().at(0)->name(), LVGL_VERSION_MAJOR,
-            LVGL_VERSION_MINOR, LVGL_VERSION_PATCH, static_cast<int>(embark::lvgl_draw_buf_lines),
-            embark::lvgl_alloc_budget_bytes);
+
+  ELOG_INFO("框架就绪：{} 个 App，默认前台 {}（剩余 {} 槽位）", framework.apps().size(),
+            framework.apps().at(0)->name(),
+            embark::launcher::max_slots - framework.apps().size());
+
+  // --- 按模式定帧数上限（0 = 一直跑到关窗）-----------------------------------
+  int frames_limit = options->frames;
+  if (frames_limit <= 0) {
+    if (options->launch) { frames_limit = launch_frames; }
+    else if (options->click) { frames_limit = 110; }
+    else if (options->drag) { frames_limit = 80; }
+    else if (options->own_task) { frames_limit = 80; }
+  }
 
   int frames_run = 0;
-  bool screenshot_done = (options->screenshot == nullptr);
-
   for (;;) {
-    // 一帧 = UI 端口喂时间 → 喂输入 → （框架在边界执行前台切换）→ LVGL 渲染
     framework.step();
     ++frames_run;
+    if (framework.exit_requested()) { break; }
 
-    if (framework.exit_requested()) {
-      ELOG_INFO("收到关窗请求：第 {} 帧，开始收尾", frames_run);
-      break;
+    // --- 合成输入（帧号驱动，确定性）-----------------------------------------
+    if (options->launch) {
+      if (frames_run == drag_press_frame) { push_motion_and_press(options->scale, 120, 220); }
+      if (frames_run == drag_move_frame) { push_motion(options->scale, 120, 216); }
+      if (frames_run == drag_move_frame + 2) { push_motion(options->scale, 120, 213); }
+      if (frames_run == drag_move_frame + 4) { push_motion(options->scale, 120, 210); }
+      if (frames_run == drag_release_frame) { push_release(options->scale, 120, 210); }
+      if (frames_run == click_selected_frame) { push_motion_and_press(options->scale, launcher_top_x, launcher_top_y); }
+      if (frames_run == click_selected_frame + click_release_delta) { push_release(options->scale, launcher_top_x, launcher_top_y); }
+      if (frames_run == click_settings_frame) { push_motion_and_press(options->scale, embark::demo::demo_click_center_x, embark::demo::demo_click_center_y); }
+      if (frames_run == click_settings_frame + click_release_delta) { push_release(options->scale, embark::demo::demo_click_center_x, embark::demo::demo_click_center_y); }
+      if (frames_run == click_level_frame) { push_motion_and_press(options->scale, embark::demo::demo_click_center_x, embark::demo::demo_click_center_y); }
+      if (frames_run == click_level_frame + click_release_delta) { push_release(options->scale, embark::demo::demo_click_center_x, embark::demo::demo_click_center_y); }
+      if (frames_run == click_back_frame) { push_motion_and_press(options->scale, nav_back_x, nav_back_y); }
+      if (frames_run == click_back_frame + click_release_delta) { push_release(options->scale, nav_back_x, nav_back_y); }
+      if (frames_run == launch_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
+    } else if (options->click) {
+      if (frames_run == click_rotate_frame) { push_motion_and_press(options->scale, slot1_unselected_x, slot1_unselected_y); }
+      if (frames_run == click_rotate_frame + click_release_delta) { push_release(options->scale, slot1_unselected_x, slot1_unselected_y); }
+      if (frames_run == click_launch_frame) { push_motion_and_press(options->scale, launcher_top_x, launcher_top_y); }
+      if (frames_run == click_launch_frame + click_release_delta) { push_release(options->scale, launcher_top_x, launcher_top_y); }
+      if (frames_run == click_probe_frame) { push_motion_and_press(options->scale, options->click_x, options->click_y); }
+      if (frames_run == click_probe_frame + click_release_delta) { push_release(options->scale, options->click_x, options->click_y); }
+    } else if (options->drag) {
+      if (frames_run == drag_press_frame) { push_motion_and_press(options->scale, options->drag_x1, options->drag_y1); }
+      if (frames_run == drag_move_frame) { push_motion(options->scale, options->drag_x1 + (options->drag_x2 - options->drag_x1) / 3, options->drag_y1 + (options->drag_y2 - options->drag_y1) / 3); }
+      if (frames_run == drag_move_frame + 2) { push_motion(options->scale, options->drag_x1 + (options->drag_x2 - options->drag_x1) * 2 / 3, options->drag_y1 + (options->drag_y2 - options->drag_y1) * 2 / 3); }
+      if (frames_run == drag_move_frame + 4) { push_motion(options->scale, options->drag_x2, options->drag_y2); }
+      if (frames_run == drag_release_frame) { push_release(options->scale, options->drag_x2, options->drag_y2); }
     }
-
-    if (options->click) {
-      if (frames_run == click_move_frame) {
-        ELOG_INFO("合成点击：移动 + 按下 ({},{})", options->click_x, options->click_y);
-        push_motion_and_press(options->scale, options->click_x, options->click_y);
-      } else if (frames_run == click_release_frame) {
-        push_release(options->scale, options->click_x, options->click_y);
-      }
-    }
-
-    if (options->switch_mode) {
-      if (frames_run == switch_move_frame) {
-        // settings 屏的 "Level +1"（与 clock 屏 "Settings" 同一中心 (120,220)，证明焦点已换）。
-        ELOG_INFO("合成点击：切换按钮 ({},{})", embark::demo::demo_click_center_x,
-                  embark::demo::demo_click_center_y);
-        push_motion_and_press(options->scale, embark::demo::demo_click_center_x,
-                              embark::demo::demo_click_center_y);
-      } else if (frames_run == switch_release_frame) {
-        push_release(options->scale, embark::demo::demo_click_center_x,
-                     embark::demo::demo_click_center_y);
-      } else if (frames_run == back_move_frame) {
-        // settings 屏的 "Back to clock"（下排按钮 (160,215)）。
-        ELOG_INFO("合成点击：返回按钮 ({},{})", embark::demo::demo_switch_center_x,
-                  embark::demo::demo_switch_center_y);
-        push_motion_and_press(options->scale, embark::demo::demo_switch_center_x,
-                              embark::demo::demo_switch_center_y);
-      } else if (frames_run == back_release_frame) {
-        push_release(options->scale, embark::demo::demo_switch_center_x,
-                     embark::demo::demo_switch_center_y);
-      }
-    }
-
     if (options->quit_at > 0 && frames_run == options->quit_at) {
-      // 等价于用户点窗口右上角的 ×：SDL_QUIT 进事件队列，由输入后端认出来再置 quit_requested_
-      // （下一帧的 pump_input 会读走它）—— 验收「关窗干净退出」走的就是这条路径。
-      SDL_Event quit{};
-      quit.type = SDL_QUIT;
-      SDL_PushEvent(&quit);
+      SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit);
     }
 
-    if (options->frames > 0 && frames_run >= options->frames) {
-      if (!screenshot_done) {
-        screenshot_done = true;
-        if (save_screenshot(display, options->screenshot)) {
-          ELOG_INFO("截图已保存：{}", options->screenshot);
-        }
+    if (frames_limit > 0 && frames_run >= frames_limit) {
+      if (options->screenshot != nullptr && !save_screenshot(display, options->screenshot)) {
+        hp::exit_process(1);
       }
-      ELOG_INFO("跑满 {} 帧，正常退出", options->frames);
       break;
     }
-
     hp::ui_loop_delay(static_cast<std::uint32_t>(options->delay_ms));
   }
 
-  const embark::demo::ClockApp& clock_app =
-      *static_cast<const embark::demo::ClockApp*>(framework.app(0));
-  const embark::demo::SettingsApp& settings =
-      *static_cast<const embark::demo::SettingsApp*>(framework.app(1));
-  const embark::demo::TickerApp& ticker =
-      *static_cast<const embark::demo::TickerApp*>(framework.app(2));
+  // --- 观测与断言 -------------------------------------------------------------
+  const auto* launcher = static_cast<const embark::demo::LauncherApp*>(framework.app(0));
+  const auto* clock = static_cast<const embark::demo::ClockApp*>(framework.app(1));
+  const auto* settings = static_cast<const embark::demo::SettingsApp*>(framework.app(2));
+  const auto* ticker = static_cast<const embark::demo::TickerApp*>(framework.app(3));
 
-  // 拆两条统计（efmt 的 format 参数上限 16，观测项多）
-  ELOG_INFO(
-      "统计（显示/前台）：帧 {}，刷新 {} 次（{} 字节），Present {} 次，前台 {}（切换 {} 次），"
-      "clock ticks {}/brightness {}，settings enter {}/resume {}",
-      frames_run, ui_port.port().refreshes(), ui_port.port().flush_bytes(), display.presents(),
-      framework.apps().at(framework.foreground())->name(), framework.switches(), clock_app.ticks(),
-      clock_app.brightness(), settings.enters(), settings.resumes());
-  ELOG_INFO(
-      "统计（后台/消息）：丢输入 {}，忽略按键 {}，ticker 发送 {} 条 / UI 收到 {} 条，"
-      "总线发布 {} 条 / 无人接收 {} 条，收件箱溢出 {} 次，UI 任务栈余量 {} 字",
-      ui_port.port().dropped_input_events(), ui_port.port().ignored_key_events(), ticker.sent(),
-      ticker.received(), framework.bus().published(), framework.bus().unknown(),
-      framework.inbox_overflows(),
-      static_cast<unsigned long>(uxTaskGetStackHighWaterMark(nullptr)));
-  ELOG_INFO("LVGL 堆：分配 {} 次，峰值 {} 字节，退出前未回收 {} 字节（预算 {}）",
-            hp::lvgl_allocations(), hp::lvgl_peak_bytes(), hp::lvgl_outstanding_bytes(),
-            embark::lvgl_alloc_budget_bytes);
+  ELOG_INFO("显示与前台：{} 帧；前台 {}；switches={}；导航壳返回键 {}（home_requests={}）",
+            frames_run, framework.apps().at(framework.foreground())->name(), framework.switches(),
+            ui_port.nav_shell().back_visible() ? "可见" : "隐藏",
+            ui_port.nav_shell().home_requests());
+  ELOG_INFO("启动器：pos={} target={}（×100），selected={} {}（enters={} resumes={} requests={}）",
+            static_cast<int>(launcher->position() * 100.0F),
+            static_cast<int>(launcher->target() * 100.0F), launcher->selected(),
+            launcher->settled() ? "已稳定" : "弹簧中", launcher->enters(), launcher->resumes(),
+            launcher->requests());
+  ELOG_INFO("后台/消息：clock ticks={} brightness={}；settings level={}；ticker sent={} received={}；LVGL 未回收 {} 字节",
+            clock->ticks(), clock->brightness(), settings->level(), ticker->sent(), ticker->received(),
+            embark_lvgl_outstanding_bytes());
 
   int exit_code = 0;
-  if (options->click && settings.enters() != 1U) {
-    // --click 点的是 clock 屏的 "Settings" 按钮：settings 必须恰好首次进入前台一次。
-    // （不校验 switches() 总数：--click 与 --switch 叠加时帧 50 的"返回"也算一次切换。）
-    std::fprintf(stderr, "合成点击没有触发前台切换（验收失败）：settings 进入 %u 次（期望 1）\n",
-                 settings.enters());
-    exit_code = 2;
+  if (options->launch) {
+    const bool launched_ok = framework.switches() == 3 && launcher->enters() == 1 && launcher->resumes() == 1 &&
+                             launcher->settled() && launcher->selected() == 1 &&
+                             clock->enters() == 1 && clock->resumes() == 0 && clock->ticks() > 0 &&
+                             settings->enters() == 1 && settings->resumes() == 0 && clock->brightness() == 1 &&
+                             ui_port.nav_shell().home_requests() == 1 &&
+                             !ui_port.nav_shell().back_visible() && ui_port.nav_shell().foreground() == 0;
+    ELOG_INFO(launched_ok ? "〔launch 验收通过〕" : "〔launch 验收失败〕");
+    if (!launched_ok) { exit_code = 2; }
   }
-  if (exit_code == 0 && options->switch_mode) {
-    // 切换验收：clock→settings→clock 恰好 2 次；onEnter 只在第一次，切回走 onResume；
-    // 帧 30/32 的合成点击落在 (120,220)：与 --click 叠加时焦点已在 settings，点中的是
-    // "Level +1"（App 间消息要真被 clock 收到）；单独 --switch 时焦点还在 clock，点中的是
-    // "Settings" 按钮本身——此时不应有任何亮度消息（brightness 必须 0）；
-    // clock 后台节拍必须要跑过（spec §14.1：后台 tick 可观测）。
-    const bool brightness_ok =
-        options->click ? (clock_app.brightness() == 1U) : (clock_app.brightness() == 0U);
-    const bool hooks_ok = framework.switches() == 2U && clock_app.enters() == 1U &&
-                          clock_app.resumes() == 1U && settings.enters() == 1U &&
-                          settings.resumes() == 0U && brightness_ok && clock_app.ticks() > 0U;
-    if (!hooks_ok) {
-      std::fprintf(stderr,
-                   "前台切换验收失败：切换 %u 次（期望 2），clock enter %u/resume %u（期望 1/1），"
-                   "settings enter %u/resume %u（期望 1/0），clock brightness %u（期望 %u），"
-                   "clock ticks %u（期望 > 0）\n",
-                   framework.switches(), clock_app.enters(), clock_app.resumes(), settings.enters(),
-                   settings.resumes(), clock_app.brightness(), options->click ? 1U : 0U,
-                   clock_app.ticks());
-      exit_code = 2;
-    }
+  if (options->click) {
+    // 非选中槽转正（不启动）→ 选中槽启动 → probe 点击落在 clock 屏的按钮上
+    const bool clicked_ok = framework.switches() == 2 && settings->enters() == 1 &&
+                            settings->resumes() == 0 && clock->enters() == 1 && clock->resumes() == 0 &&
+                            launcher->enters() == 1 && launcher->resumes() == 0;
+    ELOG_INFO(clicked_ok ? "〔click 验收通过〕" : "〔click 验收失败〕");
+    if (!clicked_ok) { exit_code = 2; }
   }
-
-  if (exit_code == 0 && options->own_task) {
-    // own_task 验收：TickerApp 的后台任务至少发出一条，且 UI 任务真的收到了。
-    // （sent() 是跨线程观测读取：own task 单写者，v1 接受；received() 在 UI 线程读）
-    if (ticker.sent() == 0 || ticker.received() == 0) {
-      std::fprintf(stderr, "own_task 验收失败：后台发送 %u 条 / UI 收到 %u 条（期望都 > 0）\n",
-                   ticker.sent(), ticker.received());
-      exit_code = 2;
-    }
+  if (options->drag) {
+    // 预期 = 松手瞬间的槽号（drag_target 夹取 + settle 时 lround）
+    const int expected = embark::launcher::selected_index(
+        embark::launcher::drag_target(0.0F, static_cast<float>(options->drag_y2 - options->drag_y1),
+                                      static_cast<int>(launcher->slot_count())),
+        static_cast<int>(launcher->slot_count()));
+    const bool dragged_ok = launcher->settled() && launcher->selected() == expected &&
+                            framework.switches() == 0;  // 拖动只转正，不启动
+    ELOG_INFO("〔drag 验收{}〕：预期槽 {}，实际 {}（dist={}px）", dragged_ok ? "通过" : "失败",
+              expected, launcher->selected(), options->drag_y2 - options->drag_y1);
+    if (!dragged_ok) { exit_code = 2; }
+  }
+  if (options->own_task) {
+    const bool ticked_ok = ticker->sent() > 0 && ticker->received() > 0;
+    ELOG_INFO(ticked_ok ? "〔own-task 验收通过〕" : "〔own-task 验收失败〕");
+    if (!ticked_ok) { exit_code = 2; }
   }
 
   framework.shutdown();
@@ -387,11 +371,10 @@ void ui_main(void* argument) noexcept {
 }
 
 int main(int argc, char** argv) {
-  std::setvbuf(stdout, nullptr, _IONBF, 0);  // 重定向到文件时也能看到进度
+  std::setvbuf(stdout, nullptr, _IONBF, 0);
 
   Options options = parse_options(argc, argv);
 
-  // 栈深口径是 StackType_t 字：宿主 1 字 = 8 字节，真机 xtensa 1 字 = 1 字节。
   ELOG_INFO("UI 任务启动：栈 {} 字（{} KB），优先级 {}，周期 {} ms", embark::ui_task_stack_words,
             embark::ui_task_stack_words * static_cast<int>(sizeof(StackType_t)) / 1024,
             static_cast<int>(embark::ui_task_priority), embark::ui_loop_period_ms);
@@ -403,6 +386,6 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  hp::start_scheduler();  // 永不返回（调度器把控制权交给 UI 任务；收尾走 exit_process）
-  return 0;               // 编译器路径：永远到不了
+  hp::start_scheduler();
+  return 0;
 }

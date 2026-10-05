@@ -6,11 +6,11 @@
  *
  *   ① 进程入口：起唯一 UI 任务（FreeRTOS 静态任务）→ 进调度器，自己不干活
  *   ② HAL 初始化：时间 / 持久化 / 日志 / 系统 / 总线 / 显示 / 输入，逐个报状态
- *   ③ 框架 boot：4 个 App 注册 → 打印每个 App 的后台策略 → 默认前台 clock
- *   ④ 后台节拍：clock 的 onBackgroundTick 由框架定时器驱动（没占 UI 任务）
- *   ⑤ 前台切换 #1：合成点击 "Settings" → clock 退场、settings 进场（onEnter）
- *   ⑥ App 间消息：settings 屏点 "Level +1" → clock 收到亮度消息
- *   ⑦ 前台切换 #2：点 "Back to clock" → clock 走 onResume（不是 onEnter）
+ *   ③ 框架 boot：5 个 App 注册 → 打印每个 App 的后台策略 → 默认前台 LauncherApp
+ *   ④ 启动器主屏：合成拖动（1px = 0.1 槽）→ 弹簧收敛 → 点选中槽启动 clock
+ *   ⑤ 前台切换 #1：点选中槽 → clock 进场（onEnter，后台 tick 继续跑）
+ *   ⑥ App 间消息：settings 屏点 "Level +1" → clock 收到亮度消息（广播）
+ *   ⑦ 导航壳返回键：点左上的返回键 → request_home → LauncherApp 走 onResume
  *   ⑧ 真正的任务切换：own_task 的 ticker 任务发消息 → UI 任务收（SPSC 队列）
  *   ⑨ 任务生命周期：一次性 own_task（job）跑完 → 框架回收槽位 → 运行期再创建一轮
  *   ⑩ 关窗退出：SDL_QUIT → framework.exit_requested() → 收尾统计 + LVGL 堆账
@@ -26,7 +26,9 @@
  *   --screenshot FILE  收尾时把最后一帧存成 BMP
  *   --help             显示用法
  *
- * 界面文案是英文（LVGL 内置字体只有 Montserrat），日志是中文。
+ * 界面文案：demo App 自己的界面沿用英文（LVGL 默认 Montserrat）；启动器与导航壳
+ * （返回键/状态行）用静态子集字库 embark_zh_14（tools/font/gen_font.mjs 生成）。
+ * 日志是中文。
  */
 #include <cstdio>
 #include <cstdlib>
@@ -39,6 +41,7 @@
 #include <embark/error.h>
 #include <embark/framework.h>
 #include <embark/log.h>
+#include <embark/launcher_geometry.h>
 #include <embark/task_spawner.h>
 #include <embark/version.h>
 #include <embark_limits.h>
@@ -49,6 +52,7 @@
 #include "host_display.h"
 #include "host_input.h"
 #include "host_lvgl_mem.h"
+#include "launcher_app.h"
 #include "lvgl_port.h"
 #include "lvgl_ui_port.h"
 #include "own_task_spawner.h"
@@ -56,87 +60,57 @@
 
 namespace {
 
-/// 注册表下标（与 EMBARK_APP_TABLE 的顺序一一对应）：第 5 个是 JobApp。
-constexpr embark::AppId job_id = 4U;
+/// 注册表下标（与 EMBARK_APP_TABLE 的顺序一一对应）：第 6 个是 JobApp。
+constexpr embark::AppId job_id = 5U;
 
 // --- 用例时间线（帧号）-------------------------------------------------------
 // 每帧 = HAL 的一跳（默认 5 ms），帧号是确定性的，所以这条用例每次跑法完全一样。
-constexpr int tick_checkpoint_first = 24;  ///< ④ 第一次看后台节拍
-constexpr int click_settings_frame = 30;   ///< ⑤ 合成点击 clock 屏的 "Settings"
-constexpr int click_release_delta = 2;  ///< 按下后隔两帧抬起（让 LVGL 分两个读周期看）
-constexpr int click_level_frame = 40;       ///< ⑥ 合成点击 settings 屏的 "Level +1"
-constexpr int click_back_frame = 50;        ///< ⑦ 合成点击 "Back to clock"
-constexpr int own_task_checkpoint = 60;     ///< ⑧ own_task 的消息回流
-constexpr int tick_checkpoint_second = 70;  ///< ④' 第二次看后台节拍（对比增长）
-constexpr int own_task_cycle_frame = 74;    ///< ⑨ 运行期再创建一次性任务（job）
-constexpr int quit_frame = 87;      ///< ⑩ 推 SDL_QUIT（等价于点窗口关闭按钮）
-constexpr int tour_end_frame = 88;  ///< 最多跑到这里
+// 启动器几何：支点 (120,270)、R=82、STEP=26°；pos=0 时槽 1 在 (156,196)。
+// 拖 10px = 1 槽，弹簧 ~29 帧收敛（0.85^n < 0.01），所以"点选中槽"排在第 56 帧。
+constexpr int drag_press_frame = 14;      ///< ④ 启动器拖动：按下
+constexpr int drag_move_step = 2;         ///< 插值 move 的帧间隔
+constexpr int drag_release_frame = 22;    ///< 松开（(120,220)→(120,210)，dy=-10 → 1 槽）
+constexpr int tick_checkpoint_first = 28; ///< 第一次看 clock 的后台节拍
+constexpr int click_slot_frame = 56;      ///< ⑤ 点选中槽（120,188）→ 启动 clock
+constexpr int click_release_delta = 2;    ///< 按下后隔两帧抬起（LVGL 分两个读周期）
+constexpr int click_settings_frame = 68;  ///< ⑥ 合成点击 clock 屏的 "Settings"
+constexpr int click_level_frame = 78;     ///< ⑥ 合成点击 settings 屏的 "Level +1"
+constexpr int click_back_frame = 90;      ///< ⑦ 合成点击导航壳返回键（15,14）
+constexpr int own_task_checkpoint = 100;  ///< ⑧ own_task 的消息回流
+constexpr int tick_checkpoint_second = 102;  ///< 第二次看后台节拍（对比增长）
+constexpr int own_task_cycle_frame = 106; ///< ⑨ 运行期再创建一次 job
+constexpr int quit_frame = 118;           ///< ⑩ 推关窗事件
+constexpr int tour_end_frame = 120;       ///< 默认帧数上限
 
 struct Options {
-  int scale = 1;     ///< 默认 1:1：窗口就是 240×320
-  int delay_ms = 5;  ///< 每帧让出的毫秒数
+  int scale = 1;
+  int delay_ms = 5;
   int frames = tour_end_frame;
   const char* screenshot = nullptr;
 };
 
 void print_usage() {
   std::printf(
-      "用法：embark_host_tour [选项]\n"
-      "  不带参数就会完整跑一遍：启动 → HAL 就绪 → 框架 boot → 后台节拍 →\n"
-      "  前台切换（clock→settings→clock）→ App 间消息 → own_task 消息回流 →\n"
-      "  一次性任务创建/回收 → 关窗收尾\n"
-      "  --scale S          窗口放大倍数（默认 1 = 240×320 与面板像素 1:1）\n"
-      "  --delay MS         每帧间隔毫秒（默认 5；调大可放慢观察）\n"
-      "  --frames N         最多跑 N 帧（默认 %d = 用例结束）\n"
-      "  --screenshot FILE  收尾时存一张 BMP 截图\n"
-      "  --help             显示本帮助\n",
+      "用法：embark_host_ui_tour [选项]\n"
+      "  --scale S          窗口放大倍数（默认 1）\n"
+      "  --delay MS         每帧间隔（默认 5）\n"
+      "  --frames N         最多跑 N 帧（默认 %d）\n"
+      "  --screenshot FILE  收尾时把最后一帧存成 BMP\n"
+      "  --help             显示用法\n",
       tour_end_frame);
 }
 
-Options parse_options(int argc, char** argv) {
-  Options options;
-  for (int index = 1; index < argc; ++index) {
-    const char* arg = argv[index];
-    if (std::strcmp(arg, "--scale") == 0 && index + 1 < argc) {
-      options.scale = std::atoi(argv[++index]);
-    } else if (std::strcmp(arg, "--delay") == 0 && index + 1 < argc) {
-      options.delay_ms = std::atoi(argv[++index]);
-    } else if (std::strcmp(arg, "--frames") == 0 && index + 1 < argc) {
-      options.frames = std::atoi(argv[++index]);
-    } else if (std::strcmp(arg, "--screenshot") == 0 && index + 1 < argc) {
-      options.screenshot = argv[++index];
-    } else if (std::strcmp(arg, "--help") == 0 || std::strcmp(arg, "-h") == 0) {
-      print_usage();
-      std::exit(0);
-    }
-  }
-  if (options.scale < 1) {
-    options.scale = 1;
-  }
-  if (options.delay_ms < 0) {
-    options.delay_ms = 0;
-  }
-  if (options.frames <= 0) {
-    options.frames = tour_end_frame;
-  }
-  return options;
-}
-
-/// 后台策略的汉语说法（打印 App 清单用）。
-const char* policy_text(embark::BackgroundPolicy policy) noexcept {
+/// 后台策略的中文解说（framework.apps().at(i)->settings() 展示用）。
+const char* policy_text(embark::BackgroundPolicy policy) {
   switch (policy) {
-    case embark::BackgroundPolicy::suspend:
-      return "suspend（退场即挂起，不再被叫）";
-    case embark::BackgroundPolicy::tick:
-      return "tick（框架定时器驱动 onBackgroundTick）";
-    case embark::BackgroundPolicy::own_task:
-      return "own_task（独占一个 FreeRTOS 任务）";
+    case embark::BackgroundPolicy::suspend: return "suspend（退前台就完全不跑）";
+    case embark::BackgroundPolicy::tick: return "tick（后台定时器，period_ms 如上）";
+    case embark::BackgroundPolicy::own_task: return "own_task（独立任务，period_ms 如上）";
   }
-  return "未知策略";
+  return "?";
 }
 
-// --- 合成输入：进 SDL 的事件队列，和"人在窗口上点一下"走同一条链路 ------------
-
+// --- 合成输入（SDL_PushEvent → 真事件队列 → 输入后端）-------------------------
 void push_motion_and_press(int scale, int panel_x, int panel_y) {
   SDL_Event motion{};
   motion.type = SDL_MOUSEMOTION;
@@ -152,6 +126,14 @@ void push_motion_and_press(int scale, int panel_x, int panel_y) {
   press.button.x = panel_x * scale;
   press.button.y = panel_y * scale;
   SDL_PushEvent(&press);
+}
+
+void push_motion(int scale, int panel_x, int panel_y) {
+  SDL_Event motion{};
+  motion.type = SDL_MOUSEMOTION;
+  motion.motion.x = panel_x * scale;
+  motion.motion.y = panel_y * scale;
+  SDL_PushEvent(&motion);
 }
 
 void push_release(int scale, int panel_x, int panel_y) {
@@ -179,15 +161,28 @@ bool save_screenshot(embark::platform::host::HostDisplay& display, const char* p
   return ok;
 }
 
+/// 自检清单：每项打一行 [通过]/[失败]，失败会置整体失败标志。
+struct CheckList {
+  bool ok = true;
+  void check(const char* title, bool passed, unsigned long measured, unsigned long expected) {
+    if (passed) {
+      ELOG_INFO("  [通过] {}（实测 {}，期望 {}）", title, measured, expected);
+    } else {
+      ELOG_ERROR("  [失败] {}（实测 {}，期望 {}）", title, measured, expected);
+      ok = false;
+    }
+  }
+};
+
 }  // namespace
 
 namespace embark::platform::host {
 
-// 进程级的 App 注册表：顺序 = ClockApp（默认前台）、SettingsApp、TickerApp（常驻后台任务）、
-// HelloApp（最简模板）、JobApp（一次性任务，issue 15 的生命周期演示）。
-// JobApp 只挂在这一条系统用例上：宿主演示 ui_demo 与真机固件仍是原来的四个 App。
-EMBARK_APP_TABLE(embark::demo::ClockApp, embark::demo::SettingsApp, embark::demo::TickerApp,
-                 embark::demo::HelloApp, embark::demo::JobApp)
+// 整个可执行文件只出现一次的 App 注册表（启动器首位 = 默认前台，JobApp 挂末位）：
+// LauncherApp 扇形主屏；ClockApp tick 100ms；SettingsApp suspend；TickerApp own_task
+// 50ms（issue 07 消息回 UI）；HelloApp 最简模板；JobApp 一次性任务（issue 15）。
+EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp,
+                 embark::demo::TickerApp, embark::demo::HelloApp, embark::demo::JobApp)
 
 }  // namespace embark::platform::host
 
@@ -198,53 +193,49 @@ namespace hp = embark::platform::host;
 
 namespace {
 
-/// 宿主的退出来源：SDL 的关窗标志（hal::IInput 里没有"退出"这个概念，端口收一个回调）。
 bool host_exit_query(void* context) noexcept {
   return static_cast<hp::HostInput*>(context)->quit_requested();
 }
 
-/// 自检清单：一条一行，全过才算这轮用例成功。
-struct CheckList {
-  bool ok = true;
-
-  void check(const char* title, bool passed, unsigned long measured, unsigned long expected) {
-    if (passed) {
-      ELOG_INFO(" [通过] {}：实测 {}（期望 {}）", title, measured, expected);
-    } else {
-      ELOG_ERROR(" [失败] {}：实测 {}（期望 {}）", title, measured, expected);
-      ok = false;
-    }
+Options parse_options(int argc, char** argv) {
+  Options options;
+  for (int i = 1; i < argc; ++i) {
+    const char* arg = argv[i];
+    // 45 = ASCII 撇号（避免本文件里出现引号字面量，保持可移植）
+    auto next_is_flag = [&]() { return i + 1 >= argc || argv[i + 1][0] == 45; };
+    if (std::strcmp(arg, "--scale") == 0 && !next_is_flag()) { options.scale = std::atoi(argv[++i]); }
+    else if (std::strcmp(arg, "--delay") == 0 && !next_is_flag()) { options.delay_ms = std::atoi(argv[++i]); }
+    else if (std::strcmp(arg, "--frames") == 0 && !next_is_flag()) { options.frames = std::atoi(argv[++i]); }
+    else if (std::strcmp(arg, "--screenshot") == 0 && !next_is_flag()) { options.screenshot = argv[++i]; }
+    else if (std::strcmp(arg, "--help") == 0) { print_usage(); std::exit(0); }
   }
-};
+  return options;
+}
 
 }  // namespace
 
-/// 唯一 UI 任务：HAL → UI 端口 → Framework → 帧循环，全在这一条线上（spec §6）。
+/// 唯一 UI 任务（spec §6：唯一能碰 LVGL 的线程，窗口事件也在它上面泵）。
 void ui_main(void* argument) noexcept {
   const Options* options = static_cast<const Options*>(argument);
 
-  // ---- ② HAL 初始化 --------------------------------------------------------
+  ELOG_INFO("① 进程入口：main 只起 UI 任务 + 进调度器，现在跑的是那唯一 UI 任务（{} 字栈）",
+            embark::ui_task_stack_words);
+
   hp::HostHal& hal = hp::HostHal::instance();
   hp::HostDisplay display(static_cast<std::uint8_t>(options->scale), "Embark 系统用例");
   hp::HostInput input(hal.time(), display);
   hal.attach_display(display);
   hal.attach_input(input);
 
-  ELOG_INFO("===== 第 2 步 / HAL 初始化（时间·持久化·日志·系统·总线·显示·输入）=====");
+  ELOG_INFO("② HAL 初始化……");
   if (const Error hal_error = hal.init(); hal_error != Error::none) {
     char text[32];
     std::fprintf(stderr, "HAL 初始化失败：%s\n", embark::error_text(text, hal_error));
     hp::exit_process(1);
   }
-  const embark::hal::DisplayInfo display_info = display.info();
-  // 整对象直接打日志：DisplayInfo 的字段名与取值名来自 hal/types.h 的 E_FMT_DERIVE 声明。
-  ELOG_INFO(" 显示 {}，输入 {}", display_info, input.is_ready() ? "就绪" : "未就绪");
-  ELOG_INFO(" 持久化位置 {}", hal.storage_path());
 
-  // ---- ③ UI 端口 + 框架 boot ----------------------------------------------
-  ELOG_INFO("===== 第 3 步 / 框架 boot（唯一 UI 任务 + App 注册表）=====");
   embark::platform::LvglUiPort ui_port(hal.context(), &host_exit_query, &input);
-  static hp::HostTaskSpawner spawner;  // own_task 的槽位（BSS，不占 UI 任务栈）
+  static hp::HostTaskSpawner spawner;
   Framework framework(hal.context(), hp::embark_apps(), &ui_port, &spawner);
   if (const Error boot_error = framework.boot(); boot_error != Error::none) {
     char text[32];
@@ -252,249 +243,155 @@ void ui_main(void* argument) noexcept {
     hp::exit_process(1);
   }
 
-  for (std::size_t index = 0; index < framework.apps().size(); ++index) {
-    const embark::App& app = *framework.apps().at(index);
-    const embark::AppSettings settings = app.settings();
-    ELOG_INFO(" App[{}] {}：{}，{}{}", index, app.name(), policy_text(settings.background),
-              index == framework.foreground() ? "前台（拿到事件循环）" : "待命",
-              settings.background == embark::BackgroundPolicy::own_task ? "，自有任务栈" : "");
-    if (settings.background == embark::BackgroundPolicy::own_task && settings.period_ms == 0U) {
-      ELOG_INFO("        └ 一次性任务：跑完即结束、槽位由框架回收，栈 {} 字、优先级 {}",
-                settings.task_stack_words, static_cast<int>(settings.task_priority));
-    } else if (settings.background == embark::BackgroundPolicy::own_task) {
-      ELOG_INFO("        └ 自有任务：周期 {} ms、栈 {} 字、优先级 {}", settings.period_ms,
-                settings.task_stack_words, static_cast<int>(settings.task_priority));
-    } else if (settings.background == embark::BackgroundPolicy::tick) {
-      ELOG_INFO("        └ 后台节拍 {} ms（框架定时器驱动，不占 UI 任务）", settings.period_ms);
-    } else {
-      ELOG_INFO("        └ 退场后不再被调度（v1 里 App 常驻，只是让出前台）");
-    }
+  ELOG_INFO("③ 框架 boot：{} 个 App；默认前台 {}（启动器，suspend）", framework.apps().size(),
+            framework.apps().at(0)->name());
+  for (embark::AppId i = 1; i < framework.apps().size(); ++i) {
+    const auto* app = framework.apps().at(i);
+    ELOG_INFO("    槽 {}：{}（{}，title={}）", i, app->name(), policy_text(app->settings().background),
+              app->title());
   }
-  ELOG_INFO(" 系统里只有一条 UI 任务，App 是逻辑模块；当前 FreeRTOS 任务数 {}",
-            static_cast<unsigned long>(uxTaskGetNumberOfTasks()));
+  ELOG_INFO("    导航壳：状态行 + 返回键已装配（UI 端口 init 时）；LVGL {}.{}.{}",
+            LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH);
 
-  // 收尾自检要用的观测点（App 本体在 app/，用具体类型读计数器）。
-  const embark::demo::ClockApp& clock_app =
-      *static_cast<const embark::demo::ClockApp*>(framework.app(0));
-  const embark::demo::SettingsApp& settings_app =
-      *static_cast<const embark::demo::SettingsApp*>(framework.app(1));
-  const embark::demo::TickerApp& ticker_app =
-      *static_cast<const embark::demo::TickerApp*>(framework.app(2));
-  const embark::demo::JobApp& job_app = *static_cast<const embark::demo::JobApp*>(framework.app(4));
-
-  // ---- ④ 帧循环：从后台节拍到前台切换 --------------------------------------
-  ELOG_INFO("===== 第 4 步 / 进入 UI 循环（每帧：喂时间 → 喂输入 → 执行待办切换 → 渲染）=====");
-  ELOG_INFO(" 检查点：后台节拍（clock 的 onBackgroundTick 由定时器驱动）");
+  // 前台切换与亮度变化的解说跟踪
+  std::uint32_t prev_switches = 0;
+  std::uint32_t prev_brightness = 0;
+  auto* launcher = static_cast<embark::demo::LauncherApp*>(framework.app(0));
+  auto* clock = static_cast<embark::demo::ClockApp*>(framework.app(1));
+  auto* settings = static_cast<embark::demo::SettingsApp*>(framework.app(2));
+  auto* ticker = static_cast<embark::demo::TickerApp*>(framework.app(3));
+  auto* job = static_cast<embark::demo::JobApp*>(framework.app(job_id));
 
   int frames_run = 0;
-  unsigned ticks_at_first_checkpoint = 0;
-  std::size_t last_switches = 0;
-  unsigned last_brightness = 0;
-  bool screenshot_done = (options->screenshot == nullptr);
-
+  ELOG_INFO("④ UI 循环（5 ms/帧）：先拖动启动器 —— 1px ≈ 0.1 槽，拖 10px = 转 1 槽；松手后弹簧收敛");
   for (;;) {
     framework.step();
     ++frames_run;
+    if (framework.exit_requested()) { break; }
 
-    if (framework.exit_requested()) {
-      ELOG_INFO(" 第 {} 帧：framework.exit_requested() 为真 → 退出帧循环，进入收尾", frames_run);
-      break;
-    }
+    // --- 合成输入（帧号驱动，确定性）-----------------------------------------
+    if (frames_run == drag_press_frame) { push_motion_and_press(options->scale, 120, 220); }
+    if (frames_run == drag_press_frame + drag_move_step) { push_motion(options->scale, 120, 216); }
+    if (frames_run == drag_press_frame + drag_move_step * 2) { push_motion(options->scale, 120, 213); }
+    if (frames_run == drag_press_frame + drag_move_step * 3) { push_motion(options->scale, 120, 210); }
+    if (frames_run == drag_release_frame) { push_release(options->scale, 120, 210); }
+    if (frames_run == click_slot_frame) { push_motion_and_press(options->scale, 120, 188); }
+    if (frames_run == click_slot_frame + click_release_delta) { push_release(options->scale, 120, 188); }
+    if (frames_run == click_settings_frame) { push_motion_and_press(options->scale, 120, 220); }
+    if (frames_run == click_settings_frame + click_release_delta) { push_release(options->scale, 120, 220); }
+    if (frames_run == click_level_frame) { push_motion_and_press(options->scale, 120, 220); }
+    if (frames_run == click_level_frame + click_release_delta) { push_release(options->scale, 120, 220); }
+    if (frames_run == click_back_frame) { push_motion_and_press(options->scale, 15, 14); }
+    if (frames_run == click_back_frame + click_release_delta) { push_release(options->scale, 15, 14); }
+    if (frames_run == quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
 
-    // 解说只在"状态真的变了"时才说：点击的帧号只是触发器，效果要等框架执行完才作数。
-    const std::size_t switches = static_cast<std::size_t>(framework.switches());
-    if (switches != last_switches) {
-      last_switches = switches;
-      ELOG_INFO("◆ 前台切换完成（第 {} 帧，累计 {} 次）：现在前台是 {}", frames_run, switches,
-                framework.apps().at(framework.foreground())->name());
-      ELOG_INFO("   钩子序：clock enter/resume = {}/{}，settings enter/resume = {}/{}",
-                clock_app.enters(), clock_app.resumes(), settings_app.enters(),
-                settings_app.resumes());
+    // --- 解说：前台切换 / 亮度 / 后台回流 -------------------------------------
+    if (framework.switches() != prev_switches) {
+      prev_switches = framework.switches();
+      ELOG_INFO("◆ 前台切换完成（第 {} 帧，累计 {} 次）：现在前台是 {}（导航壳返回键 {}）",
+                frames_run, framework.switches(), framework.apps().at(framework.foreground())->name(),
+                ui_port.nav_shell().back_visible() ? "可见" : "隐藏");
     }
-    if (clock_app.brightness() != last_brightness) {
-      last_brightness = clock_app.brightness();
-      ELOG_INFO("◆ App 间消息到达（第 {} 帧）：clock（此刻在后台）的 brightness = {}", frames_run,
-                last_brightness);
+    if (clock->brightness() != prev_brightness) {
+      prev_brightness = clock->brightness();
+      ELOG_INFO("◆ clock 收到了新的亮度档：{}（消息经总线广播，App 间不直接通信）",
+                clock->brightness());
     }
-
-    // ④ 后台节拍：两次采样，证明它一直在跑。
     if (frames_run == tick_checkpoint_first) {
-      ticks_at_first_checkpoint = clock_app.ticks();
-      ELOG_INFO(" 第 1 次采样（第 {} 帧）：clock ticks = {}，前台仍是 {}", frames_run,
-                ticks_at_first_checkpoint, framework.apps().at(framework.foreground())->name());
-    } else if (frames_run == tick_checkpoint_second) {
-      ELOG_INFO(" 第 2 次采样（第 {} 帧）：clock ticks = {}（比第 1 次多 {}，后台一直在跳）",
-                frames_run, clock_app.ticks(), clock_app.ticks() - ticks_at_first_checkpoint);
+      ELOG_INFO("后台节拍采样（第 {} 帧）：clock ticks={}、launcher selected={} {}",
+                frames_run, clock->ticks(), launcher->selected(),
+                launcher->settled() ? "已稳定" : "弹簧中");
     }
-
-    // ⑤ 前台切换 #1：点 clock 屏的 "Settings"。
-    if (frames_run == click_settings_frame) {
-      ELOG_INFO("===== 第 5 步 / 前台切换 #1：合成点击 \"Settings\" ({},{}) =====",
-                embark::demo::demo_click_center_x, embark::demo::demo_click_center_y);
-      ELOG_INFO(" 预期：clock 让出前台（onPause）→ settings 首次进场（onEnter），切换计数 +1");
-      push_motion_and_press(options->scale, embark::demo::demo_click_center_x,
-                            embark::demo::demo_click_center_y);
-    } else if (frames_run == click_settings_frame + click_release_delta) {
-      push_release(options->scale, embark::demo::demo_click_center_x,
-                   embark::demo::demo_click_center_y);
+    if (frames_run == click_slot_frame + 6) {
+      ELOG_INFO("⑤ 点击选中槽 = 启动：切到 {}（onEnter；clock 的后台 tick 继续跑）",
+                framework.apps().at(framework.foreground())->name());
     }
-
-    // ⑥ App 间消息：settings 屏的 "Level +1"（和上一步同一个中心坐标，焦点已经换了）。
-    if (frames_run == click_level_frame) {
-      ELOG_INFO("===== 第 6 步 / App 间消息：点 settings 屏的 \"Level +1\" ({},{}) =====",
-                embark::demo::demo_click_center_x, embark::demo::demo_click_center_y);
-      ELOG_INFO(" 预期：settings 广播亮度消息 → 后台的 clock 收到，brightness 变 1");
-      push_motion_and_press(options->scale, embark::demo::demo_click_center_x,
-                            embark::demo::demo_click_center_y);
-    } else if (frames_run == click_level_frame + click_release_delta) {
-      push_release(options->scale, embark::demo::demo_click_center_x,
-                   embark::demo::demo_click_center_y);
-    }
-
-    // ⑦ 前台切换 #2：settings 屏的 "Back to clock"（下排按钮）。
-    if (frames_run == click_back_frame) {
-      ELOG_INFO("===== 第 7 步 / 前台切换 #2：点 \"Back to clock\" ({},{}) =====",
-                embark::demo::demo_switch_center_x, embark::demo::demo_switch_center_y);
-      ELOG_INFO(" 预期：settings 让出前台（onPause）→ clock 走 onResume（它没退场），切换计数 +1");
-      push_motion_and_press(options->scale, embark::demo::demo_switch_center_x,
-                            embark::demo::demo_switch_center_y);
-    } else if (frames_run == click_back_frame + click_release_delta) {
-      push_release(options->scale, embark::demo::demo_switch_center_x,
-                   embark::demo::demo_switch_center_y);
-    }
-
-    // ⑧ 真正的任务切换：own_task 的后台任务 ↔ UI 任务（跨任务消息走 SPSC 队列）。
     if (frames_run == own_task_checkpoint) {
-      ELOG_INFO("===== 第 8 步 / 跨任务的真实切换：ticker 后台任务 → UI 任务 =====");
-      ELOG_INFO(" ticker 发送 {} 条，UI 收到 {} 条（跨任务消息经 SPSC 队列进 UI 收件箱）",
-                ticker_app.sent(), ticker_app.received());
+      ELOG_INFO("⑧ 断点（第 {} 帧）：ticker own_task 已发 {} 条 / UI 收 {} 条；inbox 溢出 {} 次",
+                frames_run, ticker->sent(), ticker->received(), framework.inbox_overflows());
     }
-
-    // ⑨ 任务生命周期：boot 时按策略创建的那一轮应该已经跑完并被回收，这里再创建一轮。
+    if (frames_run == tick_checkpoint_second) {
+      ELOG_INFO("后台节拍第二次采样：clock ticks={}（继续增长 = 退后台也在跑）", clock->ticks());
+    }
     if (frames_run == own_task_cycle_frame) {
-      ELOG_INFO("===== 第 9 步 / 一次性 own_task：跑完 → 回收 → 再创建 =====");
-      ELOG_INFO(" 创建前：job 跑完 {} 轮（boot 时按策略创建的那一轮），框架累计创建 {} / 回收 {}",
-                job_app.runs(), framework.own_tasks_spawned(), framework.own_tasks_released());
-      ELOG_INFO(
-          " 池账：running {}（ticker 的常驻任务占着 1 个槽）/ finished {}（不该有残留）/ 空闲槽 {}",
-          spawner.running(), spawner.finished(), spawner.free_slots());
-      ELOG_INFO(" 运行期再创建一次：spawn_own_task(job)");
-      const Error cycle_error = framework.spawn_own_task(job_id);
-      ELOG_INFO("  → {}（累计创建 {}；它跑完返回后，框架在下一帧的回收段把槽位还池）", cycle_error,
-                framework.own_tasks_spawned());
+      ELOG_INFO("⑨ 运行期再创建 job（第 {} 帧，spawned={} released={} running={} finished={} free={}）：",
+                frames_run, framework.own_tasks_spawned(), framework.own_tasks_released(),
+                spawner.running(), spawner.finished(), spawner.free_slots());
+      const Error spawn_error = framework.spawn_own_task(job_id);
+      ELOG_INFO("     spawn_own_task(job)={}（job 累计跑 {} 轮）", spawn_error, job->runs());
     }
 
-    // ⑩ 关窗退出（等价于用户点窗口右上角 ×，走的是真事件队列）。
-    if (frames_run == quit_frame) {
-      ELOG_INFO("===== 第 10 步 / 模拟用户关窗（SDL_QUIT）=====");
-      SDL_Event quit{};
-      quit.type = SDL_QUIT;
-      SDL_PushEvent(&quit);
-    }
-
-    if (frames_run >= options->frames) {
-      if (!screenshot_done) {
-        screenshot_done = true;
-        if (save_screenshot(display, options->screenshot)) {
-          ELOG_INFO(" 截图已保存：{}", options->screenshot);
-        }
+    if (options->frames > 0 && frames_run >= options->frames) {
+      if (options->screenshot != nullptr && !save_screenshot(display, options->screenshot)) {
+        hp::exit_process(1);
       }
-      ELOG_INFO(" 跑到 --frames 上限（{} 帧），正常收尾", options->frames);
       break;
     }
-
     hp::ui_loop_delay(static_cast<std::uint32_t>(options->delay_ms));
   }
 
-  // ---- 收尾：统计 + 自检清单 + LVGL 堆账 -----------------------------------
-  ELOG_INFO("===== 收尾 / 统计与自检 =====");
-  ELOG_INFO(" 显示：刷新 {} 次（{} 字节），Present {} 次；窗口 {}×{}", ui_port.port().refreshes(),
-            ui_port.port().flush_bytes(), display.presents(), display_info.width,
-            display_info.height);
-  ELOG_INFO(" 前台：{}；切换 {} 次；clock enter {}/resume {}/ticks {}/brightness {}",
-            framework.apps().at(framework.foreground())->name(),
-            static_cast<unsigned long>(framework.switches()), clock_app.enters(),
-            clock_app.resumes(), clock_app.ticks(), clock_app.brightness());
-  ELOG_INFO(" settings enter {}/resume {}；ticker 发送 {} / UI 收到 {}；收件箱溢出 {} 次",
-            settings_app.enters(), settings_app.resumes(), ticker_app.sent(), ticker_app.received(),
-            static_cast<unsigned long>(framework.inbox_overflows()));
-  ELOG_INFO(
-      " 任务生命周期：job 跑完 {} 轮；框架累计创建 {} / 回收 {}；池 running {} / finished {} / "
-      "空闲槽 {}",
-      job_app.runs(), framework.own_tasks_spawned(), framework.own_tasks_released(),
-      spawner.running(), spawner.finished(), spawner.free_slots());
-  ELOG_INFO(" 总线：发布 {} 条，无人接收 {} 条；输入丢弃 {}，忽略按键 {}",
-            static_cast<unsigned long>(framework.bus().published()),
-            static_cast<unsigned long>(framework.bus().unknown()),
-            static_cast<unsigned long>(ui_port.port().dropped_input_events()),
-            static_cast<unsigned long>(ui_port.port().ignored_key_events()));
-  ELOG_INFO(
-      " LVGL 堆：分配 {} 次，峰值 {} 字节，退出前未回收 {} 字节（预算 {}）；UI 任务栈余量 {} 字",
-      static_cast<unsigned long>(hp::lvgl_allocations()), hp::lvgl_peak_bytes(),
-      hp::lvgl_outstanding_bytes(), embark::lvgl_alloc_budget_bytes,
-      static_cast<unsigned long>(uxTaskGetStackHighWaterMark(nullptr)));
+  ELOG_INFO("⑩ 收尾统计（共 {} 帧）：", frames_run);
+  CheckList checklist;
+  checklist.check("总帧数跑到位", frames_run >= quit_frame + 1, static_cast<unsigned long>(frames_run),
+                  static_cast<unsigned long>(quit_frame) + 1UL);
+  const auto first_ticks = static_cast<unsigned long>(clock->ticks());
+  checklist.check("clock 后台节拍 > 0（退后台仍在跑）", first_ticks > 0UL, first_ticks, 1UL);
+  checklist.check("前台切换恰好 3 次（启动器→clock→settings→启动器）",
+                  framework.switches() == 3, static_cast<unsigned long>(framework.switches()), 3UL);
+  checklist.check("启动器 enter=1 / resume=1",
+                  launcher->enters() == 1 && launcher->resumes() == 1,
+                  static_cast<unsigned long>(launcher->enters() * 10U + launcher->resumes()), 11UL);
+  checklist.check("clock enter=1 / resume=0",
+                  clock->enters() == 1 && clock->resumes() == 0,
+                  static_cast<unsigned long>(clock->enters() * 10U + clock->resumes()), 10UL);
+  checklist.check("settings enter=1 / resume=0",
+                  settings->enters() == 1 && settings->resumes() == 0,
+                  static_cast<unsigned long>(settings->enters() * 10U + settings->resumes()), 10UL);
+  checklist.check("亮度消息回流（clock.brightness==1）", clock->brightness() == 1,
+                  static_cast<unsigned long>(clock->brightness()), 1UL);
+  checklist.check("ticker own_task 消息回流（sent/received > 0）",
+                  ticker->sent() > 0 && ticker->received() > 0,
+                  static_cast<unsigned long>(ticker->received()), 1UL);
+  checklist.check("收件箱无溢出", framework.inbox_overflows() == 0,
+                  static_cast<unsigned long>(framework.inbox_overflows()), 0UL);
+  checklist.check("job 生命周期（runs ≥ 2：boot 一轮 + 运行期一轮）",
+                  job->runs() >= 2 && framework.own_tasks_spawned() >= 2 &&
+                      framework.own_tasks_released() >= 2 && spawner.finished() == 0,
+                  static_cast<unsigned long>(job->runs()), 2UL);
+  checklist.check("own_task 槽位回收（free_slots == max-1）",
+                  spawner.free_slots() == static_cast<int>(embark::max_own_tasks) - 1,
+                  static_cast<unsigned long>(spawner.free_slots()),
+                  static_cast<unsigned long>(embark::max_own_tasks) - 1UL);
+  checklist.check("导航壳：返回键点了 1 次且当前隐藏（前台=启动器）",
+                  ui_port.nav_shell().home_requests() == 1 && !ui_port.nav_shell().back_visible() &&
+                      ui_port.nav_shell().foreground() == 0,
+                  static_cast<unsigned long>(ui_port.nav_shell().home_requests()), 1UL);
+  checklist.check("启动器收尾状态：选中槽 1、弹簧稳定",
+                  launcher->settled() && launcher->selected() == 1,
+                  static_cast<unsigned long>(launcher->selected()), 1UL);
 
-  CheckList checks;
-  ELOG_INFO(" 自检清单（全部通过 = 这轮系统用例成功）：");
-  checks.check("唯一 UI 任务活着并跑完帧循环", frames_run >= tour_end_frame - 1, frames_run,
-               tour_end_frame - 1);
-  checks.check("后台节拍持续（clock ticks）", clock_app.ticks() > 1,
-               static_cast<unsigned long>(clock_app.ticks()), 1);
-  checks.check("前台切换次数（clock→settings→clock）", framework.switches() == 2U,
-               static_cast<unsigned long>(framework.switches()), 2);
-  checks.check("clock 进场/复场（onEnter 1 次 / onResume 1 次）",
-               clock_app.enters() == 1U && clock_app.resumes() == 1U, clock_app.enters(), 1);
-  checks.check("settings 进场（onEnter 1 次 / onResume 0 次）",
-               settings_app.enters() == 1U && settings_app.resumes() == 0U, settings_app.enters(),
-               1);
-  checks.check("App 间消息到达（clock brightness）", clock_app.brightness() == 1U,
-               static_cast<unsigned long>(clock_app.brightness()), 1);
-  checks.check("own_task 消息回流（发送/收到都 > 0）",
-               ticker_app.sent() > 0 && ticker_app.received() > 0, ticker_app.received(), 1);
-  checks.check("收件箱无溢出", framework.inbox_overflows() == 0U,
-               static_cast<unsigned long>(framework.inbox_overflows()), 0);
-  // issue 15：boot 时一轮 + 运行期一轮 = 至少两轮"创建 → 跑完 → 回收"，且槽位不许有残留。
-  checks.check("一次性任务跑完并回收（job 轮数 / 创建 / 回收）",
-               job_app.runs() >= 2U && framework.own_tasks_spawned() >= 2U &&
-                   framework.own_tasks_released() >= 2U && spawner.finished() == 0U,
-               static_cast<unsigned long>(job_app.runs()), 2);
-  checks.check("常驻任务之外的槽位全部空闲（finished 残留 = 0）",
-               spawner.free_slots() == embark::max_own_tasks - 1U,
-               static_cast<unsigned long>(spawner.free_slots()),
-               static_cast<unsigned long>(embark::max_own_tasks - 1U));
-
-  if (checks.ok) {
-    ELOG_INFO("===== 全流程通过：启动 → 后台节拍 → 前台切换 → 消息 → 关窗收尾 =====");
-  } else {
-    std::fprintf(stderr, "系统用例失败：上面标 [失败] 的步骤没达到预期\n");
-  }
+  ELOG_INFO("启动器最终：pos×100={} target×100={} selected={}；requests={}",
+            static_cast<int>(launcher->position() * 100.0F),
+            static_cast<int>(launcher->target() * 100.0F), launcher->selected(), launcher->requests());
+  ELOG_INFO("LVGL 堆账：未回收 {} 字节（budget {}）", embark_lvgl_outstanding_bytes(),
+            embark_lvgl_budget_bytes());
 
   framework.shutdown();
-  hp::exit_process(checks.ok ? 0 : 2);
+  hp::exit_process(checklist.ok ? 0 : 2);
 }
 
 int main(int argc, char** argv) {
-  std::setvbuf(stdout, nullptr, _IONBF, 0);  // 重定向到文件时也能看到进度
+  std::setvbuf(stdout, nullptr, _IONBF, 0);
 
   Options options = parse_options(argc, argv);
 
-  // ---- ① 进程入口 ----------------------------------------------------------
-  ELOG_INFO("===== 第 1 步 / 进程入口：Embark {}（{} 后端）=====", embark::version_string(),
-            embark::platform_name());
-  ELOG_INFO(" 起唯一 UI 任务：栈 {} 字（{} KB），优先级 {}，循环周期 {} ms；之后进程入口就进调度器",
-            embark::ui_task_stack_words,
-            embark::ui_task_stack_words * static_cast<int>(sizeof(StackType_t)) / 1024,
-            static_cast<int>(embark::ui_task_priority), embark::ui_loop_period_ms);
-  ELOG_INFO(" 提示：窗口默认 1:1（{}×{}），--scale N 可整数倍放大看细节", embark::display_width,
-            embark::display_height);
-
   const Error task_error = hp::start_ui_task(&ui_main, &options);
   if (task_error != Error::none) {
-    char text[32];
+    char text[24];
     std::fprintf(stderr, "启动 UI 任务失败：%s\n", embark::error_text(text, task_error));
     return 1;
   }
 
-  hp::start_scheduler();  // 永不返回（收尾走 exit_process）
-  return 0;               // 编译器路径：永远到不了
+  hp::start_scheduler();
+  return 0;
 }

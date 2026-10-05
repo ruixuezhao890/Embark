@@ -115,7 +115,7 @@ _Avoid_: 桌面、主菜单、App 列表页
 _Avoid_: 返回首页、退出到桌面
 
 **Unified back navigation（框架统一返回）**：
-非主屏 App 在前台时，框架在其导航壳里渲染返回键，点击等效 `request_home()`；App 自己不画返回按钮（SettingsApp 里硬编码的 "Back to clock" 将移除）。
+非主屏 App 在前台时，框架在其导航壳里渲染返回键，点击等效 `request_home()`；App 自己不画返回按钮（SettingsApp 硬编码的 "Back to clock" 已随 issue 16 移除）。
 _Avoid_: 各 App 自绘返回、导航堆栈
 
 **Nav chrome（导航壳）**：

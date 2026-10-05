@@ -88,7 +88,13 @@
  *========================================================================*/
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_FONT_DEFAULT &lv_font_montserrat_14
-/* 其余 LV_FONT_* 由 lv_conf_internal.h 兜为 0（已核实，例如 :994-998 MONTSERRAT_8）。 */
+/* 其余 LV_FONT_* 由 lv_conf_internal.h 兜为 0（已核实，例如 :994-998 MONTSERRAT_8）。
+
+ * 静态子集字库 embark_zh_14（tools/font/gen_font.mjs 生成，assets/fonts/embark_zh_14.c）
+ * 是压缩位图（.bitmap_format = 1），必须开 LV_USE_FONT_COMPRESSED=1：
+ * lv_font_fmt_txt.c:130-132 在未开启时对压缩字形只 LV_LOG_WARN 并返回 NULL 位图，
+ * 结果就是"字全部不显示"。启动器（LauncherApp）与导航壳（NavShell）依赖它。 */
+#define LV_USE_FONT_COMPRESSED 1
 
 /*=========================================================================
    主题、示例与诊断开关

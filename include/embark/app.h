@@ -23,6 +23,7 @@
 
 #include <cstdint>
 
+#include <embark/design_tokens.h>
 #include <embark/message.h>
 #include <middleware/efmt/core/format.hpp>
 
@@ -62,6 +63,22 @@ class App {
 
   /// 后台配置（spec §5：per-App 策略，默认 Suspend）。
   [[nodiscard]] virtual AppSettings settings() const { return AppSettings{}; }
+
+  // --- 展示元数据（issue 16：启动器槽位与导航壳状态行；零堆、编译期常量）-------
+  // 元数据走虚函数，而不是在注册表里再挂第二张表：注册表的表项仍是 App*
+  // （app_registry.h 的宏形状一行不改），"表长 = App 数"由 App 表本身的
+  // static_assert 保证。元数据只被启动器与导航壳读，框架自身不解释它们。
+
+  /// 展示标题（启动器槽位、导航壳状态行）。默认取 name()：任何 App 都有可读标题；
+  /// 中文标题由 App 自己覆写（进静态子集字库，见 issue 17 的缺字审计）。
+  [[nodiscard]] virtual const char* title() const { return name(); }
+
+  /// 槽位图标：LV_SYMBOL_* 码点字符串（例如 LV_SYMBOL_HOME）。
+  /// 空 = 启动器用标题首字符兜底（此时该字符必须在静态子集字库里）。
+  [[nodiscard]] virtual const char* icon() const { return nullptr; }
+
+  /// 主题色（0xRRGGBB）：取 <embark/design_tokens.h> 的令牌，禁止魔法颜色。
+  [[nodiscard]] virtual std::uint32_t accent() const { return design_tokens::accent; }
 
   /// 装配期，进程生命周期里恰好一次。HAL 能力从这里注入（fw.hal()）。
   virtual void onCreate(Framework& fw) = 0;
