@@ -33,12 +33,15 @@ def make_fake_repo() -> Path:
     (tmp / "app").mkdir()
     (tmp / "platform" / "host").mkdir(parents=True)
     (tmp / "app" / "CMakeLists.txt").write_text(
-        "add_library(embark_demo_apps STATIC launcher_app.cpp demo_apps.cpp hello_app.cpp\n"
-        "        eez_demo_app.cpp eez_ui_bridge.cpp eez_ui_nav.cpp)\n",
+        "add_library(embark_demo_apps STATIC\n"
+        "        launcher/launcher_app.cpp\n"
+        "        clock/clock_app.cpp\n"
+        "        settings/settings_app.cpp\n"
+        "        common/eez_ui_bridge.cpp\n"
+        "        common/eez_ui_nav.cpp)\n",
         encoding="utf-8")
     (tmp / "platform" / "host" / "ui_demo.cpp").write_text(
-        "EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp,\n"
-        "                 embark::demo::TickerApp, embark::demo::HelloApp, embark::demo::EezDemoApp)\n",
+        "EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp)\n",
         encoding="utf-8")
     return tmp
 
@@ -54,38 +57,46 @@ def main() -> None:
     # 1) dry-run：输出蓝图与 checklist，且不写盘
     p = run(args, repo)
     for needle in ("demo_timer", "DemoTimerApp", "demo_timer_tick", "demo_timer_speed",
-                   "EEZ Studio checklist", "SetPage", "落地命令"):
+                   "EEZ Studio checklist", "SetPage", "落地命令", "eez_vars.txt",
+                   "app/demo_timer/demo_timer_app.h"):
         if needle not in p.stdout:
             print(f"FAIL: dry-run 输出缺 {needle!r}"); sys.exit(1)
-    if (repo / "app" / "demo_timer_app.cpp").exists():
+    if (repo / "app" / "demo_timer").exists():
         print("FAIL: dry-run 不应写盘"); sys.exit(1)
 
-    # 2) apply：生成 h/cpp，改两处，且插在 HelloApp 之后
-    p = run(args + ["--apply"], repo)
-    hp = repo / "app" / "demo_timer_app.h"
-    cp = repo / "app" / "demo_timer_app.cpp"
-    for f in (hp, cp):
+    # 2) apply：生成 h/cpp + eez_vars.txt（app/<name>/ 目录），改两处，插在 SettingsApp 之后
+    run(args + ["--apply"], repo)
+    d = repo / "app" / "demo_timer"
+    hp = d / "demo_timer_app.h"
+    cp = d / "demo_timer_app.cpp"
+    vf = d / "eez_vars.txt"
+    for f in (hp, cp, vf):
         if not f.exists():
             print(f"FAIL: {f} 未生成"); sys.exit(1)
     cm = (repo / "app" / "CMakeLists.txt").read_text(encoding="utf-8")
-    if "demo_timer_app.cpp" not in cm:
-        print("FAIL: CMakeLists 未插入"); sys.exit(1)
+    if "demo_timer/demo_timer_app.cpp" not in cm:
+        print("FAIL: CMakeLists 未插入（缺目录化路径）"); sys.exit(1)
     ui = (repo / "platform" / "host" / "ui_demo.cpp").read_text(encoding="utf-8")
     if "embark::demo::DemoTimerApp" not in ui:
         print("FAIL: 注册表未插入"); sys.exit(1)
-    if ui.index("embark::demo::DemoTimerApp") < ui.index("embark::demo::HelloApp"):
-        print("FAIL: 插入位置应在 HelloApp 之后"); sys.exit(1)
+    if ui.index("embark::demo::DemoTimerApp") < ui.index("embark::demo::SettingsApp"):
+        print("FAIL: 插入位置应在 SettingsApp 之后"); sys.exit(1)
     cpp = cp.read_text(encoding="utf-8")
-    for needle in ('eez_ui_bridge_set_var_int("demo_timer_tick"',
-                   'eez_ui_bridge_set_var_float("demo_timer_speed"',
+    for needle in ('eez_ui_bridge_set_var_int("demo_timer_tick"'
+                   'eez_ui_bridge_set_var_float("demo_timer_speed"'
                    "eez_ui_bridge_tick();"):
         if needle not in cpp:
             print(f"FAIL: cpp 缺变量骨架 {needle!r}"); sys.exit(1)
+    vt = vf.read_text(encoding="utf-8")
+    for needle in ("demo_timer_tick    # int", "demo_timer_speed    # float", "Flow 全局变量"):
+        if needle not in vt:
+            print(f"FAIL: eez_vars.txt 缺 {needle!r}"); sys.exit(1)
 
     # 3) 幂等：再 apply，哈希不变
-    before = (sha(cp), sha(hp), sha(repo / "app" / "CMakeLists.txt"), sha(repo / "platform" / "host" / "ui_demo.cpp"))
+    files = (cp, hp, vf, repo / "app" / "CMakeLists.txt", repo / "platform" / "host" / "ui_demo.cpp")
+    before = tuple(sha(f) for f in files)
     p2 = run(args + ["--apply"], repo)
-    after = (sha(cp), sha(hp), sha(repo / "app" / "CMakeLists.txt"), sha(repo / "platform" / "host" / "ui_demo.cpp"))
+    after = tuple(sha(f) for f in files)
     if before != after:
         print("FAIL: 幂等 apply 改了文件"); sys.exit(1)
     if "幂等" not in p2.stdout:
@@ -106,7 +117,7 @@ def main() -> None:
     run(["bad_sub", "--apply"], repo, expect_code=2)
     run(["--var", "x:double"], repo, expect_code=2)
 
-    print("scaffold_app_test: 全部通过（dry-run / apply / 幂等 / vars-check / 非法输入）")
+    print("scaffold_app_test: 全部通过（dry-run / apply 目录化 / 幂等 / vars-check / 非法输入）")
 
 
 if __name__ == "__main__":

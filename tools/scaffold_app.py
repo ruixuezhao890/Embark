@@ -6,15 +6,15 @@
     python tools/scaffold_app.py my                          # dry-run：只打印蓝图与清单
     python tools/scaffold_app.py my --title "我的" \
         --var visit_count:int --var speed:float             # 声明 Flow 变量骨架
-    python tools/scaffold_app.py my --apply                 # 落地：写 h/cpp + 接 CMakeLists + 注册表
+    python tools/scaffold_app.py my --apply                 # 落地：写 h/cpp + eez_vars.txt + 接 CMakeLists + 注册表
     python tools/scaffold_app.py my --apply \
         --vars-check build/include/embark_eez_vars.h        # 落地后核对变量表（构建期产物）
 
 设计：默认 dry-run（不碰任何文件）；--apply 才写盘，且幂等（已存在且一致 → 跳过；
 内容不一致 → 报错不覆盖）。EEZ 侧（画屏/绑变量/SetPage）是 Studio 二进制，**不可脚本化**，
 脚本只打印对应 checklist（见 docs/new-app-guide.md §2）。剧本只改三处代码：
-  - 新建       app/<name>_app.{h,cpp}（薄壳模板，hello_app 同款）
-  - 追加一行   app/CMakeLists.txt（embark_demo_apps 源列表）
+  - 新建       app/<name>/<name>_app.{h,cpp} + eez_vars.txt（薄壳模板，目录化形态）
+  - 追加一行   app/CMakeLists.txt（embark_demo_apps 源列表，锚点源行 common/eez_ui_nav.cpp 之后）
   - 追加一项   platform/host/ui_demo.cpp（EMBARK_APP_TABLE，LauncherApp 之后）
 """
 from __future__ import annotations
@@ -116,7 +116,7 @@ def build_source(app_name: str, class_name: str, vars_: list[tuple[str, str]]) -
     today = datetime.date.today().isoformat()
     L: list[str] = [
         "/**",
-        f" * {app_name} App 实现（{today} 由 tools/scaffold_app.py 生成）：薄壳纪律见 hello_app.cpp。",
+        f" * {app_name} App 实现（{today} 由 tools/scaffold_app.py 生成）：薄壳纪律见 app/clock/clock_app.cpp。",
         " *",
         " *   - onCreate 不建屏（无手绘 = 没有 screen_）；",
         " *   - onEnter/onResume 按屏名约定加载自己的 EEZ 屏",
@@ -183,8 +183,20 @@ def build_source(app_name: str, class_name: str, vars_: list[tuple[str, str]]) -
     return "\n".join(L)
 
 
+def build_vars_txt(app_name: str, vars_: list[tuple[str, str]]) -> str:
+    lines = [
+        "# EEZ Studio 粘贴清单（tools/scaffold_app.py 生成）——把下面每行声明为 Flow 全局变量并",
+        "# 绑定到控件（docs/new-app-guide.md §2.4-2.5）。声明后重新 cmake -B build：构建日志会",
+        "# 打印『EEZ 变量：N 个』，或构建后用 --vars-check build/include/embark_eez_vars.h 核对。",
+    ]
+    if vars_:
+        lines += [f"{app_name}_{f}    # {t}" for f, t in vars_]
+    else:
+        lines += ["# （未声明 --var 变量；需要上屏数据时用 --var <字段>:<类型> 重新生成声明）"]
+    return "\n".join(lines) + "\n"
+
 def cmake_new_line(app_name: str) -> str:
-    return f"launcher_app.cpp demo_apps.cpp hello_app.cpp {app_name}_app.cpp"
+    return f"{app_name}/{app_name}_app.cpp"
 
 
 def app_table_entry(app_name: str, class_name: str) -> str:
@@ -193,20 +205,22 @@ def app_table_entry(app_name: str, class_name: str) -> str:
 
 def dry_run(app_name: str, class_name: str, title: str, vars_: list[tuple[str, str]], repo: Path) -> None:
     print(f"== App 蓝图：{app_name}（{class_name}，『{title}』）==")
-    print(f"--- 新建 app/{app_name}_app.h / app/{app_name}_app.cpp（薄壳 + {len(vars_)} 个变量骨架）---")
+    print(f"--- 新建 app/{app_name}/{app_name}_app.h / app/{app_name}/{app_name}_app.cpp + eez_vars.txt（薄壳 + {len(vars_)} 个变量骨架）---")
     print(build_header(app_name, class_name, title))
     if vars_:
         print(f"--- cpp 变量骨架（onForegroundTick 内）---")
         for field, typ in vars_:
             full = f"{app_name}_{field}"
             print(f'    eez_ui_bridge_{VAR_FN[typ]}("{full}", {VAR_EXPR[typ]});  // TODO: 真实业务值')
+    print("--- eez_vars.txt（EEZ Studio 粘贴清单）---")
+    print(build_vars_txt(app_name, vars_))
     print("--- 将修改的两处 ---")
     cm = repo / CMAKELISTS
     text = cm.read_text(encoding="utf-8")
     if f"{app_name}_app.cpp" in text:
-        print(f"  = {CMAKELISTS}：已含 {app_name}_app.cpp（幂等）")
+        print(f"  = {CMAKELISTS}：已含 {app_name}/{app_name}_app.cpp（幂等）")
     else:
-        print(f"  + {CMAKELISTS}：源列表追加 {app_name}_app.cpp")
+        print(f"  + {CMAKELISTS}：源列表追加 {app_name}/{app_name}_app.cpp")
     ui = repo / UI_DEMO
     utext = ui.read_text(encoding="utf-8")
     entry = app_table_entry(app_name, class_name)
@@ -237,10 +251,12 @@ def dry_run(app_name: str, class_name: str, title: str, vars_: list[tuple[str, s
 
 
 def apply(app_name: str, class_name: str, title: str, vars_: list[tuple[str, str]], repo: Path) -> None:
-    hp = repo / APP_DIR / f"{app_name}_app.h"
-    cp = repo / APP_DIR / f"{app_name}_app.cpp"
+    hp = repo / APP_DIR / app_name / f"{app_name}_app.h"
+    cp = repo / APP_DIR / app_name / f"{app_name}_app.cpp"
+    vf = repo / APP_DIR / app_name / "eez_vars.txt"
     hdr = build_header(app_name, class_name, title)
     src = build_source(app_name, class_name, vars_)
+    (repo / APP_DIR / app_name).mkdir(parents=True, exist_ok=True)
     for p, content in ((hp, hdr), (cp, src)):
         if p.exists():
             cur = p.read_text(encoding="utf-8")
@@ -250,28 +266,37 @@ def apply(app_name: str, class_name: str, title: str, vars_: list[tuple[str, str
         else:
             p.write_text(content, encoding="utf-8")
             print(f"  + {p.relative_to(repo)} 已生成")
+    vt = build_vars_txt(app_name, vars_)
+    if vf.exists():
+        if vf.read_text(encoding="utf-8") != vt:
+            die(f"{vf.relative_to(repo)} 与模板不一致——不覆盖")
+        print(f"  = {vf.relative_to(repo)} 已是最新（幂等跳过）")
+    else:
+        vf.write_text(vt, encoding="utf-8")
+        print(f"  + {vf.relative_to(repo)} 已生成（EEZ Studio 粘贴清单）")
+
     cm = repo / CMAKELISTS
     ctext = cm.read_text(encoding="utf-8")
-    if f"{app_name}_app.cpp" in ctext:
+    if f"{app_name}/{app_name}_app.cpp" in ctext:
         print(f"  = {CMAKELISTS} 已含新源（幂等跳过）")
     else:
-        old = "launcher_app.cpp demo_apps.cpp hello_app.cpp"
-        new = cmake_new_line(app_name)
-        if old not in ctext:
-            die(f"{CMAKELISTS} 找不到锚 '{old}'（文件结构变了，手工处理）")
-        cm.write_text(ctext.replace(old, new, 1), encoding="utf-8")
-        print(f"  + {CMAKELISTS} 源列表已加 {app_name}_app.cpp")
+        anchor = "common/eez_ui_nav.cpp)"
+        if anchor not in ctext:
+            die(f"{CMAKELISTS} 找不到锚 '{anchor}'（文件结构变了，手工处理）")
+        cm.write_text(ctext.replace(anchor, anchor + "\n" +
+                    "          " + cmake_new_line(app_name), 1), encoding="utf-8")
+        print(f"  + {CMAKELISTS} 源列表已加 {app_name}/{app_name}_app.cpp")
     ui = repo / UI_DEMO
     utext = ui.read_text(encoding="utf-8")
     entry = app_table_entry(app_name, class_name)
     if entry in utext:
         print(f"  = {UI_DEMO} 注册表已含 {class_name}（幂等跳过）")
     else:
-        anchor = "embark::demo::TickerApp, embark::demo::HelloApp,"
+        anchor = "EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp)"
         if anchor not in utext:
-            die(f"{UI_DEMO} 找不到注册表锚 '{anchor}'（文件结构变了，手工处理）")
+            die(f"{UI_DEMO} 找不到注册表锚（文件结构变了，手工处理）")
         indent = " " * 17
-        utext = utext.replace(anchor, anchor + "\n" + indent + entry + ",", 1)
+        utext = utext.replace(anchor, anchor + ",\n" + indent + entry, 1)
         ui.write_text(utext, encoding="utf-8")
         print(f"  + {UI_DEMO} 注册表已加 {class_name}")
 
