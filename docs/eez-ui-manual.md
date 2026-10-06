@@ -66,8 +66,8 @@ void MyApp::onForegroundTick(std::uint32_t) {
 }  // namespace embark::demo
 ```
 
-真实样板：app/launcher_app.cpp（主屏 + 导航接线）、app/hello_app.cpp（最简薄壳）、
-app/demo_apps.cpp（ClockApp 的变量桥 + SettingsApp 的 bump_level 逻辑入口）。
+真实样板：`app/launcher/launcher_app.cpp`（主屏 + 导航接线）、`app/clock/clock_app.cpp`（变量桥 + 收 `BrightnessMessage`）、
+`app/settings/settings_app.cpp`（suspend + `bump_level` 逻辑入口）。
 
 ## 5. 数据怎么进 UI（Flow 全局变量）
 

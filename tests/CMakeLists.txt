@@ -39,10 +39,12 @@ add_executable(embark_tests
         kernel/test_zero_alloc.cpp)
 
 # 测试内部用 "fakes/fakes.h" 这种从 tests/ 起算的相对包含。
-# app/ 也在搜索路径上：屏名解析（app/eez_ui_screen_names.h）是纯函数，脱离 LVGL 单测。
+# app/ 与 app/common/ 也在搜索路径上：屏名解析（app/common/eez_ui_screen_names.h，
+# 2026-10-06 目录化后薄桥归 common）是纯函数，脱离 LVGL 单测。
 target_include_directories(embark_tests PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}"
-        "${PROJECT_SOURCE_DIR}/app")
+        "${PROJECT_SOURCE_DIR}/app"
+        "${PROJECT_SOURCE_DIR}/app/common")
 
 target_link_libraries(embark_tests PRIVATE
         embark::core

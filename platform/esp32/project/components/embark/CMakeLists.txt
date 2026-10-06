@@ -16,10 +16,14 @@ set(EMBARK_KERNEL_SOURCES
         "${EMBARK_ROOT}/src/embark/log.cpp"
         "${EMBARK_ROOT}/src/embark/version.cpp")
 
-# --- Demo App（与宿主同一批 App：真机换了后端，App 一行不改 —— §14.5）--------
+# --- Demo App（与宿主同一批 App：launcher/clock/settings 三个；目录化后各占一目录，
+#     真机清单与 app/CMakeLists.txt 的源列表一一对应 —— §14.5 换后端、App 一行不改）---
+# 桥调用在真机上 no-op（EMBARK_EEZ_UI_BRIDGE 未定义），真机接入 EEZ 后在此补编
+# common/eez_ui_bridge.cpp 与 common/eez_ui_nav.cpp 并打开开关即可。
 set(EMBARK_APP_SOURCES
-        "${EMBARK_ROOT}/app/demo_apps.cpp"
-        "${EMBARK_ROOT}/app/hello_app.cpp")
+        "${EMBARK_ROOT}/app/launcher/launcher_app.cpp"
+        "${EMBARK_ROOT}/app/clock/clock_app.cpp"
+        "${EMBARK_ROOT}/app/settings/settings_app.cpp")
 
 # --- 宿主与真机共用的胶水：必须与 platform/common/CMakeLists.txt 的列表一致 ---
 set(EMBARK_COMMON_SOURCES
@@ -48,7 +52,8 @@ idf_component_register(
         INCLUDE_DIRS
              "${EMBARK_ROOT}/include"              # embark/*.h
              "${EMBARK_ROOT}/config"               # embark_config.h / embark_limits.h / lv_conf.h
-             "${EMBARK_ROOT}/app"                  # demo_apps.h / hello_app.h
+             "${EMBARK_ROOT}/app"                  # <app名>/ 各 App 的 {h,cpp}
+             "${EMBARK_ROOT}/app/common"           # app_messages.h（薄桥待接入 EEZ）
              "${EMBARK_ROOT}/platform/common"      # lvgl_port.h / lvgl_ui_port.h / static_pool.h
              "${EMBARK_ROOT}/platform/esp32/src"   # esp32_*.h
              "${CMAKE_BINARY_DIR}/include"         # middleware 视图（<middleware/etl|efmt|elog/...>）

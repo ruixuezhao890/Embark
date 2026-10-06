@@ -12,7 +12,7 @@
  * （app/eez_ui/src/ui/；屏名约定 == App 名，子页 = <app名>_<编号>_sub，见
  * eez_ui_bridge.h / eez_ui_nav.h）：EEZ 屏上控件的 Flow SetPage 被桥翻成"切到
  * 同名 App"，所以点 EEZ 屏上的按钮 = 启动那个 App。手绘的扇形启动器与 demo App
- * 手绘按钮已全部下线（demo_apps.cpp 用 bump_level() 接替 Level +1 的触发点）。
+ * 手绘按钮已全部下线（settings_app.cpp 的 bump_level() 接替 Level +1 的触发点）
  *
  * 验收开关分五档（全部由合成 SDL 输入 + 帧号驱动，确定性）：
  *   --click [X,Y]   点 EEZ launcher 屏的按钮（Flow SetPage → clock 屏 → 切 ClockApp），
@@ -25,12 +25,10 @@
  *                   → 点 clock 屏按钮回启动器 → 点 launcher 屏按钮再进 clock →
 *                   再点 clock 屏按钮回启动器 → settings->bump_level()（消息广播）；
  *                   断言 switches==4 与各 App 钩子序。
- *   --own-task      验证 own_task 后台 App：TickerApp 的消息要能被 UI 收到。
  *   --eez           EEZ 验收（issue 19 / ADR 0008，issue 21 起接屏名约定）：屏表自检
  *                   + 变量表自检（launcher_tap_count 构建期生成）+ 变量读写往返
  *                   → 点 EEZ 屏按钮驱动切 App（Flow SetPage → 屏名 → request_switch）
-*                   → 程序化切到 EEZ 宿主 App eezdemo（验证它的前台 tick）→ 点
-*                   clock 屏按钮回启动器；断言 switches==3、nav_requests==2、last_screen=="launcher"。
+ *                   → 点 clock 屏按钮回启动器；断言 switches==2、nav_requests==2、last_screen=="launcher"。
  *   --screenshot FILE 最后一帧把窗口内容存成 BMP（用 Python/Pillow 转 PNG 便于查看）
  *   --frames N / --scale S / --delay MS / --quit-at N / --help 同旧版。
  *
@@ -52,16 +50,15 @@
 #include <embark/log.h>
 #include <embark_limits.h>
 
-#include "demo_apps.h"
-#include "eez_demo_app.h"
+#include "clock/clock_app.h"
+#include "settings/settings_app.h"
 #include "eez_ui_bridge.h"
 #include "eez_ui_nav.h"
-#include "hello_app.h"
 #include "host_context.h"
 #include "host_display.h"
 #include "host_input.h"
 #include "host_lvgl_mem.h"
-#include "launcher_app.h"
+#include "launcher/launcher_app.h"
 #include "lvgl_port.h"
 #include "lvgl_ui_port.h"
 #include "own_task_spawner.h"
@@ -74,7 +71,6 @@ namespace {
 // 两个屏的按钮几何（app/eez_ui/src/ui/screens.c）：
 //   launcher 屏按钮 obj0 pos(70,199) 102×50 → 中心 (121,224)：Flow SetPage → clock 屏；
 //   clock 屏按钮  obj1 pos(70,135) 100×50 → 中心 (120,160)：Flow SetPage → launcher 屏。
-// 手写 demo App 的按钮几何已随 UI 退役（demo_apps.h 不再有 demo_click_center_*）。
 constexpr int launcher_button_x = 121;  // EEZ launcher 屏按钮（Flow SetPage → clock 屏）
 constexpr int launcher_button_y = 224;
 constexpr int clock_button_x = 120;     // EEZ clock 屏按钮（Flow SetPage → launcher 屏）
@@ -84,34 +80,32 @@ constexpr int clock_button_y = 160;
 constexpr int press_frame = 20;
 constexpr int click_release_delta = 2;
 
-// --click 故事线：点 launcher 屏按钮切 clock（帧 20），再点 clock 屏按钮回启动器（帧 60）。
-constexpr int click_second_frame = 60;
-constexpr int click_frames = 80;
-
-// --launch 故事线（程序化启动 + 真点击混合，间隔足够避开一次切换的收敛期）：
-//   帧 20 request_switch("clock")；帧 40 点 clock 屏按钮 → 回启动器（屏名约定驱动）；
-//   帧 60 点 launcher 屏按钮 → 再进 clock；帧 80 settings->bump_level()（手绘
-//   Level +1 的逻辑入口，消息广播到 clock）；帧 90 再点 clock 屏按钮 → 回启动器
-//   （EEZ 屏内按钮承担返回，导航壳已退役）。
+// --click 故事线：点 launcher 屏按钮切 clock（帧 20），再点 clock 屏按钮回启动器（帧 70，
+//   落在首次切页动画 22–62 之后，避开 LVGL 动画期输入屏蔽）。
+constexpr int click_second_frame = 70;
+constexpr int click_frames = 90;
+// --launch 故事线（程序化启动 + 真点击混合；EEZ 屏按钮引发的切页动画 200ms≈40 帧，
+//   期间 LVGL 屏蔽输入（lv_indev.c prev_scr 非空），后续点击须等动画窗口结束再落帧）：
+//   帧 20 request_switch("clock")（程序化、无动画）；帧 40 点 clock 屏按钮 → 回启动器，
+//   动画 42–82；帧 90 点 launcher 屏按钮 → 再进 clock，动画 92–132；
+//   帧 84 settings->bump_level()（手绘 Level +1 的逻辑入口，消息广播到 clock）；
+//   帧 140 再点 clock 屏按钮 → 回启动器（EEZ 屏内按钮承担返回，导航壳已退役）。
 constexpr int launch_switch_frame = 20;
 constexpr int launch_clock_back_frame = 40;
-constexpr int launch_launcher_btn_frame = 60;
-constexpr int launch_bump_frame = 80;
-constexpr int launch_home_frame = 90;
-constexpr int launch_quit_frame = 102;
-constexpr int launch_frames = 110;
-
-// --eez 故事线（issue 19 / ADR 0008）：点 launcher 屏按钮（帧 20）→ Flow SetPage 到
-// clock 屏 → 桥的屏观察者 request_switch("clock") → ClockApp 前台；帧 60 程序化切到
-// eezdemo（EEZ 宿主 App，验证它的 onForegroundTick 在跑）。帧 90 再点 clock 屏按钮
-// （eezdemo 没有同名屏、保持的当前屏）→ Flow SetPage 回 launcher 屏 → 观察者
-// request_switch 回启动器 —— 返回由 EEZ 屏内按钮承担（导航壳已退役）。
+constexpr int launch_launcher_btn_frame = 90;
+constexpr int launch_bump_frame = 84;
+constexpr int launch_home_frame = 140;
+constexpr int launch_quit_frame = 190;
+constexpr int launch_frames = 200;
+// --eez 故事线（issue 19 / ADR 0008，2026-10-06 精简为三 App）：点 launcher 屏按钮
+// （帧 20）→ Flow SetPage 到 clock 屏 → 桥的屏观察者 request_switch("clock") →
+// ClockApp 前台；帧 70 点 clock 屏按钮 → Flow SetPage 回 launcher 屏 → 观察者
+// request_switch 回启动器（回程由 EEZ 屏内按钮承担，导航壳已退役）；帧 70 落在
+// 第一次切页动画（22–62）之后，避免 LVGL 动画期屏蔽输入。
 constexpr int eez_switch_frame = press_frame;
-constexpr int eez_demo_frame = 60;
-constexpr int eez_home_frame = 90;
-constexpr int eez_quit_frame = 114;
-constexpr int eez_frames = 122;
-
+constexpr int eez_home_frame = 70;
+constexpr int eez_quit_frame = 100;
+constexpr int eez_frames = 110;
 // --drag 冒烟：press 15 → 三个插值 move（17/19/21）→ release 23。
 constexpr int drag_press_frame = 15;
 constexpr int drag_move_frame = 17;
@@ -133,18 +127,16 @@ struct Options {
   int drag_x2 = 100;  int drag_y2 = 140;
   bool launch = false;
   int quit_at = 0;
-  bool own_task = false;
   bool eez = false;
 };
 
 void print_usage() {
   std::printf(
       "用法：embark_host_ui [选项]\n"
-"  --frames N         跑 N 帧后退出（默认按模式：launch 110 / click 80 / drag 80 / own-task 80 / eez 122 / 否则 0 = 一直跑到关窗）\n"
-      "  --click [X,Y]      点 launcher 屏按钮切 clock（帧 20）→ 帧 60 在 clock 屏点 (X,Y)（默认按钮中心 %d,%d = 回启动器）\n"
+      "  --frames N         跑 N 帧后退出（默认按模式：launch 200 / click 90 / drag 80 / eez 110 / 否则 0 = 一直跑到关窗）\n"
+"  --click [X,Y]      点 launcher 屏按钮切 clock（帧 20）→ 帧 70 在 clock 屏点 (X,Y)（默认按钮中心 %d,%d = 回启动器）\n"
       "  --drag X1,Y1,X2,Y2 合成拖动冒烟（帧 15 按下 → 帧 23 抬起；默认 40,60 → 100,140，落在空白处不误触按钮）\n"
 "  --launch            完整验收故事（request_switch('clock')→点屏按钮往返→bump_level 消息）\n"
-      "  --own-task          验证 own_task 后台 App（TickerApp 消息回流）\n"
       "  --eez               EEZ 验收（issue 19）：屏表/变量表自检 + 变量读写往返 + EEZ 屏点按钮切 App\n"
       "  --screenshot FILE  最后一帧存 BMP\n"
       "  --shot-frame N FILE 第 N 帧存 BMP（配 --eez 等故事线抓中途屏）\n"
@@ -212,10 +204,9 @@ bool save_screenshot(embark::platform::host::HostDisplay& display, const char* p
 namespace embark::platform::host {
 
 // 整个可执行文件只出现一次的 App 注册表：LauncherApp（启动器）首位 = 默认前台，
-// 之后是 ClockApp/SettingsApp/TickerApp/HelloApp/EezDemoApp。启动器与 clock 屏的
-// 界面来自 EEZ Studio（app/eez_ui/），启动器仍必须第一位（默认前台）。
-EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp,
-                 embark::demo::TickerApp, embark::demo::HelloApp, embark::demo::EezDemoApp)
+// 之后是 ClockApp/SettingsApp。启动器与 clock/settings 屏的界面都来自 EEZ Studio
+// （app/eez_ui/），启动器仍必须第一位（默认前台）。2026-10-06 精简：只留这三个。
+EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp)
 
 }  // namespace embark::platform::host
 
@@ -261,7 +252,6 @@ Options parse_options(int argc, char** argv) {
       }
     }
     else if (std::strcmp(arg, "--launch") == 0) { options.launch = true; }
-    else if (std::strcmp(arg, "--own-task") == 0) { options.own_task = true; }
     else if (std::strcmp(arg, "--eez") == 0) { options.eez = true; }
     else if (std::strcmp(arg, "--help") == 0) { print_usage(); std::exit(0); }
     else {
@@ -311,7 +301,6 @@ void ui_main(void* argument) noexcept {
     if (options->launch) { frames_limit = launch_frames; }
     else if (options->click) { frames_limit = click_frames; }
     else if (options->drag) { frames_limit = drag_frames; }
-    else if (options->own_task) { frames_limit = 80; }
     else if (options->eez) { frames_limit = eez_frames; }
   }
 
@@ -339,17 +328,17 @@ void ui_main(void* argument) noexcept {
       // request_switch("clock")（帧 20 按下 → 帧 21/22 抬起 → 下次 tick 生效）。
       if (frames_run == eez_switch_frame) { push_motion_and_press(options->scale, launcher_button_x, launcher_button_y); }
       if (frames_run == eez_switch_frame + click_release_delta) { push_release(options->scale, launcher_button_x, launcher_button_y); }
-      // 程序化切到 EEZ 宿主 App（eezdemo）：验证它的 onForegroundTick 一直在跑。
-      if (frames_run == eez_demo_frame) { (void)framework.request_switch("eezdemo"); }
-      // 回程：点 clock 屏按钮（eezdemo 保持的当前屏）→ Flow SetPage 回 launcher 屏 →
+      // 回程：点 clock 屏按钮 → Flow SetPage 回 launcher 屏 →
       // 观察者 request_switch 回启动器（EEZ 屏内按钮承担返回，无导航壳）。
+      // 回程点击放帧 70：首次切页动画 22–62 期间 LVGL 屏蔽输入（prev_scr）。
       if (frames_run == eez_home_frame) { push_motion_and_press(options->scale, clock_button_x, clock_button_y); }
       if (frames_run == eez_home_frame + click_release_delta) { push_release(options->scale, clock_button_x, clock_button_y); }
       if (frames_run == eez_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
     } else if (options->click) {
-      // 帧 20：点 launcher 屏按钮（切到 clock）；帧 60：在 clock 屏点 (X,Y)
-      // （默认 = clock 屏按钮中心 → Flow SetPage 回 launcher 屏 → 回启动器）。
       if (frames_run == press_frame) { push_motion_and_press(options->scale, launcher_button_x, launcher_button_y); }
+      // 帧 20：点 launcher 屏按钮（切到 clock）；帧 70：在 clock 屏点 (X,Y)
+      // （默认 = clock 屏按钮中心 → Flow SetPage 回 launcher 屏 → 回启动器；帧 70
+      // 落在首次切页动画 22–62 之后，避开输入屏蔽）。
       if (frames_run == press_frame + click_release_delta) { push_release(options->scale, launcher_button_x, launcher_button_y); }
       if (frames_run == click_second_frame) { push_motion_and_press(options->scale, options->click_x, options->click_y); }
       if (frames_run == click_second_frame + click_release_delta) { push_release(options->scale, options->click_x, options->click_y); }
@@ -380,15 +369,13 @@ void ui_main(void* argument) noexcept {
   const auto* launcher = static_cast<const embark::demo::LauncherApp*>(framework.app(0));
   const auto* clock = static_cast<const embark::demo::ClockApp*>(framework.app(1));
   auto* settings = static_cast<embark::demo::SettingsApp*>(framework.app(2));
-  const auto* ticker = static_cast<const embark::demo::TickerApp*>(framework.app(3));
-  const auto* eez_app = static_cast<const embark::demo::EezDemoApp*>(framework.app(5));
 
   ELOG_INFO("显示与前台：{} 帧；前台 {}；switches={}",
             frames_run, framework.apps().at(framework.foreground())->name(), framework.switches());
   ELOG_INFO("启动器（界面来自 EEZ 屏 \"launcher\"）：enters={} resumes={} 前台帧={}",
             launcher->enters(), launcher->resumes(), launcher->foreground_ticks());
-  ELOG_INFO("后台/消息：clock ticks={} brightness={}；settings level={}；ticker sent={} received={}；LVGL 未回收 {} 字节",
-            clock->ticks(), clock->brightness(), settings->level(), ticker->sent(), ticker->received(),
+  ELOG_INFO("时钟（界面来自 EEZ 屏 \"clock\"）：ticks={} 亮度={} settings 档={}；LVGL 未回收 {} 字节",
+          clock->ticks(), clock->brightness(), settings->level(),
             embark_lvgl_outstanding_bytes());
 
   int exit_code = 0;
@@ -428,16 +415,10 @@ void ui_main(void* argument) noexcept {
               framework.switches());
     if (!dragged_ok) { exit_code = 2; }
   }
-  if (options->own_task) {
-    const bool ticked_ok = ticker->sent() > 0 && ticker->received() > 0;
-    if (ticked_ok) { ELOG_INFO("〔own-task 验收通过〕"); } else { ELOG_INFO("〔own-task 验收失败〕"); }
-    if (!ticked_ok) { exit_code = 2; }
-  }
   if (options->eez) {
     // 故事线：点 launcher 屏按钮 → Flow SetPage 到 clock 屏 → 桥的屏观察者 →
-    // request_switch("clock") → ClockApp 前台（switches 1）→ 程序化切 eezdemo
-// （switches 2，EEZ 宿主 App 的前台 tick 在跑）→ 点 clock 屏按钮回启动器（switches 3）。
-    // 这就是"EEZ 里切屏 = 切前台 App"（屏名约定 == App 名，见 eez_ui_nav.h）。
+    // request_switch("clock") → ClockApp 前台（switches 1）→ 点 clock 屏按钮回启动器（switches 2）。
+    // 这就是“EEZ 里切屏 = 切前台 App”（屏名约定 == App 名，见 eez_ui_nav.h）。
     // 屏表（构建期从 EEZ 生成代码解析）自检：表非空，且每项都能名字→id 反查回来
     // （未来按约定加屏，这里随之增长，不需要改本文件）。
     const int screen_count = embark::demo::eez_ui_bridge_screen_count();
@@ -485,20 +466,17 @@ void ui_main(void* argument) noexcept {
                                 embark::demo::kEezVarNone;
     if (!no_such_var_ok) { var_roundtrip_ok = false; }
     const char* last_screen = embark::demo::eez_ui_nav_last_screen();
-    const bool eez_ok = framework.switches() == 3 && launcher->enters() == 1 &&
+    const bool eez_ok = framework.switches() == 2 && launcher->enters() == 1 &&
                         launcher->resumes() == 1 && launcher->foreground_ticks() > 0 &&
                         clock->enters() == 1 && clock->resumes() == 0 &&
-                        eez_app->enters() == 1 && eez_app->resumes() == 0 &&
-                        eez_app->foreground_ticks() > 0 &&
                         embark::demo::eez_ui_nav_switch_requests() == 2 &&
                         last_screen != nullptr && std::strcmp(last_screen, "launcher") == 0 &&
                         embark::demo::eez_ui_bridge_current_screen() == 1 &&
                         framework.foreground() == 0 && screen_table_ok && var_table_ok &&
                         var_roundtrip_ok && no_such_var_ok;
     ELOG_INFO(
-        "eez: switches={} enters={} resumes={} ticks={} clock_enters={} eez_enters={} eez_ticks={} current_screen={} screens={} vars={} nav_requests={} last_screen={}",
+        "eez: switches={} enters={} resumes={} ticks={} current_screen={} screens={} vars={} nav_requests={} last_screen={}",
         framework.switches(), launcher->enters(), launcher->resumes(), launcher->foreground_ticks(),
-        clock->enters(), eez_app->enters(), eez_app->foreground_ticks(),
         embark::demo::eez_ui_bridge_current_screen(), screen_count, var_count,
         embark::demo::eez_ui_nav_switch_requests(),
         last_screen != nullptr ? last_screen : "<none>");

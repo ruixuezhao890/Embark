@@ -1,5 +1,6 @@
 # 构建产物（CMake/Ninja 生成的一切都不进仓库）
 build/
+__pycache__/
 build-*/
 out/
 cmake-build-*/

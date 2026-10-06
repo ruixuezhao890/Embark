@@ -1,6 +1,6 @@
 # main 组件：只是入口（app_main → 起唯一 UI 任务），真正的代码都在 embark 组件里。
 #
-# REQUIRES embark 是为了拿到它的 PUBLIC 头文件（embark/*.h、demo_apps.h 等），
+# REQUIRES embark 是为了拿到它的 PUBLIC 头文件（embark/*.h、各 App 的 {h,cpp} 等），
 # 以及它 **PUBLIC** 传下来的 `-include config/embark_config.h`
 # （ETL 锁宏、日志开关、平台宏的唯一开关；少了它 callback_timer.h 会直接 #error）。
 idf_component_register(SRCS "main.cpp" INCLUDE_DIRS "." REQUIRES embark)

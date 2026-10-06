@@ -6,16 +6,14 @@
  *
  *   ① 进程入口：起唯一 UI 任务（FreeRTOS 静态任务）→ 进调度器，自己不干活
  *   ② HAL 初始化：时间 / 持久化 / 日志 / 系统 / 总线 / 显示 / 输入，逐个报状态
- *   ③ 框架 boot：6 个 App 注册 → 打印每个 App 的后台策略 → 默认前台 LauncherApp
+ *   ③ 框架 boot：3 个 App 注册（launcher/clock/settings）→ 打印每个 App 的后台策略 → 默认前台 LauncherApp
  *   ④ 启动器主屏：EEZ Studio 的 launcher 屏 —— 点屏上按钮（Flow SetPage → clock 屏）
  *   ⑤ 前台切换 #1：EEZ 屏按钮驱动 → clock 进场（onEnter，后台 tick 继续跑）
  *   ⑥ EEZ 屏往返 + App 间消息：点 clock 屏按钮回启动器（SetPage 回 launcher 屏，
  *       屏名约定驱动切回归）；settings->bump_level() 广播亮度消息 → clock 收到（手绘
  *       Level +1 按钮退役后的逻辑入口，界面提交给 EEZ 屏）
  *   ⑦ 回程交给 EEZ 屏按钮：无导航壳 —— 用例在 clock 收尾（SetPage 回程由 EEZ 屏承担）
- *   ⑧ 真正的任务切换：own_task 的 ticker 任务发消息 → UI 任务收（SPSC 队列）
- *   ⑨ 任务生命周期：一次性 own_task（job）跑完 → 框架回收槽位 → 运行期再创建一轮
- *   ⑩ 关窗退出：SDL_QUIT → framework.exit_requested() → 收尾统计 + LVGL 堆账
+ *   ⑧ 关窗退出：SDL_QUIT → framework.exit_requested() → 收尾统计 + LVGL 堆账
  *
  * 每一步都打一行中文解说，末尾再打一张"自检清单"（✓/✗ + 实测值），
  * 所以它既是给人看的演示，也是能无人值守判定的系统用例：
@@ -46,14 +44,14 @@
 #include <embark/version.h>
 #include <embark_limits.h>
 
-#include "demo_apps.h"
+#include "clock/clock_app.h"
+#include "settings/settings_app.h"
 #include "eez_ui_bridge.h"
-#include "hello_app.h"
 #include "host_context.h"
 #include "host_display.h"
 #include "host_input.h"
 #include "host_lvgl_mem.h"
-#include "launcher_app.h"
+#include "launcher/launcher_app.h"
 #include "lvgl_port.h"
 #include "lvgl_ui_port.h"
 #include "own_task_spawner.h"
@@ -61,8 +59,6 @@
 
 namespace {
 
-/// 注册表下标（与 EMBARK_APP_TABLE 的顺序一一对应）：第 6 个是 JobApp。
-constexpr embark::AppId job_id = 5U;
 
 // --- 用例时间线（帧号）-------------------------------------------------------
 // 每帧 = HAL 的一跳（默认 5 ms），帧号是确定性的，所以这条用例每次跑法完全一样。
@@ -76,16 +72,18 @@ constexpr int clock_button_x = 120;     ///< ⑥ EEZ clock 屏的按钮中心（
 constexpr int clock_button_y = 160;
 constexpr int click_release_delta = 2;  ///< 按下后隔两帧抬起（LVGL 分两个读周期）
 
+// EEZ Flow SetPage 切页动画 200ms≈40 帧，动画窗口内 LVGL 屏蔽输入
+// （lv_indev.c prev_scr 非空），后续点击须落在动画结束后：16→56、72→112、
+// 122→162。
+
 constexpr int eez_click_frame = 14;         ///< ④ 点 launcher 屏按钮：按下（→ clock）
 constexpr int tick_checkpoint_first = 28;   ///< 第一次看 clock 的后台节拍
-constexpr int clock_back_frame = 36;        ///< ⑥ 点 clock 屏按钮：回 launcher 屏（→ 启动器）
-constexpr int bump_level_frame = 44;        ///< ⑥ settings->bump_level()：广播亮度消息
-constexpr int launcher_reenter_frame = 52;  ///< ⑦ 再点 launcher 屏按钮：进 clock（回程交给 EEZ 屏按钮）
-constexpr int own_task_checkpoint = 78;     ///< ⑧ own_task 的消息回流
+constexpr int clock_back_frame = 70;        ///< ⑥ 点 clock 屏按钮：回 launcher 屏（→ 启动器）；16–56 动画结束后
 constexpr int tick_checkpoint_second = 82;  ///< 第二次看后台节拍（对比增长）
-constexpr int own_task_cycle_frame = 86;    ///< ⑨ 运行期再创建一次 job
-constexpr int quit_frame = 98;              ///< ⑩ 推关窗事件
-constexpr int tour_end_frame = 100;         ///< 默认帧数上限
+constexpr int bump_level_frame = 80;        ///< ⑥ settings->bump_level()：广播亮度消息
+constexpr int launcher_reenter_frame = 120; ///< ⑦ 再点 launcher 屏按钮：进 clock（回程交给 EEZ 屏按钮）；72–112 后
+constexpr int quit_frame = 170;            ///< ⑩ 推关窗事件（122–162 动画结束后）
+constexpr int tour_end_frame = 180;        ///< 默认帧数上限
 
 struct Options {
   int scale = 1;
@@ -175,11 +173,9 @@ struct CheckList {
 
 namespace embark::platform::host {
 
-// 整个可执行文件只出现一次的 App 注册表（启动器首位 = 默认前台，JobApp 挂末位）：
-// LauncherApp（界面 = EEZ 屏 "launcher"）；ClockApp tick 100ms；SettingsApp suspend；
-// TickerApp own_task 50ms（issue 07 消息回 UI）；HelloApp 最简模板；JobApp 一次性任务。
-EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp,
-                 embark::demo::TickerApp, embark::demo::HelloApp, embark::demo::JobApp)
+// 整个可执行文件只出现一次的 App 注册表（启动器首位 = 默认前台）：
+// LauncherApp（界面 = EEZ 屏 "launcher"）；ClockApp tick 100ms；SettingsApp suspend。
+EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp)
 
 }  // namespace embark::platform::host
 
@@ -255,8 +251,6 @@ void ui_main(void* argument) noexcept {
   auto* launcher = static_cast<embark::demo::LauncherApp*>(framework.app(0));
   auto* clock = static_cast<embark::demo::ClockApp*>(framework.app(1));
   auto* settings = static_cast<embark::demo::SettingsApp*>(framework.app(2));
-  auto* ticker = static_cast<embark::demo::TickerApp*>(framework.app(3));
-  auto* job = static_cast<embark::demo::JobApp*>(framework.app(job_id));
 
   int frames_run = 0;
   ELOG_INFO("④ UI 循环（5 ms/帧）：先点 EEZ launcher 屏的按钮 —— Flow SetPage 到 clock 屏，桥把切屏翻成切 App");
@@ -294,19 +288,8 @@ void ui_main(void* argument) noexcept {
       ELOG_INFO("⑤ EEZ 屏按钮驱动切前台：切到 {}（onEnter；clock 的后台 tick 继续跑）",
                 framework.apps().at(framework.foreground())->name());
     }
-    if (frames_run == own_task_checkpoint) {
-      ELOG_INFO("⑧ 断点（第 {} 帧）：ticker own_task 已发 {} 条 / UI 收 {} 条；inbox 溢出 {} 次",
-                frames_run, ticker->sent(), ticker->received(), framework.inbox_overflows());
-    }
     if (frames_run == tick_checkpoint_second) {
       ELOG_INFO("后台节拍第二次采样：clock ticks={}（继续增长 = 退后台也在跑）", clock->ticks());
-    }
-    if (frames_run == own_task_cycle_frame) {
-      ELOG_INFO("⑨ 运行期再创建 job（第 {} 帧，spawned={} released={} running={} finished={} free={}）：",
-                frames_run, framework.own_tasks_spawned(), framework.own_tasks_released(),
-                spawner.running(), spawner.finished(), spawner.free_slots());
-      const Error spawn_error = framework.spawn_own_task(job_id);
-      ELOG_INFO("     spawn_own_task(job)={}（job 累计跑 {} 轮）", spawn_error, job->runs());
     }
 
     if (options->frames > 0 && frames_run >= options->frames) {
@@ -318,7 +301,7 @@ void ui_main(void* argument) noexcept {
     hp::ui_loop_delay(static_cast<std::uint32_t>(options->delay_ms));
   }
 
-  ELOG_INFO("⑩ 收尾统计（共 {} 帧）：", frames_run);
+  ELOG_INFO("⑧ 收尾统计（共 {} 帧）：", frames_run);
   CheckList checklist;
   checklist.check("总帧数跑到位", frames_run >= quit_frame + 1, static_cast<unsigned long>(frames_run),
                   static_cast<unsigned long>(quit_frame) + 1UL);
@@ -337,19 +320,8 @@ void ui_main(void* argument) noexcept {
                   static_cast<unsigned long>(settings->enters() * 10U + settings->resumes()), 0UL);
   checklist.check("亮度消息回流（clock.brightness==1）", clock->brightness() == 1,
                   static_cast<unsigned long>(clock->brightness()), 1UL);
-  checklist.check("ticker own_task 消息回流（sent/received > 0）",
-                  ticker->sent() > 0 && ticker->received() > 0,
-                  static_cast<unsigned long>(ticker->received()), 1UL);
   checklist.check("收件箱无溢出", framework.inbox_overflows() == 0,
                   static_cast<unsigned long>(framework.inbox_overflows()), 0UL);
-  checklist.check("job 生命周期（runs ≥ 2：boot 一轮 + 运行期一轮）",
-                  job->runs() >= 2 && framework.own_tasks_spawned() >= 2 &&
-                      framework.own_tasks_released() >= 2 && spawner.finished() == 0,
-                  static_cast<unsigned long>(job->runs()), 2UL);
-  checklist.check("own_task 槽位回收（free_slots == max-1）",
-                  spawner.free_slots() == static_cast<int>(embark::max_own_tasks) - 1,
-                  static_cast<unsigned long>(spawner.free_slots()),
-                  static_cast<unsigned long>(embark::max_own_tasks) - 1UL);
   checklist.check("结尾前台 = clock（回程交给 EEZ 屏按钮，导航壳已退役）",
                   framework.foreground() == framework.id_of(*clock),
                   static_cast<unsigned long>(framework.foreground()), 1UL);

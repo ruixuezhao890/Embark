@@ -17,8 +17,9 @@
 #include <embark/version.h>
 #include <middleware/elog/elog.hpp>
 
-#include "demo_apps.h"
-#include "hello_app.h"
+#include "clock_app.h"
+#include "launcher_app.h"
+#include "settings_app.h"
 
 #include "esp32_hal.h"
 #include "esp32_lvgl_mem.h"  // 静态池观测：容量 / 未回收 / 峰值（心跳日志要用）
@@ -33,11 +34,11 @@ namespace ep = embark::platform::esp32;
 
 namespace embark::platform::esp32 {
 
-// 整个固件只出现一次的 App 注册表（与宿主演示同一套 App）：ClockApp 默认前台、
-// SettingsApp 待命、TickerApp 纯后台（own_task，issue 07 的消息回 UI 演示）、
-// HelloApp 是最简模板（issue 12 的新手最短路径）。
-EMBARK_APP_TABLE(embark::demo::ClockApp, embark::demo::SettingsApp, embark::demo::TickerApp,
-                 embark::demo::HelloApp)
+// 整个固件只出现一次的 App 注册表（与宿主演示同一套 App，2026-10-06 精简为三个）：
+// LauncherApp 首位 = 默认前台（界面来自 EEZ 屏，真机接入 EEZ 后由屏承担导航）；
+// ClockApp 后台 tick 100ms（状态机 + 消息驱动亮度档）；SettingsApp suspend（bump_level
+// 逻辑入口）。桥调用在真机上编译成 no-op（EMBARK_EEZ_UI_BRIDGE 未定义），逻辑照常跑。
+EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp)
 
 }  // namespace embark::platform::esp32
 

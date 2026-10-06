@@ -46,9 +46,8 @@ ctest --test-dir build --output-on-failure  # 单元测试（95 用例 / 835 断
 
 ```sh
 ./build/platform/host/embark_host_ui --click                     # 最短验收：launcher ⇄ clock（点 EEZ 屏按钮往返），退出码 0
-./build/platform/host/embark_host_ui --frames 150 --launch --own-task
-# 合验：EEZ 屏按钮往返切前台 4 次（含亮度消息 1 发 1 收）+ ticker 自己的任务 24 发 24 收，退出码 0
-./build/platform/host/embark_host_ui --frames 150 --own-task    # 只验消息与 own_task
+./build/platform/host/embark_host_ui --frames 200 --launch
+# 合验：request_switch + EEZ 屏按钮往返切前台 4 次（含亮度消息 1 发 1 收），退出码 0
 ```
 
 退出码约定：0 = 全部验收通过；2 = 某项断言没满足（日志里 `验收失败` 会说出
@@ -58,7 +57,7 @@ ctest --test-dir build --output-on-failure  # 单元测试（95 用例 / 835 断
 
 照着 demo 的模板走，总共五步：
 
-1. **新建 `app/hello_app.h`**（薄壳：不 include LVGL、不持有屏对象，界面全部交给 EEZ）：
+1. **新建 `app/hello/hello_app.h`**（示例名 hello；每个 App 独立目录 `app/<名字>/`。薄壳：不 include LVGL、不持有屏对象，界面全部交给 EEZ）：
 
 ```cpp
 #ifndef EMBARK_APP_HELLO_APP_H
@@ -89,12 +88,12 @@ class HelloApp final : public App {
 #endif
 ```
 
-2. **新建 `app/hello_app.cpp`**（薄壳纪律：不建屏、不手绘；进入前台只按屏名挂自己的 EEZ 屏）：
+2. **新建 `app/hello/hello_app.cpp`**（薄壳纪律：不建屏、不手绘；进入前台只按屏名挂自己的 EEZ 屏）：
 
 ```cpp
 #include <embark/log.h>
 
-#include "hello_app.h"
+#include "hello/hello_app.h"
 
 #if defined(EMBARK_EEZ_UI_BRIDGE)
 #include "eez_ui_bridge.h"
@@ -135,11 +134,16 @@ void HelloApp::onForegroundTick(std::uint32_t now_ms) {
 }  // namespace embark::demo
 ```
 
-3. **`app/CMakeLists.txt`**：`embark_demo_apps` 的源列表加 `hello_app.cpp`：
+3. **`app/CMakeLists.txt`**：`embark_demo_apps` 的源列表加一条 `hello/hello_app.cpp`（现状就是目录化布局）：
 
 ```cmake
-add_library(embark_demo_apps STATIC launcher_app.cpp demo_apps.cpp hello_app.cpp
-        eez_demo_app.cpp eez_ui_bridge.cpp eez_ui_nav.cpp)
+add_library(embark_demo_apps STATIC
+        launcher/launcher_app.cpp
+        clock/clock_app.cpp
+        settings/settings_app.cpp
+        common/eez_ui_bridge.cpp
+        common/eez_ui_nav.cpp
+        hello/hello_app.cpp)   # 你新增的 App（追加在真机清单锚点处）
 ```
 
 4. **`platform/host/ui_demo.cpp`**：`EMBARK_APP_TABLE(...)` 里加进注册表
@@ -147,6 +151,8 @@ add_library(embark_demo_apps STATIC launcher_app.cpp demo_apps.cpp hello_app.cpp
 
 ```cpp
 EMBARK_APP_TABLE(embark::demo::LauncherApp,  // 首位必须是启动器
+                 embark::demo::ClockApp,
+                 embark::demo::SettingsApp,
                  embark::demo::HelloApp)     // 你的新 App
 ```
 
@@ -157,7 +163,7 @@ EMBARK_APP_TABLE(embark::demo::LauncherApp,  // 首位必须是启动器
 
 ```sh
 cmake --build build
-./build/platform/host/embark_host_ui --frames 30 --click   # hello 在后，先验收原有 App
+./build/platform/host/embark_host_ui --frames 90 --click   # 最短验收：launcher ⇄ clock 往返
 ```
 
 想让它被启动：在 EEZ Studio 的 launcher 屏加一个按钮，Flow SetPage 到 `hello` 屏——
@@ -170,25 +176,28 @@ cmake --build build
 ### 用 EEZ Studio 画界面（手绘 UI 已退役，全程只调接口）
 
 界面（外观、交互、切屏）全部由 EEZ Studio 负责，App 侧一行 LVGL 都不用写，
-只需在 4 个钩子里调用薄桥接口（`app/eez_ui_bridge.h`，命名空间 `embark::demo`）：
+只需在 4 个钩子里调用薄桥接口（`app/common/eez_ui_bridge.h`，命名空间 `embark::demo`）：
 
 1. `onCreate` → `eez_ui_bridge_ensure_init()`（幂等启动生成代码）。
 2. `onEnter` / `onResume` → `eez_ui_bridge_enter_app_screen(name())`（按屏名约定挂自己的屏）。
 3. `onForegroundTick` → 先 `set_var_*(...)` 推 UI 显示数据（Flow 全局变量），再 `eez_ui_bridge_tick()`。
 4. 主屏（launcher）额外 `eez_ui_nav_attach(fw)`：EEZ 里 SetPage 切屏 = 框架切到同名 App。
 
-完整流程见 [eez-ui-manual.md](eez-ui-manual.md)（用户手册）；Studio 安装/导出见
-[eez-studio-guide.md](eez-studio-guide.md)。
+**新手从零加 App 的端到端流程（建壳 → 画同名屏 → 绑变量 → 构建验收）见
+[new-app-guide.md](new-app-guide.md)**；接口全集见 [eez-ui-manual.md](eez-ui-manual.md)（用户手册）；
+Studio 安装/导出见 [eez-studio-guide.md](eez-studio-guide.md)。
 
 ## 文档索引
 
 | 文档 | 内容 |
 | --- | --- |
+| [quickstart.md](quickstart.md) | **5 分钟快速开始**：跑起来 → 最短验收 → 加一个带界面的 App；常见问题速查 |
 | [messages-and-background.md](messages-and-background.md) | 消息（总线 / 收件箱信封）与三种后台策略怎么用，含示例代码；`own_task` 的生命周期（入口返回 = 结束、每帧回收、运行期再创建）也在这里 |
 | [hal-backend-guide.md](hal-backend-guide.md) | 怎么写一个 HAL 后端：宿主骨架（照 platform/host/）、共享层（platform/common/）与真机实现（platform/esp32/，含 IDF 坑清单） |
 | [../platform/esp32/README.md](../platform/esp32/README.md) | ESP32-S3 真机端口：板级参数、构建/烧录命令、bring-up 清单、串口日志样例 |
+| [new-app-guide.md](new-app-guide.md) | **新手指南**：30 分钟加一个带界面的 App（建壳 → 画同名屏 → 绑变量 → 构建验收，端到端） |
 | [eez-ui-manual.md](eez-ui-manual.md) | EEZ UI 用户手册：界面交给 EEZ、App 只调 4 个接口（薄桥 API 全集 + 命名约定 + 模板） |
-| [eez-studio-guide.md](eez-studio-guide.md) | EEZ Studio 一条龙：装 Studio、建工程、导出代码入库（.eez-project） |
+| [eez-studio-guide.md](eez-studio-guide.md) | EEZ Studio 一条龙：装 Studio、建工程、导出代码入库（源工程 .eez-project 不在仓库） |
 | [common-pitfalls.md](common-pitfalls.md) | 常见坑：ETL 定容行为、消息非聚合、保留 id、无异常/无堆、MinGW 对齐分配、日志 384 字节上限、派生打印（E_FMT_DERIVE）、宏前置条件…… |
 | [adr/](adr/) | 架构决策记录：单一 UI 任务（0001）、HAL 能力粒度（0002）、零堆无异常（0003）、后台节拍与状态范式（0004）、静态槽位与任务池（0005） |
 | [agents/](agents/) | 面向 agent 的仓库约定（领域模型、issue 追踪规则） |

@@ -124,8 +124,7 @@ const embark::Error err = fw.spawn_own_task(fw.id_of(*this));
 `tests/kernel/test_own_task_lifecycle.cpp` 与 `platform/host/ui_tour.cpp` 的第 9 步。
 
 ## 演示对照
-
-`app/demo_apps.{h,cpp}` 就是最小可读范本：clock（tick + state_chart + 收 `BrightnessMessage`）、
-settings（suspend + `publish` 亮度 + `request_switch`）、ticker（own_task + `post` 信封）、
-job（own_task + `period_ms = 0`：跑完就返回的一次性任务，见下一节）。job 只挂在系统用例
-`platform/host/ui_tour.cpp` 的注册表里；宿主演示 `ui_demo` 已是 5 个（启动器 + 那 4 个 demo App），真机固件仍按 4 个 demo App 注册（首位留给启动器）。
+`app/launcher/`（主屏 + 导航接线）、`app/clock/`（tick 100ms + 状态机 + 收 `BrightnessMessage`）、`app/settings/`
+（suspend + `publish` 亮度消息 + `bump_level` 逻辑入口）就是最小可读范本；`app/common/app_messages.h` 定义了
+`BrightnessMessage`。own_task 的完整系统用例见 `tests/kernel/test_own_task_lifecycle.cpp`（job 模式的一次性任务在
+`platform/host/ui_tour.cpp` 的系统用例里驱动，宿主演示 `ui_demo` 仍按这 3 个 App 注册）。

@@ -33,6 +33,9 @@ settings 全挂起、ticker 用自己的任务发消息）、零堆审计（issu
 ——需要板子到手；另有 RTC 对时（`epoch_ms` 目前 `unsupported`）与 SD 卡总线。
 规格书见 `.scratch/embark-v1/spec.md`，新手路径见 [docs/README.md](docs/README.md)。
 
+**新用户入门**：5 分钟快速开始见 [docs/quickstart.md](docs/quickstart.md)（跑起来 → 最短验收 →
+加一个带界面的 App）；完整端到端教程见 [docs/new-app-guide.md](docs/new-app-guide.md)。
+
 ## 宿主构建
 
 依赖以 git submodule 引入，先拉齐：
@@ -94,7 +97,7 @@ ctest --test-dir build --output-on-failure
 | `--screenshot FILE` | 最后一帧存成 BMP |
 | `--quit-at N` | 第 N 帧合成关窗事件（等价于点窗口 ×，用来验收"干净退出"） |
 | `--scale S` / `--delay MS` | 窗口放大倍数（默认 1 = 240×320 1:1，不糊）/ 每帧让出的毫秒数（默认 5） |
-| `--frames N` | 跑满 N 帧就退出（默认按模式：launch 110 / click 80 / drag 80 / own-task 80 / eez 122，否则 0 = 一直跑到关窗） |
+| `--frames N` | 跑满 N 帧就退出（默认按模式：launch 200 / click 90 / drag 80 / eez 110，否则 0 = 一直跑到关窗） |
 | `--help` | 用法 |
 
 最短的自动验收（退出码 0 + 日志里 `前台切换完成` 出现 2 次：点 EEZ launcher 屏的按钮切到 clock → 再点 clock 屏的按钮收回启动器）：
@@ -172,15 +175,17 @@ idf.py -C platform/esp32/project -B build-esp32 -p COM5 flash monitor
 App 是 `embark::App` 的子类，注册进**编译期静态注册表**即可，不需要改框架
 （后台策略、生命周期钩子的完整说明见 [docs/messages-and-background.md](docs/messages-and-background.md)）：
 
-1. 在 `app/` 新建 `hello_app.h` / `hello_app.cpp`（类 HelloApp；七个钩子，
-   `name()` 返回唯一名字）；
-2. `app/CMakeLists.txt`：`embark_demo_apps` 源列表加 `hello_app.cpp`；
-3. `platform/host/ui_demo.cpp`：`EMBARK_APP_TABLE(...)` 里加
-   `embark::demo::HelloApp`（放在 `LauncherApp` 之后 —— 首位必须是启动器：默认前台 + `request_home()` 的目标）；
+1. 在 `app/<名字>/` 新建 `<名字>_app.h` / `<名字>_app.cpp`（薄壳：不 include LVGL、不建屏，
+   界面全部交给 EEZ；类名自取，`name()` 返回唯一小写名字）；
+2. `app/CMakeLists.txt`：`embark_demo_apps` 源列表加 `<名字>/<名字>_app.cpp`；
+3. `platform/host/ui_demo.cpp`：`EMBARK_APP_TABLE(...)` 里加你的 App 类
+   （放在 `LauncherApp` 之后 —— 首位必须是启动器：默认前台 + `request_home()` 的目标）；
+4. `cmake --build build` 重新构建，运行 demo 即可看到它。
 4. `cmake --build build` 重新构建，运行 demo 即可看到它。
 
 完整可复制的五步清单（含代码）在 [docs/README.md](docs/README.md) 的
-「改起来」最短路径。
+「改起来」最短路径；**带 EEZ 界面的完整新手指南（30 分钟端到端）在
+[docs/new-app-guide.md](docs/new-app-guide.md)**。
 
 ## 日志
 

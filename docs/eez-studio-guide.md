@@ -13,7 +13,8 @@ EEZ Flow（生成代码）经 eez-framework（MIT，submodule）驱动 LVGL 8.3.
 ## 安装与导出
 
 1. 装 EEZ Studio（官网下载，Electron 应用）。
-2. 打开仓库内的工程文件（`app/eez_ui/` 下的 `.eez-project`，随仓库入库）；
+2. 打开 Embark 的 EEZ 源工程 `.eez-project`（**不在仓库**：仓库只存导出产物
+   `app/eez_ui/src/ui/`，源工程是 Studio 二进制、与版本绑定，向维护者获取或随发布包附带）；
    画布尺寸 240×320（宿主竖屏）。
 3. 加页面（**屏名 == 对应 App 名**：主屏 = launcher、时钟 = clock……）、控件的交互、
    Flow 全局变量（命名 `<app名>_<字段>`，如 `launcher_tap_count`）。

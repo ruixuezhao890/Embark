@@ -23,6 +23,11 @@ target_compile_definitions(embark_core PRIVATE
         EMBARK_PLATFORM_NAME="${EMBARK_PLATFORM_NAME}"
         EMBARK_VERSION_STRING="${PROJECT_VERSION}")
 
+# framework.cpp 的 etl::mutex 走 FreeRTOS 实现（mutex_freertos.h → queue.c 的
+# xQueueCreateMutexStatic/xQueueSemaphoreTake/xQueueGenericSend）：core 必须声明
+# 对 embark_freertos 的 PUBLIC 依赖，链接展开时它才会出现在 core 之后（ld 按序扫
+# 静态归档，只靠消费者手工追加会因平铺顺序落在 core 之前而解析不到，2026-10-06 修复）。
 target_link_libraries(embark_core
         PUBLIC  embark_build_options
+                embark_freertos
         PRIVATE embark_kernel_flags)

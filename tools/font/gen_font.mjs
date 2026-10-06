@@ -39,7 +39,7 @@
  *       #else                            ->  #include "<--lv-include 的值>"
  *     本工程打开 LV_LVGL_H_INCLUDE_SIMPLE=ON（见 cmake/embark_middleware.cmake:23
  *     与 build/CMakeCache.txt:353），include 根就是 third_party/lvgl 仓库根，
- *     应用侧一律 #include <lvgl.h>（app/hello_app.h:10、platform/common/lvgl_port.h:32）。
+ *     应用侧一律 #include <lvgl.h>（app/<app名>/ 各 App 头、platform/common/lvgl_port.h:32）。
  *     所以这里传 lvgl.h（不是 lvgl/lvgl.h），保证两条分支都对。
  *
  * --lv-font-name embark_zh_14
