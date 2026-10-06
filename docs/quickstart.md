@@ -1,7 +1,8 @@
 # 5 分钟快速开始（Embark + EEZ 屏）
 
 > 目标：从零跑起宿主 UI，看到 **EEZ Studio 导出的屏**（launcher → clock），并加一个自己的 App。
-> 前提：已 `cmake --build build` 成功（构建环境见根 [README](../README.md)「宿主构建」）。
+> 前提：已 `cmake --build build` 成功。**环境从零开始**（装工具 → `git clone --recursive` → 配置构建）
+> 见 [README.md](README.md)「跑起来」①–④。
 
 ## 第 1 分钟：跑起来
 

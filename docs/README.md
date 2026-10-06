@@ -9,12 +9,40 @@
 三步：**跑起来**（构建 + 运行 demo）、**敲起来**（用命令行开关做自动验收）、
 **改起来**（照模板加一个 App）。
 
-### 1. 跑起来
+### 1. 跑起来（从零开始，约 15 分钟）
 
-Windows（MinGW + Ninja）与 Linux（apt 装 `ninja-build libsdl2-dev`）同一条路：
+按下面顺序走，每一步都是在"新装的机器"上能直接执行的。
+
+**① 装工具**（装好 `git --version`、`cmake --version`、`ninja --version` 能出号即可）：
+
+- **Windows**：
+  - Git：官方安装包（默认选项）；
+  - CMake ≥ 3.24：官方安装包（装完把 `cmake` 加进 PATH）；
+  - Ninja：独立发行版放进 PATH（或随 CMake 自带）；
+  - MinGW-w64（C++17 编译器）：推荐 [winlibs.com](https://winlibs.com/) 的 UCRT 发行版（本仓库用 g++ 15 验证；宿主 FreeRTOS 端口是 MSVC-MingW，普通发行版即可）；
+  - SDL2（宿主 UI 必需）：GitHub Releases 的 **SDL2-devel-*-mingw** 包，解压后 configure 时传
+    `-DCMAKE_PREFIX_PATH=<解压目录>/x86_64-w64-mingw32`（CMake 会在那里按 CONFIG 模式找到
+    SDL2Config.cmake；`SDL2.dll` 会被自动复制到 exe 旁边）。**没装 SDL2 时 UI 目标会被跳过**——
+    build 成功但没有 `embark_host_ui.exe`；跑 UI 之前务必先装。
+- **Linux（Debian/Ubuntu）**：
+
+  ```sh
+  sudo apt install git cmake ninja-build g++ libsdl2-dev
+  ```
+
+**② 拉取仓库（含依赖）**：5 个依赖（ETL / efmt-elog / LVGL / FreeRTOS / doctest）以 git submodule
+引入，克隆时一次带齐：
 
 ```sh
-git submodule update --init --recursive   # 拉齐 ETL / efmt-elog / LVGL / FreeRTOS / doctest
+git clone --recursive https://github.com/ruixuezhao890/Embark.git
+cd Embark
+```
+
+已经 clone 过的仓库补拉依赖：`git submodule update --init --recursive`。
+
+**③ 配置，④ 构建，⑤ 测试，⑥ 运行**：
+
+```sh
 cmake -G Ninja -B build                   # 配置（宿主 + 测试；SDL2 找不到只跳过 UI demo）
 cmake --build build                       # 构建（零警告要求）
 ctest --test-dir build --output-on-failure  # 单元测试（95 用例 / 835 断言）

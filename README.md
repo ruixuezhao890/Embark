@@ -38,7 +38,16 @@ settings 全挂起、ticker 用自己的任务发消息）、零堆审计（issu
 
 ## 宿主构建
 
-依赖以 git submodule 引入，先拉齐：
+**从零开始**：先装工具——Windows 要 Git、CMake ≥ 3.24、Ninja、MinGW-w64（C++17）与 SDL2
+（装法见 [docs/README.md](docs/README.md)「跑起来」①，UI 目标依赖 SDL2）；Linux 一行
+`sudo apt install git cmake ninja-build g++ libsdl2-dev`。然后带依赖克隆：
+
+```sh
+git clone --recursive https://github.com/ruixuezhao890/Embark.git
+cd Embark
+```
+
+依赖以 git submodule 引入（ETL / efmt-elog / LVGL / FreeRTOS / doctest）；已经 clone 过的仓库补拉：
 
 ```sh
 git submodule update --init --recursive
@@ -65,7 +74,7 @@ ctest --test-dir build --output-on-failure
 ## 宿主 UI 演示（SDL2 + LVGL）
 
 需要本机有 SDL2（MinGW 发行版即可，`find_package(SDL2 CONFIG)` 找得到就编；找不到时只跳过
-这个目标，内核与测试照常构建）：
+这个目标，内核与测试照常构建——Windows 的 SDL2 安装途径见 [docs/README.md](docs/README.md)「跑起来」①）：
 
 ```sh
 ./build/platform/host/embark_host_ui          # Windows: .\build\platform\host\embark_host_ui.exe
