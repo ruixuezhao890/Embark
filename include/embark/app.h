@@ -65,12 +65,12 @@ class App {
   /// 后台配置（spec §5：per-App 策略，默认 Suspend）。
   [[nodiscard]] virtual AppSettings settings() const { return AppSettings{}; }
 
-  // --- 展示元数据（issue 16：启动器槽位与导航壳状态行；零堆、编译期常量）-------
+// --- 展示元数据（issue 16；零堆、编译期常量）----------------------------------
   // 元数据走虚函数，而不是在注册表里再挂第二张表：注册表的表项仍是 App*
   // （app_registry.h 的宏形状一行不改），"表长 = App 数"由 App 表本身的
-  // static_assert 保证。元数据只被启动器与导航壳读，框架自身不解释它们。
+// static_assert 保证。元数据由框架的扩展点读取，框架自身不解释它们。
 
-  /// 展示标题（启动器槽位、导航壳状态行）。默认取 name()：任何 App 都有可读标题；
+/// 展示标题（启动器槽位等用途）。默认取 name()：任何 App 都有可读标题；
   /// 中文标题由 App 自己覆写（进静态子集字库，见 issue 17 的缺字审计）。
   [[nodiscard]] virtual const char* title() const { return name(); }
 

@@ -1,10 +1,8 @@
 /**
  * 平台共用层 · UI 端口（issues/06，issue 11 从 platform/host 提上来共用）
  *
- * IUiPort 的共用实现：把 LvglPort（LVGL 接入）装进框架端口，并补上框架要求的三个职责：
+ * IUiPort 的共用实现：把 LvglPort（LVGL 接入）装进框架端口，职责如下：
  *   - lv_timer_handler() 的唯一调用点（spec §6：全工程只有 UI 任务能碰 LVGL）；
- *   - 框架导航壳（issue 16）：init 时装配 NavShell（状态行 + 返回键），
- *     set_foreground / set_foreground_policy / take_home_request 透传给壳；
  *   - 退出信号。`hal::IInput` 只有 init()/poll()，没有"退出请求"这个概念 ——
  *     宿主是用户关窗、真机可能是某个按键或压根没有 —— 所以这里收一个平台注入的回调，
  *     而不是把某个平台的类型硬塞进共用层。
@@ -21,7 +19,6 @@
 #include <embark/ui_port.h>
 
 #include "lvgl_port.h"
-#include "nav_shell.h"
 
 namespace embark::platform {
 
@@ -51,21 +48,11 @@ class LvglUiPort final : public IUiPort {
   [[nodiscard]] LvglPort& port() noexcept { return port_; }
   [[nodiscard]] const LvglPort& port() const noexcept { return port_; }
 
-  /// 观测：导航壳（宿主验收断言 home_requests()/back_visible() 用）。
-  [[nodiscard]] NavShell& nav_shell() noexcept { return nav_shell_; }
-  [[nodiscard]] const NavShell& nav_shell() const noexcept { return nav_shell_; }
-
-  // --- 导航壳转发（issue 16；默认实现是 no-op，见 include/embark/ui_port.h）-----
-  void set_foreground(AppId id) noexcept override;
-  void set_foreground_policy(AppSettings settings) noexcept override;
-  [[nodiscard]] bool take_home_request() noexcept override;
-
  private:
   hal::Context& context_;
   ExitQuery exit_query_ = nullptr;
   void* exit_context_ = nullptr;
   LvglPort port_;
-  NavShell nav_shell_;  // 导航壳（状态行 + 返回键），init 时装配
   bool ready_ = false;
 };
 

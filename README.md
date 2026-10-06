@@ -80,29 +80,30 @@ ctest --test-dir build --output-on-failure
 | `SettingsApp` | `Suspend` | 前台才有行为的典型设置页；「Level +1」发 `BrightnessMessage` 经总线广播，clock 收到后更新亮度标签 |
 | `TickerApp` | `OwnTask`（50 ms） | 自己的任务每拍发一条 `CrossTaskMessage`，UI 任务收到后经总线回派给 App 自己，不丢不乱序 |
 | `HelloApp` | `Suspend` | 最简 App 模板（只显示一行字）——「加一个 App」的起点，见 [docs/README.md](docs/README.md) |
-| `JobApp` | `OwnTask`（`period_ms = 0`） | 一次性任务：入口跑一轮就返回，槽位被框架回收后可再创建。只挂在系统用例 `embark_host_tour` 的注册表里（宿主演示 `embark_host_ui` 是启动器 + 上面 4 个 = 5 个；真机固件仍是那 4 个 demo App） |
+| `JobApp` | `OwnTask`（`period_ms = 0`） | 一次性任务：入口跑一轮就返回，槽位被框架回收后可再创建。只挂在系统用例 `embark_host_tour` 的注册表里（宿主演示 `embark_host_ui` 是启动器 + 上面 4 个 + EEZ 宿主 = 6 个；真机固件仍是那 4 个 demo App） |
 
 命令行开关：
 
 | 开关 | 作用 |
 | --- | --- |
-| `--launch` | 完整故事：合成拖动（1px ≈ 0.1 槽）→ 弹簧收敛 → 点选中槽启动 clock → settings「Level +1」→ 点导航壳返回键回启动器；前台切换恰好 3 次、钩子计数/亮度/返回键请求不对则退出码 2 |
-| `--click [X,Y]` | 三段合成点击：第 20 帧点非选中槽（156,196）转正、第 64 帧点选中槽（120,188）启动、第 90 帧探测默认点 120,220（`--click 120,265` 可换坐标）；前台切换 2 次，settings 没进前台则退出码 2 |
-| `--drag X1,Y1,X2,Y2` | 第 15 帧按下、逐帧插值拖动到 (X2,Y2)、第 23 帧松开；断言弹簧收敛且选中槽 == 预期（1px ≈ 0.1 槽），不对则退出码 2 |
+| `--launch` | 完整故事：程序化 `request_switch("clock")` → 点 clock 屏按钮回启动器 → 点 launcher 屏按钮再进 clock → 再点 clock 屏按钮回启动器 → settings「Level +1」（消息广播）；前台切换恰好 4 次、钩子计数/亮度/EEZ 回程请求不对则退出码 2 |
+| `--click [X,Y]` | 两段合成点击：第 20 帧点 EEZ launcher 屏的按钮（Flow SetPage → clock 屏 → 切 ClockApp）、第 60 帧在 clock 屏点 (X,Y)（默认 120,160 = clock 屏按钮中心，回启动器；`--click 120,220` 可换坐标）；前台切换 2 次，第二次点击没回到启动器则退出码 2 |
+| `--drag X1,Y1,X2,Y2` | 输入通路冒烟：第 15 帧按下、逐帧插值拖到 (X2,Y2)、第 23 帧松开；EEZ 屏上没有可拖对象，断言不误触按钮、不切 App（`switches==0`），不对则退出码 2 |
+| `--eez` | EEZ 验收：屏表自检 + 点 EEZ 屏按钮驱动切 App（Flow SetPage → 屏名约定 → `request_switch`）+ EEZ 宿主 App 前台 tick + 点 clock 屏按钮回启动器（回程由 EEZ 屏内按钮承担）；不对则退出码 2 |
 | `--own-task` | 验证 own_task 后台 App：TickerApp 发出的每条消息都必须被 UI 任务收到（不丢不乱序）；发送或收到为 0 则退出码 2 |
 | `--screenshot FILE` | 最后一帧存成 BMP |
 | `--quit-at N` | 第 N 帧合成关窗事件（等价于点窗口 ×，用来验收"干净退出"） |
 | `--scale S` / `--delay MS` | 窗口放大倍数（默认 1 = 240×320 1:1，不糊）/ 每帧让出的毫秒数（默认 5） |
-| `--frames N` | 跑满 N 帧就退出（默认按模式：launch 115 / click 110 / drag 80 / own-task 80，否则 0 = 一直跑到关窗） |
+| `--frames N` | 跑满 N 帧就退出（默认按模式：launch 110 / click 80 / drag 80 / own-task 80 / eez 122，否则 0 = 一直跑到关窗） |
 | `--help` | 用法 |
 
-最短的自动验收（退出码 0 + 日志里 `前台切换完成` 出现 2 次：点非选中槽转正 → 点选中槽启动 clock → 探测点落在 clock 屏的按钮上）：
+最短的自动验收（退出码 0 + 日志里 `前台切换完成` 出现 2 次：点 EEZ launcher 屏的按钮切到 clock → 再点 clock 屏的按钮收回启动器）：
 
 ```sh
 ./build/platform/host/embark_host_ui --click
 ```
 
-启动器 + 前台切换验收（退出码 0 + 日志里 `前台切换完成` 3 次：启动器 → clock → settings → 回启动器；enter/resume 计数符合
+启动器 + 前台切换验收（退出码 0 + 日志里 `前台切换完成` 4 次：启动器 → clock → 回启动器 → clock → 回启动器，全程由 EEZ 屏按钮驱动往返；enter/resume 计数符合 "首次 onEnter、回主屏 onResume"）：
 "首次 onEnter、回主屏 onResume"）：
 
 ```sh
@@ -126,10 +127,10 @@ ctest --test-dir build --output-on-failure
 ```
 
 它在真平台后端上（同一个 UI 任务、真 LVGL、真输入、真 FreeRTOS 任务）按 10 步走完
-**进程入口 → HAL → 框架 boot（启动器主屏登场）→ 拖动换位 + 弹簧收敛 → 点选中槽启动 clock → 后台节拍
-→ 合成点击切到 settings → 「Level +1」亮度消息回到后台的 clock → 点导航壳返回键回启动器（onResume）
-→ own_task 回流 → 一次性任务跑完并回收（再创建一次）→ 关窗收尾**，每一步都用中文解说发生了什么
-（前台是谁、钩子跑了几次、消息第几帧到达、池里还剩几个槽），最后打一张 14 项自检清单：全部通过退出码 0，
+**进程入口 → HAL → 框架 boot（EEZ launcher 屏登场）→ 点屏上按钮（Flow SetPage 驱动切 App）→ clock 登场 → 后台节拍
+→ 点 clock 屏按钮回启动器（onResume）→ 再点屏上按钮进 clock → 「Level +1」亮度消息回到后台的 clock
+→ own_task 回流 → 一次性任务跑完并回收（再创建一次）→ 关窗收尾**（回程全由 EEZ 屏内按钮承担，导航壳已退役），每一步都用中文解说发生了什么
+，最后打一张 15 项自检清单：全部通过退出码 0，
 任一项不满足退出码 2（日志里 `[失败]` 会说出期望值与实测值）。开关只有
 `--scale / --delay / --frames / --screenshot / --help`（`--help` 有清单）。
 
@@ -188,7 +189,7 @@ App 是 `embark::App` 的子类，注册进**编译期静态注册表**即可，
 
 ```cpp
 ELOG_INFO("HAL 就绪：显示 {}", display_info);
-// [info] [ui_demo.cpp:251 ui_main] 框架就绪：5 个 App，默认前台 launcher（剩余 3 槽位）
+// [info] [ui_demo.cpp:333 ui_main] 框架就绪：6 个 App，默认前台 launcher（上限 8）
 //   { width = 240, height = 320, format = embark::hal::PixelFormat::rgb565, stride_bytes = 480 }
 ```
 

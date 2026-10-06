@@ -102,7 +102,8 @@
  * 静态子集字库 embark_zh_14（tools/font/gen_font.mjs 生成，assets/fonts/embark_zh_14.c）
  * 是压缩位图（.bitmap_format = 1），必须开 LV_USE_FONT_COMPRESSED=1：
  * lv_font_fmt_txt.c:130-132 在未开启时对压缩字形只 LV_LOG_WARN 并返回 NULL 位图，
- * 结果就是"字全部不显示"。启动器（LauncherApp）与导航壳（NavShell）依赖它。 */
+ * 结果就是"字全部不显示"。该字库原为导航壳使用（状态行/返回键）；导航壳已于
+ * 2026-10-06 退役、启动器界面改由 EEZ Studio 提供，字库保留备用。 */
 #define LV_USE_FONT_COMPRESSED 1
 
 /*=========================================================================

@@ -11,22 +11,33 @@ App 契约核心不变。
    （.eez-project）与导出的 ui/ 生成代码**随仓库入库**——EEZ Studio 是图形化工具、
    构建不能依赖人工点鼠标，生成代码入库才能保证 CI 与任何协作者可复现构建；
    生成代码按第三方压制警告（零警告基线不被污染）。
-2. **适配层 = 薄桥接，契约核心不动**：ui_init()（= eez_flow_init + init_vars）装进
-   App 的 onCreate；ui_tick()（= eez_flow_tick + tick_vars + tick_screen）由
-   **新增的前台节拍钩子**驱动——App 契约补一个可选虚函数 onForegroundTick(now_ms)
-   （默认空实现），框架在 UI 任务每跳调用前台 App 的它；EEZ App 覆写它来跑 ui_tick()。
-   选它而不是让 LvglUiPort 直接知道 eez：钩子通用、不绑定第三方，且 eez_flow_tick
-   必须在 UI 任务上下文（唯一 LVGL 操作点）执行的要求同样满足。
+2. **适配层 = 薄桥接，契约核心不动**：生成代码经**薄桥**（app/eez_ui_bridge.h，
+   命名空间 embark::demo）接入 App 契约——ui_init() 由 onCreate 里的
+   eez_ui_bridge_ensure_init()（幂等）启动；onEnter/onResume 调
+   eez_ui_bridge_enter_app_screen(name())（按屏名约定挂自己的屏，缺同名屏时保持当前屏
+   + 告警）；ui_tick()（= eez_flow_tick + tick_screen）由**新增的前台节拍钩子**
+   onForegroundTick(now_ms)（默认空实现，框架在 UI 任务每跳调用前台 App 的它）驱动，
+   EEZ App 覆写它先 set_var_* 再跑 eez_ui_bridge_tick()。选钩子而不是让 LvglUiPort
+   直接知道 eez：钩子通用、不绑定第三方，且 eez_flow_tick 必须在 UI 任务上下文（唯一
+   LVGL 操作点）执行的要求同样满足。编译开关 EMBARK_EEZ_UI_BRIDGE：宿主平台定义
+   （桥调用生效），esp32 真机暂不定义（桥调用编译成 no-op，App 逻辑照常）。
 3. **导航融合**：eez_flow_init 收尾自动 lv_scr_load_anim 首页，与 App 契约
    onEnter/onResume 的 lv_scr_load 重叠——适配层按 screen 指针判等去重（同屏不重复
    load）；Flow 的换屏（eez_flow_set_screen / flowPropagateValue 切页）只允许发生在
-   **App 内部**，跨 App 切换仍只走框架的 request_switch / request_home，统一返回键
-   （ADR 0006）不变。
+   **App 内部**，跨 App 切换仍只走框架的 request_switch / request_home；
+   （ADR 0006）不变；统一返回键已随导航壳 2026-10-06 退役（见 ADR 0006 后记），
+   回主屏的返回改由 EEZ 屏内按钮承担（Flow SetPage 回 launcher 屏）。
 4. **交互出口 = Flow action**：Studio 里把控件事件定义为 User Action，导出为
    action_<name>(lv_event_t*) 声明，由 App 的 C++ 实现；action 里可调 request_switch、
    发 Message 等一切框架动作——「EEZ 管外观与交互流、C++ 管业务」的边界就在这条线。
-5. **数据桥 = 原生变量**：Flow 全局变量经 get_var_<name>() / set_var_<name>(v) 与
-   App 状态互读互写；缓冲约定（vars.cpp 样例为 256 B 静态缓冲 + snprintf）沿用。
+5. **数据桥 = Flow 全局变量按名读写（路线 A，2026-10 定案）**：Flow 全局变量就是
+   UI 显示数据的接口——控件在 Studio 里绑定变量，生成代码每帧 tick_screen_*() 把
+   变量值刷进控件；App 侧只按名读写：eez_ui_bridge_set_var_int/float/bool/string(name, v)
+   与 get_var_int/float/bool(name, out)。**变量索引由构建期变量表解析**
+   （cmake/embark_eez_vars.cmake 从生成 vars.h 的 FlowGlobalVariables 生成
+   build/include/embark_eez_vars.h），变量命名沿用屏名约定：<app名>_<字段>；
+   Studio 加/删变量后重新 cmake 配置即可，**不用改 C++、不用生成 get_var_x 符号**。
+   变量名不存在或 UI 未 init 时桥接口返回 false 且无副作用。
 6. **颜色红线重划**：手写 C++ 仍只准用 design tokens；Studio 页面一律用 Studio 工程
    集中定义的样式（导出为 styles.c，随工程入库）——**样式域归 Studio**。理由：
    硬编码色值若散落手写代码各处是坏味道，但集中定义在一个 Studio 工程里并生成

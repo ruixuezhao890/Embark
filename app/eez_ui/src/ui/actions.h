@@ -7,11 +7,6 @@
 extern "C" {
 #endif
 
-extern void action_login(lv_event_t * e);
-extern void action_inc_counter(lv_event_t * e);
-extern void action_dec_counter(lv_event_t * e);
-
-
 #ifdef __cplusplus
 }
 #endif

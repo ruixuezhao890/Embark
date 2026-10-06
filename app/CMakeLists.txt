@@ -27,7 +27,7 @@ embark_find_sdl2(EMBARK_APP_SDL2_FOUND)
 
 if(EMBARK_APP_SDL2_FOUND)
   add_library(embark_demo_apps STATIC launcher_app.cpp demo_apps.cpp hello_app.cpp
-          eez_demo_app.cpp eez_ui_bridge.cpp)
+          eez_demo_app.cpp eez_ui_bridge.cpp eez_ui_nav.cpp)
   add_library(embark::demo_apps ALIAS embark_demo_apps)
 
   # PUBLIC：demo_apps.h 公开 include <embark/app.h> 与 <lvgl.h>，使用方需要
@@ -36,9 +36,16 @@ if(EMBARK_APP_SDL2_FOUND)
 
   # EEZ 生成代码与薄桥（issue 19）：PRIVATE —— 静态库依赖以 LINK_ONLY 透传给
   # 宿主可执行文件，但 eez 的 include 根不进消费者的编译面。
-  target_link_libraries(embark_demo_apps PRIVATE embark_eez_ui embark_eez)
+  # 只链 embark_eez_ui：生成 eez-flow.cpp 是自含混编（commit 10f714f），不再链
+  # third_party 的 eez_framework（另一个 pin，同链必重复符号，见 eez_ui/CMakeLists.txt）。
+  target_link_libraries(embark_demo_apps PRIVATE embark::eez_ui)
   # 生成代码头写死 <lvgl/lvgl.h>：需要 third_party/ 作为 include 根（spike 18 同款）。
   target_include_directories(embark_demo_apps SYSTEM PRIVATE "${PROJECT_SOURCE_DIR}/third_party")
+
+  # 薄壳开关（issue 19）：宿主构建接 EEZ 生成代码 —— App 层的 eez_ui_bridge_*
+  # 桥调用生效；esp32 真机组件清单没编 eez_ui_*/生成代码，不定义此宏 = 桥调用
+  # 编译成 no-op（见 demo_apps.cpp / hello_app.cpp 的 #if defined(EMBARK_EEZ_UI_BRIDGE)）。
+  target_compile_definitions(embark_demo_apps PRIVATE EMBARK_EEZ_UI_BRIDGE=1)
 else()
   message(STATUS "  示例 App 库（embark_demo_apps）已跳过：没有 SDL2，LVGL 不可用。")
 endif()

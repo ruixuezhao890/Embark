@@ -62,50 +62,5 @@ endif()
 add_library(embark_lvgl INTERFACE)
 target_link_libraries(embark_lvgl INTERFACE lvgl::lvgl)
 
-# ---------------------------------------------------------------------------
-# EEZ Flow 运行时（issue 19 / ADR 0008）：EEZ Studio 导出代码的宿主端运行引擎。
-#
-# 编译门（与上游样例、spike 18 同口径）：
-#   - EEZ_FOR_LVGL：Flow 引擎切到 LVGL 后端（src/eez/conf-internal.h 据此把 GUI 关成 0，
-#     整棵 platform/simulator 的 display/touch 源变成空翻译单元，不依赖 SDL2_image）；
-#   - EEZ_PLATFORM_SIMULATOR：给出 osKernelGetTickCount() 等宿主实现（platform/simulator
-#     目录进了 include 根才能被 conf-internal.h 探到）；
-#   - 资源分配走 LVGL 堆：LV_MEM_CUSTOM=1 下 lv_mem_alloc 落进 embark_lvgl_alloc 记账
-#     （spike 18 实测：UI 常驻 +7.1 KB / 峰值 +9.3 KB，占 256 KB 预算的 5.7%）。
-#
-# 版本纪律：子模块 pin c3e0ac0（与官方 native-interface-lvgl-with-flow 样例配套的
-# 同款 pin，支持 LVGL 8.3 的最后已知点），升级必须与 LVGL 版本、Studio 导出版本三方对齐。
-# 警告纪律：第三方代码不改，用 -w 挡在我们自己的告警标准外面（与 lvgl 同款做法）。
-# 文件清单纪律：上游没有为 eez-framework 提供 cmake 目标（根 CMakeLists 是 IDF 组件的），
-# 用 GLOB_RECURSE 收 src/eez/**/*.{c,cpp} 并剔除 platform/stm32 与 libs/libscpi——
-# 新增/删除上游文件后重新 configure 即可（GLOB 的配置期固化由版本 pin 兜住）。
-#
-# 真机纪律：eez-framework 是宿主先行（issue 19 范围）；ESP-IDF 侧的 idf_component.yml
-# 接入与 PSRAM 事项另开 issue，这里的定义不进平台组件。
-# ---------------------------------------------------------------------------
-file(GLOB_RECURSE EEZ_FRAMEWORK_SRC "${CMAKE_CURRENT_LIST_DIR}/eez-framework/src/eez/*.cpp"
-     "${CMAKE_CURRENT_LIST_DIR}/eez-framework/src/eez/*.c")
-list(FILTER EEZ_FRAMEWORK_SRC EXCLUDE REGEX "platform/stm32|libs/libscpi")
-
-add_library(eez_framework STATIC ${EEZ_FRAMEWORK_SRC})
-target_include_directories(eez_framework SYSTEM PUBLIC
-    "${CMAKE_CURRENT_LIST_DIR}/eez-framework/src"
-    "${CMAKE_CURRENT_LIST_DIR}/eez-framework/src/eez/libs/agg"
-    "${CMAKE_CURRENT_LIST_DIR}/eez-framework/src/eez/platform/simulator")
-target_compile_definitions(eez_framework PUBLIC EEZ_FOR_LVGL EEZ_PLATFORM_SIMULATOR)
-target_link_libraries(eez_framework PUBLIC lvgl::lvgl)
-if(MSVC)
-  target_compile_options(eez_framework PRIVATE /w)
-else()
-  target_compile_options(eez_framework PRIVATE -w)
-endif()
-if(WIN32)
-  target_compile_definitions(eez_framework PUBLIC _CRT_SECURE_NO_WARNINGS)
-  target_link_libraries(eez_framework PUBLIC wsock32 ws2_32)
-endif()
-
-add_library(embark_eez INTERFACE)
-target_link_libraries(embark_eez INTERFACE eez_framework)
-
 # 挂到公共编译选项上：所有 Embark 目标都能用 <middleware/...>（唯一写法）
 target_link_libraries(embark_build_options INTERFACE etl::etl embark_efmt)

@@ -1,16 +1,20 @@
 /**
- * Embark 示例 App 实现（issues/08；issue 16 起主屏是启动器，示例 App 只管演示）
+ * Embark 示例 App 实现（issues/08；issue 16 起主屏是启动器；issue 19 起界面由
+ * EEZ Studio 生成代码提供 —— 手绘 UI 已全部退役，本文件只留 App 逻辑的薄壳）
  *
- * 本文件四个 App 全程只做三件事：
- *   1. onCreate 里建自己的屏幕（lv_obj_create(nullptr) = 游离屏幕对象），
- *       ClockApp 还在其后启动状态机（chart_.start()：触发初始态的 on_entry）；
- *   2. onEnter/onResume 里 lv_scr_load 换上自己的屏幕（App 自决界面生命周期）；
- *   3. 想离开前台时 request_switch() 请求，框架在循环边界执行切换（回主屏用
- *      导航壳的返回键 → request_home，SettingsApp 不再自绘"返回"按钮，issue 16）；
- *      JobApp（issue 15）是第四个 App，演示"一次性后台任务"：任务入口跑完就返回，
- *      槽位由框架回收（只出现在系统用例 ui_tour 的注册表里）；
- *      App 之间只走消息（SettingsApp publish → ClockApp onMessage）。
- * 全程不碰框架内部，也绝不自己调 lv_timer_handler()（那是 UI 端口的活）。
+ * 薄壳纪律（与 launcher_app.cpp / eez_demo_app.cpp 同形，详见 demo_apps.h 头注释）：
+ *   - onCreate 不再建屏：只记账/启后台逻辑（ClockApp 顺带启动状态机 chart_.start()）；
+ *   - onEnter/onResume 只做一件事 —— 按屏名约定加载自己的 EEZ 屏
+ *       （eez_ui_bridge_enter_app_screen：Studio 还没画同名屏时保持当前屏 + 告警）；
+ *   - onForegroundTick 泵 eez_ui_bridge_tick（LVGL 一帧 = tick_screen_* 刷新绑了
+ *       Flow 全局变量的控件）；值变化的 App（ClockApp 每拍）把数据显示推进变量；
+ *   - 切换仍只经 fw.request_switch()；App 之间仍只走消息（SettingsApp publish →
+ *       ClockApp onMessage）；绝不自己调 lv_timer_handler()（那是 UI 端口的活，
+ *       现在由前台 App 的 onForegroundTick 泵 —— 同一件事，入口在薄壳侧）。
+ *
+ * 编译开关 EMBARK_EEZ_UI_BRIDGE（see demo_apps.h）：宿主构建定义它，桥调用生效；
+ * 未定义的目标（esp32 真机，其组件清单还没接 eez_ui_* 与生成代码）把桥调用编译成
+ * no-op —— App 逻辑照常可跑，真机接入 EEZ 后打开开关即可。
  */
 #include <cstdint>
 
@@ -20,40 +24,18 @@
 
 #include "demo_apps.h"
 
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+#include "eez_ui_bridge.h"
+#endif
+
 namespace embark::demo {
-
-namespace {
-
-// 居中段落文字（宽度撑满 + 顶部居中，issue 05 同款样式）。
-lv_obj_t* make_centered_label(lv_obj_t* parent, const char* text, lv_color_t color,
-                              lv_coord_t y) noexcept {
-  lv_obj_t* label = lv_label_create(parent);
-  lv_label_set_text(label, text);
-  lv_obj_set_width(label, LV_PCT(100));
-  lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_style_text_color(label, color, 0);
-  lv_obj_align(label, LV_ALIGN_TOP_MID, 0, y);
-  return label;
-}
-
-// 带文字的标准按钮（默认主题蓝色，同 issue 05 的 Click me）。
-lv_obj_t* make_button(lv_obj_t* parent, const char* text, lv_coord_t x, lv_coord_t y) noexcept {
-  lv_obj_t* button = lv_btn_create(parent);
-  lv_obj_set_pos(button, x, y);
-  lv_obj_set_size(button, demo_button_width, demo_button_height);
-  lv_obj_t* label = lv_label_create(button);
-  lv_label_set_text(label, text);
-  lv_obj_center(label);
-  return button;
-}
-
-}  // namespace
 
 // ================================ ClockApp ================================
 // 状态机（示范 §16.4）：led on / led off 两态，tick 事件来回切。
 // 转移表（显式 current_state 版）：两个条目分别描述"on 态收 tick → off"与
-// "off 态收 tick → on"，action 都是 on_tick（计数 + 刷界面）；状态的 on_entry
-// 回调负责视觉副作用（换背景色）。事件不匹配时保持原状态（状态机丢弃该事件）。
+// "off 态收 tick → on"，action 都是 on_tick（++计数 + 推进 UI 显示变量）；状态的
+// on_entry 回调只记日志（画面由 EEZ 屏绑定变量呈现 —— 视觉副作用随手绘 UI 退役）。
+// 事件不匹配时保持原状态（状态机丢弃该事件）。
 const ClockApp::Chart::transition ClockApp::kTransitions[2] = {
     ClockApp::Chart::transition(static_cast<Chart::state_id_t>(State::blinking_on),
                                 static_cast<Chart::event_id_t>(Event::tick),
@@ -77,24 +59,10 @@ ClockApp::ClockApp() noexcept
              static_cast<Chart::state_id_t>(State::blinking_on)) {}
 
 void ClockApp::onCreate(Framework& fw) {
-  fw_ = &fw;
-  ELOG_INFO("App {} onCreate（后台策略 = tick 100 ms）", name());
+  (void)fw;  // 薄壳不再持有框架句柄（本 App 不 request_switch、不 publish）
+  ELOG_INFO("App {} onCreate（后台策略 = tick 100 ms；界面 = EEZ 屏 clock）", name());
 
-  screen_ = lv_obj_create(nullptr);
-  lv_obj_set_size(screen_, lv_disp_get_hor_res(nullptr), lv_disp_get_ver_res(nullptr));
-  lv_obj_set_style_bg_color(screen_, lv_color_hex(0x121820), 0);
-
-  make_centered_label(screen_, "Embark demo", lv_color_hex(0xf0f4f8), 20);
-  make_centered_label(screen_, "clock app (tick + state_chart)", lv_color_hex(0x8a97a8), 50);
-
-  state_label_ = make_centered_label(screen_, "Ticks: 0", lv_color_hex(0x6cd4ff), 100);
-  refresh_state_label();
-  brightness_label_ = make_centered_label(screen_, "Brightness: 0", lv_color_hex(0x54d97e), 130);
-
-  lv_obj_t* settings_btn = make_button(screen_, "Settings", demo_button_x, demo_button_y);
-  lv_obj_add_event_cb(settings_btn, &ClockApp::on_settings_button, LV_EVENT_CLICKED, this);
-
-  // 状态机就位：触发初始态的 on_entry（背景换亮色），此后 tick 事件驱动往返。
+  // 状态机就位：触发初始态的 on_entry（记日志），此后 tick 事件驱动往返。
   chart_.start();
 }
 
@@ -102,7 +70,9 @@ void ClockApp::onEnter() {
   ++enters_;
   ELOG_INFO("App {} 进入前台（enter {}, resume {}, 累计 {} 次）", name(), enters_, resumes_,
             enters_ + resumes_);
-  lv_scr_load(screen_);
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  eez_ui_bridge_enter_app_screen(name());
+#endif
 }
 
 void ClockApp::onPause() {
@@ -112,11 +82,23 @@ void ClockApp::onPause() {
 void ClockApp::onResume() {
   ++resumes_;
   ELOG_INFO("App {} 回到前台（enter {}, resume {}）", name(), enters_, resumes_);
-  lv_scr_load(screen_);
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  eez_ui_bridge_enter_app_screen(name());
+#endif
 }
 
 void ClockApp::onExit() {
   ELOG_INFO("App {} onExit", name());
+}
+
+void ClockApp::onForegroundTick(std::uint32_t now_ms) {
+  (void)now_ms;
+  ++foreground_ticks_;
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  // 泵一帧：ui_tick() = lv_timer_handler + tick_screen(当前屏)—— 绑了 Flow 全局
+  // 变量的控件每帧在这里读到最新值（变量桥的路由，见 eez_ui_bridge.h「四」）。
+  eez_ui_bridge_tick();
+#endif
 }
 
 void ClockApp::onBackgroundTick(std::uint32_t now_ms) {
@@ -129,74 +111,51 @@ void ClockApp::onBackgroundTick(std::uint32_t now_ms) {
 
 void ClockApp::onMessage(const Message& msg) {
   if (msg.get_message_id() == BrightnessMessage::ID) {
-    // 消息驱动不进状态机：亮度档是"值"不是"行为"，直接更新界面（示例说明：
-    // 不是所有输入都要过状态机，状态机表达周期性/时序行为）。
+    // 消息驱动不进状态机：亮度档是"值"不是"行为"，直接更新数据（界面显示交给
+    // EEZ 屏绑定的变量，C++ 不再碰控件 —— 示例说明：不是所有输入都要过状态机，
+    // 状态机表达周期性/时序行为）。
     const auto& brightness = static_cast<const BrightnessMessage&>(msg);
     level_ = brightness.level;
-    refresh_brightness();
     ELOG_INFO("clock 收到 BrightnessMessage：亮度档 -> {}", level_);
   }
 }
 
 void ClockApp::on_tick() noexcept {
   ++ticks_;
-  refresh_state_label();
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  // 值变化时推进 UI 显示变量（EEZ Studio 里声明 clock_tick_count 并绑到控件即自动
+  // 生效；还没声明时 set_var_int 返回 false、无副作用 —— 见 eez_ui_bridge.h「四」）。
+  eez_ui_bridge_set_var_int("clock_tick_count", static_cast<std::int32_t>(ticks_));
+#endif
 }
 
 void ClockApp::enter_blinking_on() noexcept {
-  lv_obj_set_style_bg_color(screen_, lv_color_hex(0x1b3a5c), 0);  // led 亮：偏蓝
+  // 视觉副作用已退役：led 亮的呈现改由 EEZ 屏绑定变量按值显示，这里只记日志。
   ELOG_INFO("clock 状态机 -> led on");
 }
 
 void ClockApp::enter_blinking_off() noexcept {
-  lv_obj_set_style_bg_color(screen_, lv_color_hex(0x121820), 0);  // led 灭：背景色
   ELOG_INFO("clock 状态机 -> led off");
 }
 
-void ClockApp::refresh_state_label() noexcept {
-  // 显式转 unsigned：xtensa GCC 下 uint32_t 是 long unsigned int，直接喂 %u 会被 IDF 的
-  // -Werror=format 拦下（宿主 MinGW 上 uint32_t 就是 unsigned int，所以宿主从没报过）。
-  lv_label_set_text_fmt(state_label_, "Ticks: %u (about %u s)", static_cast<unsigned>(ticks_),
-                        static_cast<unsigned>(ticks_ / 10));
-}
-
-void ClockApp::refresh_brightness() noexcept {
-  lv_label_set_text_fmt(brightness_label_, "Brightness: %u", static_cast<unsigned>(level_));
-}
-
-void ClockApp::on_settings_button(lv_event_t* event) noexcept {
-  auto* self = static_cast<ClockApp*>(lv_event_get_user_data(event));
-  const Error error = self->fw_->request_switch("settings");
-  ELOG_INFO("请求切到 SettingsApp：{}", error);
-}
-
 // ================================ SettingsApp ================================
-// （issue 16）本 App 不再有"Back to clock"按钮：回主屏走导航壳的返回键
-// （框架 request_home），切 App 也只经 Layers 里 LauncherApp 的 request_switch。
+// 本 App 不再有"Back to clock"按钮：回主屏由 EEZ 屏按钮 SetPage 回 launcher 屏承担
+// （导航壳已退役）；切 App 也只经 Framework 的 request_switch。
+// （issue 19）手绘"Level +1"按钮退役：亮度档逻辑入口 bump_level() 交给 EEZ Flow
+// 动作/变量或无人值守验收调用 —— 界面在 Studio 画好 settings 屏后由 EEZ 屏提供。
 
 void SettingsApp::onCreate(Framework& fw) {
   fw_ = &fw;
-  ELOG_INFO("App {} onCreate（后台策略 = suspend）", name());
-
-  screen_ = lv_obj_create(nullptr);
-  lv_obj_set_size(screen_, lv_disp_get_hor_res(nullptr), lv_disp_get_ver_res(nullptr));
-  lv_obj_set_style_bg_color(screen_, lv_color_hex(0x201210), 0);
-
-  make_centered_label(screen_, "Settings", lv_color_hex(0xf0f4f8), 20);
-  make_centered_label(screen_, "suspend: foreground only", lv_color_hex(0x8a97a8), 50);
-
-  brightness_label_ = make_centered_label(screen_, "Brightness: 0", lv_color_hex(0x6cd4ff), 100);
-  refresh_brightness_label();
-
-  lv_obj_t* level_btn = make_button(screen_, "Level +1", demo_button_x, demo_button_y);
-  lv_obj_add_event_cb(level_btn, &SettingsApp::on_level_plus, LV_EVENT_CLICKED, this);
+  ELOG_INFO("App {} onCreate（后台策略 = suspend；界面 = EEZ 屏 settings）", name());
 }
 
 void SettingsApp::onEnter() {
   ++enters_;
   ELOG_INFO("App {} 进入前台（enter {}, resume {}, 累计 {} 次）", name(), enters_, resumes_,
             enters_ + resumes_);
-  lv_scr_load(screen_);
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  eez_ui_bridge_enter_app_screen(name());
+#endif
 }
 
 void SettingsApp::onPause() {
@@ -206,24 +165,28 @@ void SettingsApp::onPause() {
 void SettingsApp::onResume() {
   ++resumes_;
   ELOG_INFO("App {} 回到前台（enter {}, resume {}）", name(), enters_, resumes_);
-  lv_scr_load(screen_);
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  eez_ui_bridge_enter_app_screen(name());
+#endif
 }
 
 void SettingsApp::onExit() {
   ELOG_INFO("App {} onExit", name());
 }
 
-void SettingsApp::on_level_plus(lv_event_t* event) noexcept {
-  auto* self = static_cast<SettingsApp*>(lv_event_get_user_data(event));
-  self->level_ = (self->level_ + 1U) % 4U;  // 四档循环：0..3
-  self->refresh_brightness_label();
-  // App 之间只走消息：广播给总线（ClockApp 的 onMessage 会收到并更新自己的档位）。
-  self->fw_->publish(BrightnessMessage{static_cast<std::uint8_t>(self->level_)});
-  ELOG_INFO("设置页：亮度档 -> {}（已广播 BrightnessMessage）", self->level_);
+void SettingsApp::onForegroundTick(std::uint32_t now_ms) {
+  (void)now_ms;
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  eez_ui_bridge_tick();
+#endif
 }
 
-void SettingsApp::refresh_brightness_label() noexcept {
-  lv_label_set_text_fmt(brightness_label_, "Brightness: %u", static_cast<unsigned>(level_));
+void SettingsApp::bump_level() {
+  // 手绘按钮退役后的逻辑入口：档位 0..3 循环 +1，并广播给总线（ClockApp 的
+  // onMessage 会收到并更新自己的档位）。谁触发（EEZ Flow 动作/验收程序）不关心。
+  level_ = (level_ + 1U) % 4U;  // 四档循环：0..3
+  fw_->publish(BrightnessMessage{static_cast<std::uint8_t>(level_)});
+  ELOG_INFO("设置页：亮度档 -> {}（已广播 BrightnessMessage）", level_);
 }
 
 // ================================ TickerApp ================================
@@ -238,6 +201,9 @@ void TickerApp::onCreate(Framework& fw) {
 
 void TickerApp::onEnter() {
   ELOG_INFO("App {} 进入前台", name());
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  eez_ui_bridge_enter_app_screen(name());
+#endif
 }
 
 void TickerApp::onPause() {
@@ -246,6 +212,16 @@ void TickerApp::onPause() {
 
 void TickerApp::onResume() {
   ELOG_INFO("App {} 回到前台", name());
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  eez_ui_bridge_enter_app_screen(name());
+#endif
+}
+
+void TickerApp::onForegroundTick(std::uint32_t now_ms) {
+  (void)now_ms;
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  eez_ui_bridge_tick();
+#endif
 }
 
 void TickerApp::onBackgroundTick(std::uint32_t now_ms) {
@@ -274,7 +250,7 @@ void TickerApp::onExit() {
   ELOG_INFO("App {} onExit", name());
 }
 
-// ================================ JobApp =================================
+// ================================ JobApp ===================================
 // 一次性任务：period_ms = 0 由框架解释成"跑一轮就结束"（run_own_task 的零周期分支）。
 // 任务体里没有循环、没有 delay —— 返回即结束，回收由框架的 step 负责。
 
@@ -285,6 +261,9 @@ void JobApp::onCreate(Framework& fw) {
 
 void JobApp::onEnter() {
   ELOG_INFO("App {} 进入前台", name());
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  eez_ui_bridge_enter_app_screen(name());
+#endif
 }
 
 void JobApp::onPause() {
@@ -293,6 +272,16 @@ void JobApp::onPause() {
 
 void JobApp::onResume() {
   ELOG_INFO("App {} 回到前台", name());
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  eez_ui_bridge_enter_app_screen(name());
+#endif
+}
+
+void JobApp::onForegroundTick(std::uint32_t now_ms) {
+  (void)now_ms;
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  eez_ui_bridge_tick();
+#endif
 }
 
 void JobApp::onBackgroundTick(std::uint32_t now_ms) {

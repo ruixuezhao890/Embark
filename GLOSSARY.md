@@ -107,23 +107,23 @@ _Avoid_: 手写 to_string、逐字段拼日志
 _Avoid_: to_string(Error)
 
 **Launcher app（启动器 App）**：
-注册表首位的管理型 App：把全部 App 以扇形半环列出，点击启动、拖动/滚轮换位；它是主屏，也是 `request_home()` 的唯一目标。
+注册表首位的管理型 App：主屏界面来自 EEZ Studio 的 launcher 屏（屏上按钮经 Flow SetPage → 屏观察者 → `request_switch` 启动对应 App）；它是主屏，也是 `request_home()` 的唯一目标。历史上的扇形半环自绘已下线（见 ADR 0006 的后续说明与 2026-10-06 后记：框架导航壳也已退役，主屏交互全部在 EEZ 屏内完成）。
 _Avoid_: 桌面、主菜单、App 列表页
 
 **request_home（回主屏请求）**：
-`request_switch(registry[0])` 的语义别名：从任何 App 切回注册表首位（即启动器）。注册顺序即主屏归属，首位不可被运行期改变。
+`request_switch(registry[0])` 的语义别名：从任何 App 切回注册表首位（即启动器）。注册顺序即主屏归属，首位不可被运行期改变。导航壳退役后它仍是公共 API：App 或 EEZ 屏 action 需要时显式调用。
 _Avoid_: 返回首页、退出到桌面
 
 **Unified back navigation（框架统一返回）**：
-非主屏 App 在前台时，框架在其导航壳里渲染返回键，点击等效 `request_home()`；App 自己不画返回按钮（SettingsApp 硬编码的 "Back to clock" 已随 issue 16 移除）。
+（已退役，2026-10-06）非主屏 App 在前台时，框架曾在导航壳里渲染返回键，点击等效 `request_home()`。现在回主屏的返回由 EEZ 屏内按钮承担（Flow SetPage 回 launcher 屏 → 屏观察者 `request_switch`）；App 不自己画返回按钮。
 _Avoid_: 各 App 自绘返回、导航堆栈
 
 **Nav chrome（导航壳）**：
-框架级叠加层（`lv_layer_top`）：承载状态行与统一返回键，跨 `lv_scr_load` 持久存在；App 对壳的存在无感知，契约不变。
+（已退役，2026-10-06）框架级叠加层（`lv_layer_top`）：曾承载状态行与统一返回键，跨 `lv_scr_load` 持久存在。职责已移交 EEZ 屏（屏内按钮 SetPage 回程、屏上状态控件）；本条目为历史术语保留。
 _Avoid_: 页面框架、装饰层
 
 **Status bar（状态行）**：
-导航壳顶部的信息条：左侧时间（宿主墙钟；真机 RTC 未接时显示占位），右侧当前前台 App 的后台策略名（`悬` / `tick:100ms` / `own:50ms`）；不渲染节拍计数。
+（随导航壳退役，2026-10-06）原导航壳顶部的信息条：左侧时间（宿主墙钟；真机 RTC 未接时显示占位），右侧当前前台 App 的后台策略名（`悬` / `tick:100ms` / `own:50ms`）；不渲染节拍计数。本条目为历史术语保留。
 _Avoid_: 顶部栏、通知栏
 
 **App metadata（App 元数据）**：
@@ -131,12 +131,20 @@ _Avoid_: 顶部栏、通知栏
 _Avoid_: 运行时描述符、注册文件
 
 **Design tokens（设计令牌）**：
-命名化视觉常量（底色/面板/文字/强调色、圆角、间距、线宽），手写 LVGL 的唯一取色来源；框架壳与启动器共用，风格为深色科技风。
+命名化视觉常量（底色/面板/文字/强调色、圆角、间距、线宽），手写 LVGL 的唯一取色来源；框架壳与手写界面共用（启动器界面改由 EEZ 提供），风格为深色科技风。
 _Avoid_: 魔法颜色、主题对象
 
 **EEZ App（EEZ 应用）**：
-页面由 EEZ Studio 工程导出（生成代码入库）、交互与外观由 EEZ Flow 描述、业务逻辑由 C++ 实现的 App；它仍遵守 App 契约（onCreate 里建树 + eez_flow_init，onForegroundTick 里跑 eez_flow_tick），跨 App 切换仍走 request_switch。制作页面的默认方式。
+页面由 EEZ Studio 工程导出（生成代码入库）、交互与外观由 EEZ Flow 描述、业务逻辑由 C++ 实现的 App；它是薄壳——onCreate 调 eez_ui_bridge_ensure_init()（幂等），onEnter/onResume 调 eez_ui_bridge_enter_app_screen(name())，onForegroundTick 先 set_var_* 再调 eez_ui_bridge_tick()，不手写任何 LVGL。跨 App 切换由 EEZ 切屏经 eez_ui_nav 翻成 request_switch。制作界面的唯一方式（手绘已退役）。
 _Avoid_: Studio 页面、生成式 App、Flow 应用
+
+**Screen name convention（屏名约定）**：
+EEZ 里 screen 名 == 同名 App 的名字（子页 `<app名>_<编号>_sub`）；桥据此把 EEZ 的切屏翻成框架的 `request_switch`，也据此为 App 找同名屏。屏表在构建期从生成代码解析（cmake/embark_eez_screens.cmake），加屏不用改 C++。
+_Avoid_: 编号映射表、手工维护的屏清单
+
+**EEZ bridge（EEZ 动作桥）**：
+`app/eez_ui_bridge.h` 的双向接线：Embark → EEZ 是 `load_screen_for_app` / `enter_app_screen`（按屏名约定载屏）与 `set_var_*` / `get_var_*`（Flow 全局变量 = UI 显示数据接口，按名读写）；EEZ → Embark 是屏观察者（生成代码的切页统一收敛到 `replacePageHook`，桥保存原指针再换成自己的，先转发再回调）。App 只调桥，不 include 生成代码头。
+_Avoid_: 生成代码直连、App 里 include ui.h
 
 **Style scope（样式域）**：
 样式定义的归属边界：手写 C++ 只用 design tokens；EEZ 页面只在 Studio 工程里集中定义样式（导出为 styles.c，随工程入库）。同一视觉常量不得跨域散落。
@@ -147,7 +155,7 @@ App 契约的可选钩子 onForegroundTick(now_ms)：框架在 UI 任务每跳�
 _Avoid_: UI tick、渲染回调
 
 **Static subset font（静态子集字库）**：
-lv_font_conv 生成、编译进 flash 的 C 数组字库，只收录 UI 实际用到的字符（启动器与框架壳文本全走它）；覆盖范围由清单文件声明、构建期审计。
+lv_font_conv 生成、编译进 flash 的 C 数组字库，只收录 UI 实际用到的字符（框架壳文本全走它）；覆盖范围由清单文件声明、构建期审计。
 _Avoid_: 全量字库、外挂字体文件
 
 **IFileSystem（文件服务）**：

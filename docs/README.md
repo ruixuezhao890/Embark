@@ -22,7 +22,7 @@ ctest --test-dir build --output-on-failure  # 单元测试（95 用例 / 835 断
 ./build/platform/host/embark_host_tour    # 系统用例：从启动看到任务切换（同上 Windows 加 .exe）
 ```
 
-看到 240×320 的 LVGL 窗口（竖屏，标题 "Embark demo"，默认前台是 clock App）就跑起来了。
+看到 240×320 的 LVGL 窗口（竖屏，标题 "Embark demo"，默认前台是 launcher App —— EEZ launcher 屏）就跑起来了。
 关窗退出。想要"跑够帧数自己退"或验证参数，看下一步。
 
 `embark_host_tour` 是"一条用例看完整系统"：不加参数就会自己走完
@@ -45,10 +45,10 @@ ctest --test-dir build --output-on-failure  # 单元测试（95 用例 / 835 断
 宿主 UI 可执行文件的开关都是为自动验收做的（`--help` 有完整清单）：
 
 ```sh
-./build/platform/host/embark_host_ui --frames 60 --click        # 最短验收：切到 settings，退出码 0
-./build/platform/host/embark_host_ui --frames 150 --click --switch --own-task
-# 三合一：切前台 2 次 + 亮度消息 1 发 1 收 + ticker 自己的任务 24 发 24 收，退出码 0
-./build/platform/host/embark_host_ui --frames 150 --own-task   # 只验消息与 own_task
+./build/platform/host/embark_host_ui --click                     # 最短验收：launcher ⇄ clock（点 EEZ 屏按钮往返），退出码 0
+./build/platform/host/embark_host_ui --frames 150 --launch --own-task
+# 合验：EEZ 屏按钮往返切前台 4 次（含亮度消息 1 发 1 收）+ ticker 自己的任务 24 发 24 收，退出码 0
+./build/platform/host/embark_host_ui --frames 150 --own-task    # 只验消息与 own_task
 ```
 
 退出码约定：0 = 全部验收通过；2 = 某项断言没满足（日志里 `验收失败` 会说出
@@ -58,13 +58,12 @@ ctest --test-dir build --output-on-failure  # 单元测试（95 用例 / 835 断
 
 照着 demo 的模板走，总共五步：
 
-1. **新建 `app/hello_app.h`**：
+1. **新建 `app/hello_app.h`**（薄壳：不 include LVGL、不持有屏对象，界面全部交给 EEZ）：
 
 ```cpp
 #ifndef EMBARK_APP_HELLO_APP_H
 #define EMBARK_APP_HELLO_APP_H
 
-#include <lvgl.h>
 #include <embark/app.h>
 #include <embark/framework.h>
 
@@ -73,16 +72,16 @@ namespace embark::demo {
 class HelloApp final : public App {
  public:
   HelloApp() noexcept = default;
+
   [[nodiscard]] const char* name() const override { return "hello"; }
+  [[nodiscard]] const char* title() const override { return "你好"; }  // 中文标题（元数据）
+
   void onCreate(Framework& fw) override;
   void onEnter() override;
   void onPause() override;
   void onResume() override;
   void onExit() override;
-
- private:
-  Framework* fw_ = nullptr;
-  lv_obj_t* screen_ = nullptr;
+  void onForegroundTick(std::uint32_t now_ms) override;
 };
 
 }  // namespace embark::demo
@@ -90,32 +89,48 @@ class HelloApp final : public App {
 #endif
 ```
 
-2. **新建 `app/hello_app.cpp`**（生命周期纪律与 demo 完全一致：屏自己建、
-自己装，切换只发请求）：
+2. **新建 `app/hello_app.cpp`**（薄壳纪律：不建屏、不手绘；进入前台只按屏名挂自己的 EEZ 屏）：
 
 ```cpp
 #include <embark/log.h>
+
 #include "hello_app.h"
+
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+#include "eez_ui_bridge.h"
+#endif
 
 namespace embark::demo {
 
 void HelloApp::onCreate(Framework& fw) {
-  fw_ = &fw;
-  ELOG_INFO("App {} onCreate", name());
-  screen_ = lv_obj_create(nullptr);
-  lv_obj_set_size(screen_, lv_disp_get_hor_res(nullptr), lv_disp_get_ver_res(nullptr));
-  lv_obj_set_style_bg_color(screen_, lv_color_hex(0x12241f), 0);
-  lv_obj_t* label = lv_label_create(screen_);
-  lv_label_set_text(label, "Hello, Embark");
-  lv_obj_set_width(label, LV_PCT(100));
-  lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
+  (void)fw;
+  ELOG_INFO("App {} onCreate（薄壳：界面 = EEZ 屏 hello，Studio 画好即生效）", name());
 }
 
-void HelloApp::onEnter() { lv_scr_load(screen_); }
-void HelloApp::onPause() {}
-void HelloApp::onResume() { lv_scr_load(screen_); }
-void HelloApp::onExit() {}
+void HelloApp::onEnter() {
+  ELOG_INFO("App {} 进入前台", name());
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  eez_ui_bridge_enter_app_screen(name());   // 屏名约定：screen 名 == App 名
+#endif
+}
+
+void HelloApp::onPause() { ELOG_INFO("App {} 离开前台", name()); }
+
+void HelloApp::onResume() {
+  ELOG_INFO("App {} 回到前台", name());
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  eez_ui_bridge_enter_app_screen(name());
+#endif
+}
+
+void HelloApp::onExit() { ELOG_INFO("App {} onExit", name()); }
+
+void HelloApp::onForegroundTick(std::uint32_t now_ms) {
+  (void)now_ms;
+#if defined(EMBARK_EEZ_UI_BRIDGE)
+  eez_ui_bridge_tick();   // 前台每帧驱动 EEZ Flow
+#endif
+}
 
 }  // namespace embark::demo
 ```
@@ -123,42 +138,47 @@ void HelloApp::onExit() {}
 3. **`app/CMakeLists.txt`**：`embark_demo_apps` 的源列表加 `hello_app.cpp`：
 
 ```cmake
-add_library(embark_demo_apps STATIC demo_apps.cpp hello_app.cpp)
+add_library(embark_demo_apps STATIC launcher_app.cpp demo_apps.cpp hello_app.cpp
+        eez_demo_app.cpp eez_ui_bridge.cpp eez_ui_nav.cpp)
 ```
 
 4. **`platform/host/ui_demo.cpp`**：`EMBARK_APP_TABLE(...)` 里加进注册表
-（注册顺序即默认前台顺序，想让 hello 当默认前台就放最前）：
+（`LauncherApp` 必须第一位：默认前台 + `request_home()` 目标 + 主屏）：
 
 ```cpp
-EMBARK_APP_TABLE(embark::demo::ClockApp, embark::demo::SettingsApp,
-                 embark::demo::TickerApp, embark::demo::HelloApp)
+EMBARK_APP_TABLE(embark::demo::LauncherApp,  // 首位必须是启动器
+                 embark::demo::HelloApp)     // 你的新 App
 ```
 
-5. **重新构建并跑**：
+5. **在 EEZ Studio 画 `hello` 屏**（屏名必须等于 App 名）：不画也能编译运行——
+`enter_app_screen` 找不到同名屏时保持当前屏 + 一条告警（缺屏策略 A），画好同名屏后自动生效。
+
+6. **重新构建并跑**：
 
 ```sh
 cmake --build build
-./build/platform/host/embark_host_ui --frames 30 --click   # hello 在后，先验收原有三 App
+./build/platform/host/embark_host_ui --frames 30 --click   # hello 在后，先验收原有 App
 ```
 
-想让它当前台，把 `HelloApp` 放到 `EMBARK_APP_TABLE` 第一个参数即可。
-不需要改任何框架代码——App 只是注册表里多了一项。想让它退后台后做点事
-（周期任务/自己的任务/发消息给别的 App），读 `messages-and-background.md`。
+想让它被启动：在 EEZ Studio 的 launcher 屏加一个按钮，Flow SetPage 到 `hello` 屏——
+屏观察者自动 `request_switch("hello")`。不需要改任何框架代码——App 只是注册表里多了一项。
+想让它退后台后做点事（周期任务/自己的任务/发消息给别的 App），读 `messages-and-background.md`。
 
-> 注意：界面文案用英文（LVGL 内置字体无中文字形，见 common-pitfalls）；
-> 日志中文没问题。
+> 注意：界面文案全部在 EEZ Studio 里设置（字体在工程里配）；日志中文没问题。
 
-### 用 EEZ Studio 画界面（不用手写 LVGL）
 
-不想手写控件？用 EEZ Studio + EEZ Flow 画界面，生成代码照常入库：
+### 用 EEZ Studio 画界面（手绘 UI 已退役，全程只调接口）
 
-1. 装 EEZ Studio，新建 240×320 工程，加页面 / 控件 / User Action / Flow 变量。
-2. 导出代码到 `app/eez_ui/`（`embark_eez_ui` 目标，生成代码照 5 步注册，模板是
-   `app/eez_demo_app.{h,cpp}`：onCreate→`eez_ui_bridge_init`，onEnter/onResume→
-   `eez_ui_bridge_load_current_screen`，onForegroundTick→`eez_ui_bridge_tick`）。
-3. 重新构建跑起来，验收开关 `--eez` 走完登录 Flow 与 User Action。
+界面（外观、交互、切屏）全部由 EEZ Studio 负责，App 侧一行 LVGL 都不用写，
+只需在 4 个钩子里调用薄桥接口（`app/eez_ui_bridge.h`，命名空间 `embark::demo`）：
 
-完整流程见 [eez-studio-guide.md](eez-studio-guide.md)。
+1. `onCreate` → `eez_ui_bridge_ensure_init()`（幂等启动生成代码）。
+2. `onEnter` / `onResume` → `eez_ui_bridge_enter_app_screen(name())`（按屏名约定挂自己的屏）。
+3. `onForegroundTick` → 先 `set_var_*(...)` 推 UI 显示数据（Flow 全局变量），再 `eez_ui_bridge_tick()`。
+4. 主屏（launcher）额外 `eez_ui_nav_attach(fw)`：EEZ 里 SetPage 切屏 = 框架切到同名 App。
+
+完整流程见 [eez-ui-manual.md](eez-ui-manual.md)（用户手册）；Studio 安装/导出见
+[eez-studio-guide.md](eez-studio-guide.md)。
 
 ## 文档索引
 
@@ -167,7 +187,8 @@ cmake --build build
 | [messages-and-background.md](messages-and-background.md) | 消息（总线 / 收件箱信封）与三种后台策略怎么用，含示例代码；`own_task` 的生命周期（入口返回 = 结束、每帧回收、运行期再创建）也在这里 |
 | [hal-backend-guide.md](hal-backend-guide.md) | 怎么写一个 HAL 后端：宿主骨架（照 platform/host/）、共享层（platform/common/）与真机实现（platform/esp32/，含 IDF 坑清单） |
 | [../platform/esp32/README.md](../platform/esp32/README.md) | ESP32-S3 真机端口：板级参数、构建/烧录命令、bring-up 清单、串口日志样例 |
-| [eez-studio-guide.md](eez-studio-guide.md) | EEZ Studio 一条龙：装 Studio、导出代码入库、App 侧接线（issue 19 落地模板） |
+| [eez-ui-manual.md](eez-ui-manual.md) | EEZ UI 用户手册：界面交给 EEZ、App 只调 4 个接口（薄桥 API 全集 + 命名约定 + 模板） |
+| [eez-studio-guide.md](eez-studio-guide.md) | EEZ Studio 一条龙：装 Studio、建工程、导出代码入库（.eez-project） |
 | [common-pitfalls.md](common-pitfalls.md) | 常见坑：ETL 定容行为、消息非聚合、保留 id、无异常/无堆、MinGW 对齐分配、日志 384 字节上限、派生打印（E_FMT_DERIVE）、宏前置条件…… |
 | [adr/](adr/) | 架构决策记录：单一 UI 任务（0001）、HAL 能力粒度（0002）、零堆无异常（0003）、后台节拍与状态范式（0004）、静态槽位与任务池（0005） |
 | [agents/](agents/) | 面向 agent 的仓库约定（领域模型、issue 追踪规则） |

@@ -40,7 +40,6 @@ Error Framework::boot() noexcept {
   pending_ = 0;
   entered_[0] = true;
   apps_.at(0)->onEnter();
-  notify_foreground();  // 导航壳（issue 16）：返回键与状态行从这一刻起有得可画
 
   // --- 总线装配（issue 07）--------------------------------------------------
   // 每个 App 一个订阅适配器（v1 全收，App 在 onMessage 里按消息 id 自己分发）。
@@ -112,11 +111,6 @@ void Framework::step() noexcept {
   if (ui_ != nullptr) {
     ui_->tick();  // 1. UI 时间轴（LVGL tick，必须在任何界面工作之前）
     ui_->pump_input();  // 2. 输入事件处理（抽干 HAL 输入队列；事件回调在 process 里）
-    // 2b. 导航壳（issue 16）：壳只登记"用户按了返回键"，回主屏的决策仍在框架手里。
-    //     与 request_switch 同口径 —— 只登记，第 3 段生效。
-    if (ui_->take_home_request()) {
-      (void)request_home();
-    }
   }
   apply_pending_switch();  // 3. 循环边界：让前台切换请求生效（钩子顺序可预期）
   if (ui_ != nullptr) {
@@ -169,20 +163,6 @@ Error Framework::request_home() noexcept {
     return Error::not_found;
   }
   return request_switch(static_cast<AppId>(0));
-}
-
-void Framework::notify_foreground() noexcept {
-  if (ui_ == nullptr) {
-    return;
-  }
-  ui_->set_foreground(foreground_);
-  // 状态行右半段是"当前前台的后台策略"：策略归框架（App::settings），
-  // 格式化归端口 —— 框架只把结构化取值交出去，不替 UI 决定怎么显示。
-  AppSettings settings{};
-  if (apps_.valid(foreground_)) {
-    settings = apps_.at(foreground_)->settings();
-  }
-  ui_->set_foreground_policy(settings);
 }
 
 void Framework::fire_background_tick(AppId app_id) noexcept {
@@ -323,7 +303,6 @@ void Framework::apply_pending_switch() noexcept {
       entered_[foreground_] = true;
     }
   }
-  notify_foreground();
   ++switches_;
 }
 

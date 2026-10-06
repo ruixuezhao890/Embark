@@ -24,7 +24,7 @@
  *                边界（step 开头），切换顺序：旧前台 onPause → 新前台
  *                onEnter（第一次）/ onResume（再次）。切换决策与时机归框架，
  *                App 永远无权直接改前台。
- *   - request_home()  回主屏（= 注册表第 0 个 App，issue 16 的导航壳用它）。
+ *   - request_home()  回主屏（= 注册表第 0 个 App；App 或 EEZ 屏需要时显式调用）。
  *   - publish/post  消息投递（spec §7）：publish 是总线广播，只能在框架线程
  *                （UI 任务 / 后台 tick / App 生命周期钩子）调用；own task 里
  *                发消息必须走 post()（信封入收件箱，step 的派发段再广播，
@@ -88,9 +88,9 @@ class Framework {
   [[nodiscard]] Error request_switch(AppId id) noexcept;
   [[nodiscard]] Error request_switch(const char* name) noexcept;
 
-  /// 回主屏：注册表首位即主屏（issue 16、ADR 0006），语义上就是
-  /// request_switch(注册表第 0 个)。导航壳的返回键走的就是这条路 —— 壳只登记
-  /// 请求（IUiPort::take_home_request），由框架在循环边界转成一次切换。
+  /// 回主屏：注册表首位即主屏（ADR 0006），语义上就是
+  /// request_switch(注册表第 0 个)。导航壳的返回键曾用它（导航壳 2026-10-06 退役），
+  /// 现在由 App 显式调用，或由 EEZ 屏观察者转成 request_switch。
   [[nodiscard]] Error request_home() noexcept;
 
   /// 退出路径（见文件头）。幂等；之后不要再 step。
@@ -169,10 +169,6 @@ class Framework {
  private:
   /// 让待生效的切换落地（只在 step 的固定边界调用，保证钩子顺序可预期）。
   void apply_pending_switch() noexcept;
-
-  /// 把"当前前台"告知导航壳（issue 16）：首次前台与每次切换生效后各一次。
-  /// 只走 IUiPort 的默认实现 —— 没有壳的端口（测试 fake）不受影响。
-  void notify_foreground() noexcept;
 
   /// tick 策略的周期性回调（framework 线程；BgTrampoline 转接来）。
   void fire_background_tick(AppId app_id) noexcept;

@@ -25,8 +25,7 @@ endif()
 
 add_library(embark_common_ui STATIC
         lvgl_port.cpp
-        lvgl_ui_port.cpp
-        nav_shell.cpp)
+        lvgl_ui_port.cpp)
 
 add_library(embark::common_ui ALIAS embark_common_ui)
 
