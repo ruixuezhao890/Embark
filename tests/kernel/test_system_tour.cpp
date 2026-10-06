@@ -5,7 +5,8 @@
 //
 //   ① 假 HAL 就绪           ② 框架 boot（UI init → onCreate → 默认前台 onEnter）
 //   ③ 后台节拍（tick 策略）  ④ App 间消息（publish 广播 / post 跨任务投递）
-//   ⑤ 前台切换              ⑥ 再切回来（第二次进前台走 onResume）
+//   ⑤ 前台切换（第一次进前台 = 武装它的后台策略：issue 23 / ADR 0009）
+//   ⑥ 再切回来（第二次进前台走 onResume）
 //   ⑦ shutdown（前台 onPause → 全 App onExit → UI 端口 shutdown）
 //
 // 在 CLion 里单独跑这一条 case，从上往下读日志即可看清系统行为；末尾的 CHECK 才是
@@ -179,13 +180,21 @@ TEST_CASE("系统用例：从启动到任务切换走一遍（跟着日志读）
   CHECK(settings->create_calls == 1U);
   CHECK(clock->enter_calls == 1U);     // 但只有前台 onEnter
   CHECK(settings->enter_calls == 0U);  // 后台 App 在 boot 阶段不 enter
+  // 后台武装（issue 23 / ADR 0009）：默认前台在 boot 里就算"进过前台" → 当场武装；
+  // 其余 App 要等第一次被切到前台才武装（见 ⑤）。
+  CHECK(fw.background_armed(clock_id));
+  CHECK_FALSE(fw.background_armed(settings_id));
+  CHECK(fw.arm_failures() == 0U);
   std::printf("  boot 后：前台 = %s（默认取注册表第 0 个），两个 App 都已 onCreate\n",
               fw.app(fw.foreground())->name());
+  std::printf("  boot 后：clock 后台已武装 = %d，settings 已武装 = %d\n",
+              fw.background_armed(clock_id) ? 1 : 0, fw.background_armed(settings_id) ? 1 : 0);
 
   step_title("③ 后台节拍：clock 是 tick 策略，period_ms = 40（每 8 帧一拍）");
   std::printf("  clock.settings()  = { background = tick, period_ms = %u }\n",
               background_period_ms);
   std::printf("  settings 用默认策略（suspend）：退场后不跑节拍，只等消息\n");
+  std::printf("  clock 是默认前台 → boot 里已经武装，定时器的周期从 boot 那一帧起算\n");
 
   /// 走 n 帧：每帧先把假时钟推到"帧号 × ui_loop_period_ms"，再 step()。
   const auto run_frames = [&fw, &hal](std::uint32_t count) {
@@ -237,6 +246,7 @@ TEST_CASE("系统用例：从启动到任务切换走一遍（跟着日志读）
   CHECK(fw.switches() == 1U);
   CHECK(clock->pause_calls == 1U);     // 旧前台让出
   CHECK(settings->enter_calls == 1U);  // 新前台首次进入
+  CHECK(fw.background_armed(settings_id));  // 首次进前台 = 武装它的后台策略（suspend → 无事）
   std::printf("  step 后：前台 = %s，累计切换 %u 次\n", fw.app(fw.foreground())->name(),
               static_cast<unsigned>(fw.switches()));
 
@@ -251,6 +261,7 @@ TEST_CASE("系统用例：从启动到任务切换走一遍（跟着日志读）
               fw.app(fw.foreground())->name(), clock->enter_calls, clock->resume_calls);
 
   step_title("⑦ shutdown()：前台 onPause → 全 App onExit → UI 端口 shutdown");
+  CHECK(fw.arm_failures() == 0U);  // 全程没有武装失败（两个 App 都不需要真的建东西）
   fw.shutdown();
   CHECK(clock->exit_calls == 1U);
   CHECK(settings->exit_calls == 1U);

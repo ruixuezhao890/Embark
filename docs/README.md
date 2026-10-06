@@ -45,7 +45,7 @@ cd Embark
 ```sh
 cmake -G Ninja -B build                   # 配置（宿主 + 测试；SDL2 找不到只跳过 UI demo）
 cmake --build build                       # 构建（零警告要求）
-ctest --test-dir build --output-on-failure  # 单元测试（95 用例 / 835 断言）
+ctest --test-dir build --output-on-failure  # 单元测试（104 用例 / 921 断言）
 ./build/platform/host/embark_host_ui      # 宿主 UI demo（Windows: .\build\platform\host\embark_host_ui.exe）
 ./build/platform/host/embark_host_tour    # 系统用例：从启动看到任务切换（同上 Windows 加 .exe）
 ```
@@ -55,9 +55,10 @@ ctest --test-dir build --output-on-failure  # 单元测试（95 用例 / 835 断
 想"跑够帧数自己退"或自动验收，看第 3 节。
 
 `embark_host_tour` 是"一条用例看完整系统"：不加参数就会自己走完
-**启动 → 后台节拍 → 合成点击切前台 → App 间消息 → 再切回来 → 一次性任务跑完并回收 → 关窗收尾**，
+**启动（后台还没武装，谁都不跑；本仓库没有声明 `ArmPolicy::at_boot` 的 App）→ 合成点击切前台（同一帧武装 clock 的后台 tick）→ 后台节拍 →
+App 间消息 → 再切回来 → 一次性任务跑完并回收 → 关窗收尾**，
 边跑边在控制台用中文解说每一步（前台是谁、谁收到了消息、钩子跑了几次、任务池还剩几个槽），
-最后打一张 15 项自检清单；全部通过退出码 0，任一项不满足退出码 2。
+最后打一张 17 项自检清单；全部通过退出码 0，任一项不满足退出码 2。
 同一条流程的**无窗口版本**是 doctest 用例 `系统用例：从启动到任务切换走一遍`
 （`tests/kernel/test_system_tour.cpp`），在 CLion 里单跑那一条即可从上往下读日志；
 任务生命周期那一步的用例是 `系统用例：own task 创建 → 跑完 → 回收 → 再创建`
@@ -280,6 +281,7 @@ Studio 安装/导出见 [eez-studio-guide.md](eez-studio-guide.md)。
 | --- | --- |
 | [quickstart.md](quickstart.md) | **5 分钟快速开始**：跑起来 → 最短验收 → 加一个带界面的 App；常见问题速查 |
 | [messages-and-background.md](messages-and-background.md) | 消息（总线 / 收件箱信封）与三种后台策略怎么用，含示例代码；`own_task` 的生命周期（入口返回 = 结束、每帧回收、运行期再创建）也在这里 |
+| [app-lifecycle/](app-lifecycle/) | **机制原理**：boot 装配顺序、唯一 UI 任务一帧 7 段、前后台切换何时生效、三种后台策略、own task 创建→回收全生命周期、publish/post 两条消息路——配图 + 源码索引 |
 | [hal-backend-guide.md](hal-backend-guide.md) | 怎么写一个 HAL 后端：宿主骨架（照 platform/host/）、共享层（platform/common/）与真机实现（platform/esp32/，含 IDF 坑清单） |
 | [../platform/esp32/README.md](../platform/esp32/README.md) | ESP32-S3 真机端口：板级参数、构建/烧录命令、bring-up 清单、串口日志样例 |
 | [new-app-guide.md](new-app-guide.md) | **新手指南**：30 分钟加一个带界面的 App（建壳 → 画同名屏 → 绑变量 → 构建验收，端到端） |

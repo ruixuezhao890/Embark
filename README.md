@@ -140,10 +140,10 @@ EEZ 屏往返验收（退出码 0 + 屏表自检 + 点 launcher 屏按钮进 clo
 ```
 
 它在真平台后端上（同一个 UI 任务、真 LVGL、真输入、真 FreeRTOS 任务）按 10 步走完
-**进程入口 → HAL → 框架 boot（EEZ launcher 屏登场）→ 点屏上按钮（Flow SetPage 驱动切 App）→ clock 登场 → 后台节拍
+**进程入口 → HAL → 框架 boot（EEZ launcher 屏登场；后台此时一个都没武装 —— 声明 `ArmPolicy::at_boot` 的 App 会在这里被武装，本仓库暂时没有）→ 点屏上按钮（Flow SetPage 驱动切 App）→ clock 登场（同一帧武装它的后台节拍）→ 后台节拍
 → 点 clock 屏按钮回启动器（onResume）→ 再点屏上按钮进 clock → 「Level +1」亮度消息回到后台的 clock
 → own_task 回流 → 一次性任务跑完并回收（再创建一次）→ 关窗收尾**（回程全由 EEZ 屏内按钮承担，导航壳已退役），每一步都用中文解说发生了什么
-，最后打一张 15 项自检清单：全部通过退出码 0，
+，最后打一张 17 项自检清单：全部通过退出码 0，
 任一项不满足退出码 2（日志里 `[失败]` 会说出期望值与实测值）。开关只有
 `--scale / --delay / --frames / --screenshot / --help`（`--help` 有清单）。
 

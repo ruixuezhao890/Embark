@@ -92,7 +92,7 @@ Structures 面板 → 加页面，命名 **`my`**（严格等于 `name()`，子�
 ### 2.3 放控件
 
 拖文本/值显示/按钮等控件，样式在 Studio 里排（深色科技风参考 launcher 屏的配色）。
-**文案用 ASCII**（EEZ 屏当前用 LVGL 默认字体 Montserrat，不含中文；中文需要字库方案，见 §5 踩坑）。
+**文案用 ASCII**（EEZ 屏当前用 LVGL 默认字体 Montserrat，不含中文；中文需要字库方案，见 §6 踩坑）。
 
 ### 2.4 声明 Flow 全局变量
 
@@ -200,7 +200,51 @@ void MyApp::onForegroundTick(std::uint32_t) {
 - 业务动作（发消息、改状态）→ User Action：Studio 里定义 action，C++ 实现对应函数
   （ADR 0008 决策 4：User Action 在生成代码的 Flow action 里实现，由 Studio 生成的 dispatch 表进入 C++，位置见 `app/eez_ui/src/ui/eez-flow.cpp`；也可以改成自己 App 目录里的实现文件，只要 CMake 源列表里登记）。
 
-## 4. 构建与验收（5 分钟）
+## 4. 钩子契约速查（8 个钩子：几次、哪个线程、能做什么）
+
+> 一句话：**框架不认识「App 在干什么」**。没有 status / visible 字段可查，也不存在「先查询状态再决定调哪个钩子」——
+> 全部是「事件驱动 + 定时器自发 + 每帧无条件」三类机制，外加一个「进过前台」的记账位。
+> 所以写 App 真正要知道的不是框架内部判定，而是**分派契约**：下面这张表。
+
+| 钩子 | 调用次数 | 线程 | 能做什么（纪律） |
+| --- | --- | --- | --- |
+| `onCreate(Framework&)` | 恰好 1 次（boot 装配期，按注册顺序） | UI | 存 `fw_ = &fw`、注入 HAL 能力（`fw.hal()`）、`eez_ui_bridge_ensure_init()`。**别 publish**：总线这时还没装配，发出去没人收（计 unknown + WARN）——要发消息放 `onEnter` 之后 |
+| `onEnter()` | ≤ 1 次（第一次成为前台） | UI | 建屏 / 挂自己的 EEZ 屏、启动计时状态机；**同一帧框架武装这个 App 的后台策略**（issue 23 / ADR 0009）；声明 `ArmPolicy::at_boot` 的 App 在 boot 就已武装，这里不重复（issue 24 / ADR 0010） |
+| `onPause()` | 每次离开前台 | UI | **只通知**：框架不碰你的 UI，保存状态请自己做 |
+| `onResume()` | 每次回到前台 | UI | 恢复显示、**再挂一次屏**（你的屏可能已被别的 App 覆盖过） |
+| `onForegroundTick(now_ms)` | 每帧一次（仅前台） | UI | 推数据给 UI：先 `set_var_*` 再 `eez_ui_bridge_tick()`。**必须轻**——它就在 UI 循环里 |
+| `onBackgroundTick(now_ms)` | 武装之后：按 `settings().period_ms` 周期（默认没被打开过 = 一次都不跑；`ArmPolicy::at_boot` 的在 boot 第 9 步就武装） | **tick 策略 = UI 任务；own_task 策略 = 独立任务** | 轻活走 tick；阻塞/重计算走 own_task。own_task 里**不许碰 UI、不许 publish**，回 UI 只能 `post` 信封 |
+| `onMessage(const Message&)` | 每条广播一次 | UI | 按 `msg.get_message_id()` 自分发。**v1 是广播：自己发的消息也会回到自己** |
+| `onExit()` | 恰好 1 次 | UI | 收尾、打日志。**v1 只有关机路径会触发**，没有别的退役路径 |
+
+最容易写错的三条（都有源码证据）：
+
+1. **`onCreate` 里 publish 会丢**——总线在 `onCreate` 之后才装配（`src/embark/framework.cpp:44-54`），早于它的广播被计为 unknown 并 WARN（`src/embark/bus.cpp:66-71`）。装配消息请放 `onEnter` 之后。
+2. **`onMessage` 会收到自己发的消息**——`publish` 遍历所有订阅者，**发送方的 adapter 也在订阅表里**（`src/embark/bus.cpp:55-75`）。要防自回环，就带个 `from` 字段自己过滤。
+3. **同一个 `onBackgroundTick`，线程语义完全不同**——tick 策略在唯一 UI 任务里被调（`src/embark/framework.cpp:140` → `:181`），own_task 策略在自己的任务里被调（`:250-253`）。跨策略复制粘贴代码前先确认这条。
+
+> 周期是**帧粒度**：`ceil(period_ms / ui_loop_period_ms)` 个帧（宿主 5 ms 一拍，`config/embark_limits.h:85`）。
+
+**「要写的东西 → 放哪个钩子」对照**：
+
+| 你要写的 | 放这里 | 理由 |
+| --- | --- | --- |
+| 建屏 / 手绘 LVGL 对象 | `onCreate` | 一次性，装配期做完 |
+| 挂自己的 EEZ 屏 | `onEnter` + `onResume` | 首次进入 + 每次回来（屏会被覆盖） |
+| 推数据给 EEZ 控件 | `onForegroundTick`：先 `set_var_*` 再 `tick` | 只有前台需要刷 |
+| 读传感器 / 硬件数据 | 驱动写在 App 或平台侧，用 `fw.hal().bus` 取总线 | 数据怎么上屏见 [eez-ui-manual.md](eez-ui-manual.md) 第 5 节 |
+| 耗时计算 / 网络 / 长阻塞 | `own_task` 策略 + `onBackgroundTick` | 不能阻塞 UI 任务 |
+| own_task 里回 UI | `fw.post(CrossTaskMessage(...))`，回 UI 再进总线 | 跨任务只能 post 信封（[messages-and-background.md](messages-and-background.md)） |
+
+> 框架**不会替你保存任何状态**：`entered_` 只是「进过前台」的记账位（`include/embark/framework.h:297`），
+> 不是状态查询接口。要「记住」什么，自己存成员变量。
+>
+> 另外：声明了后台策略**默认也不会**一上电就跑 —— 第一次进过前台（`onEnter` 同一帧）才武装，
+> 之后才可能出现 `onBackgroundTick`（查询用 `fw.background_armed(id)`）。要「一上电就跑」
+> （闹钟这类由持久化状态驱动的 App）就显式声明 `ArmPolicy::at_boot`（issue 24 / ADR 0010）。详见
+> [messages-and-background.md](messages-and-background.md) 的「武装时机」。
+
+## 5. 构建与验收（5 分钟）
 
 ```sh
 cmake -S . -B build && cmake --build build
@@ -218,7 +262,7 @@ ctest --test-dir build --output-on-failure            # 单测：屏表/变量�
 | 屏名拼错（≠ App 名） | 同上，挂不上屏 |
 | Studio 加了变量忘了重配 | 变量表没刷新，桥查不到 → set/get false；重配即可 |
 
-## 5. 踩坑清单（新用户第一周必看）
+## 6. 踩坑清单（新用户第一周必看）
 
 1. **屏名 ≠ App 名** → 挂不上屏（症状：一直在上一屏 + 告警日志）。
 2. **按钮用了「回上一屏」** → 点了没反应（屏栈恒空）。一律 SetPage。
@@ -230,7 +274,7 @@ ctest --test-dir build --output-on-failure            # 单测：屏表/变量�
    （在 Studio 里引用该字体并把文案纳入缺字审计，issue 17）。
 6. **app 名字冲突** → 注册表里必须唯一（`EMBARK_APP_TABLE` 展开时同名 App 编译期报错）。
 
-## 6. 从这里往哪走
+## 7. 从这里往哪走
 
 - 桥的完整 API、命名约定细节：**[eez-ui-manual.md](eez-ui-manual.md)**（词典）
 - Studio 安装/导出/注意事项：**[eez-studio-guide.md](eez-studio-guide.md)**

@@ -7,8 +7,10 @@
  *   ① 进程入口：起唯一 UI 任务（FreeRTOS 静态任务）→ 进调度器，自己不干活
  *   ② HAL 初始化：时间 / 持久化 / 日志 / 系统 / 总线 / 显示 / 输入，逐个报状态
  *   ③ 框架 boot：3 个 App 注册（launcher/clock/settings）→ 打印每个 App 的后台策略 → 默认前台 LauncherApp
+ *      （后台武装时机 = issue 23 / ADR 0009：boot 只武装默认前台；其余 App 等第一次被切进前台，
+ *       所以 clock 在 ⑤ 之前后台不跑 —— ⑨ 的清单里有两项专门盯这件事）
  *   ④ 启动器主屏：EEZ Studio 的 launcher 屏 —— 点屏上按钮（Flow SetPage → clock 屏）
- *   ⑤ 前台切换 #1：EEZ 屏按钮驱动 → clock 进场（onEnter，后台 tick 继续跑）
+ *   ⑤ 前台切换 #1：EEZ 屏按钮驱动 → clock 进场（onEnter；同帧武装它的后台策略 → tick 起跑）
  *   ⑥ EEZ 屏往返 + App 间消息：点 clock 屏按钮回启动器（SetPage 回 launcher 屏，
  *       屏名约定驱动切回归）；settings->bump_level() 广播亮度消息 → clock 收到（手绘
  *       Level +1 按钮退役后的逻辑入口，界面提交给 EEZ 屏）
@@ -76,6 +78,7 @@ constexpr int click_release_delta = 2;  ///< 按下后隔两帧抬起（LVGL 分
 // （lv_indev.c prev_scr 非空），后续点击须落在动画结束后：16→56、72→112、
 // 122→162。
 
+constexpr int arm_probe_frame = 12;         ///< ③b 还没点进 clock：确认它尚未武装、ticks 恒 0
 constexpr int eez_click_frame = 14;         ///< ④ 点 launcher 屏按钮：按下（→ clock）
 constexpr int tick_checkpoint_first = 28;   ///< 第一次看 clock 的后台节拍
 constexpr int clock_back_frame = 70;        ///< ⑥ 点 clock 屏按钮：回 launcher 屏（→ 启动器）；16–56 动画结束后
@@ -245,6 +248,8 @@ void ui_main(void* argument) noexcept {
               app->title());
   }
   ELOG_INFO("    LVGL {}.{}.{}", LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH);
+  ELOG_INFO("③b 后台武装：默认前台 {} 已武装={}；其余 App 等第一次被切进前台（clock 此刻未武装）",
+            framework.apps().at(0)->name(), framework.background_armed(0U) ? 1 : 0);
 
   // 前台切换与亮度变化的解说跟踪
   std::uint32_t prev_switches = 0;
@@ -255,6 +260,7 @@ void ui_main(void* argument) noexcept {
   auto* settings = static_cast<embark::demo::SettingsApp*>(framework.app(2));
 
   int frames_run = 0;
+  std::uint32_t ticks_before_first_enter = 0;  ///< 进 clock 之前采到的节拍数（应为 0：没打开过就不跑）
   ELOG_INFO("④ UI 循环（5 ms/帧）：先点 EEZ launcher 屏的按钮 —— Flow SetPage 到 clock 屏，桥把切屏翻成切 App");
   for (;;) {
     framework.step();
@@ -270,6 +276,12 @@ void ui_main(void* argument) noexcept {
     if (frames_run == launcher_reenter_frame) { push_motion_and_press(options->scale, launcher_button_x, launcher_button_y); }
     if (frames_run == launcher_reenter_frame + click_release_delta) { push_release(options->scale, launcher_button_x, launcher_button_y); }
     if (frames_run == quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
+    if (frames_run == arm_probe_frame) {
+      ticks_before_first_enter = clock->ticks();
+      ELOG_INFO("③b 后台武装时机（第 {} 帧，还没点进 clock）：clock 已武装={}，ticks={}（没打开过的 App 后台不跑）",
+                frames_run, framework.background_armed(framework.id_of(*clock)) ? 1 : 0,
+                ticks_before_first_enter);
+    }
 
     // --- 解说：前台切换 / 亮度 / 后台回流 -------------------------------------
     if (framework.switches() != prev_switches) {
@@ -283,15 +295,17 @@ void ui_main(void* argument) noexcept {
                 clock->brightness());
     }
     if (frames_run == tick_checkpoint_first) {
-      ELOG_INFO("后台节拍采样（第 {} 帧）：clock ticks={}；启动器前台帧={}",
+      ELOG_INFO("后台节拍采样（第 {} 帧）：clock ticks={}（武装后才十几拍，不到 1 个周期 20 拍 → 0 属正常）；"
+                "启动器前台帧={}",
                 frames_run, clock->ticks(), launcher->foreground_ticks());
     }
     if (frames_run == eez_click_frame + 6) {
-      ELOG_INFO("⑤ EEZ 屏按钮驱动切前台：切到 {}（onEnter；clock 的后台 tick 继续跑）",
+      ELOG_INFO("⑤ EEZ 屏按钮驱动切前台：切到 {}（onEnter；同一帧武装它的后台策略，tick 从此刻起算周期）",
                 framework.apps().at(framework.foreground())->name());
     }
     if (frames_run == tick_checkpoint_second) {
-      ELOG_INFO("后台节拍第二次采样：clock ticks={}（继续增长 = 退后台也在跑）", clock->ticks());
+      ELOG_INFO("后台节拍第二次采样：clock ticks={}（继续增长 = 武装之后一直在跑，人在前台也跑）",
+                clock->ticks());
     }
     if (frames_run == screen_life_check_frame) {
       const bool clock_gone = !embark::demo::eez_ui_bridge_screen_created("clock");
@@ -316,7 +330,13 @@ void ui_main(void* argument) noexcept {
   checklist.check("总帧数跑到位", frames_run >= quit_frame + 1, static_cast<unsigned long>(frames_run),
                   static_cast<unsigned long>(quit_frame) + 1UL);
   const auto first_ticks = static_cast<unsigned long>(clock->ticks());
-  checklist.check("clock 后台节拍 > 0（退后台仍在跑）", first_ticks > 0UL, first_ticks, 1UL);
+  checklist.check("clock 后台节拍 > 0（进过前台后持续跑）", first_ticks > 0UL, first_ticks, 1UL);
+  checklist.check("进 clock 之前它的后台没跑（武装时机：没打开过就不跑）", ticks_before_first_enter == 0UL,
+                  static_cast<unsigned long>(ticks_before_first_enter), 0UL);
+  const auto clock_armed = static_cast<unsigned long>(framework.background_armed(framework.id_of(*clock)));
+  checklist.check("clock 在第一次进前台时就已武装", clock_armed == 1UL, clock_armed, 1UL);
+  const auto arm_failures = static_cast<unsigned long>(framework.arm_failures());
+  checklist.check("武装失败计数 = 0", arm_failures == 0UL, arm_failures, 0UL);
   checklist.check("前台切换恰好 3 次（launcher→clock→launcher→clock）",
                   framework.switches() == 3, static_cast<unsigned long>(framework.switches()), 3UL);
   checklist.check("启动器 enter=1 / resume=1（一次回程：EEZ 屏往返）",

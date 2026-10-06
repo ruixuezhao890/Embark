@@ -64,13 +64,14 @@ fw.post(embark::CrossTaskMessage(id_of(*this), ++seq_));
 
 ## 后台策略：三种，每 App 声明一次
 
-`App::settings()` 返回 `AppSettings{策略, 周期, 栈深, 优先级}`：
+`App::settings()` 返回 `AppSettings{策略, 周期, 栈深, 优先级, 武装时机}`（最后一项有默认值，4 字段写法照旧可用）。
+注意：**声明 ≠ 一上电就在后台跑** —— 默认在 App **第一次进过前台**那一刻才武装；要"开机就跑"得显式声明 `ArmPolicy::at_boot`（见本节末「武装时机」）：
 
 | 策略 | 语义 | 适合 | 注意 |
 | --- | --- | --- | --- |
 | `suspend`（默认） | 退后台后完全不跑 | 设置页等纯前台交互 App | 前台钩子正常；后台零开销 |
-| `tick` | 每 `period_ms` 进一次 `onBackgroundTick(now_ms)` | 轻量后台逻辑（计时、轮询状态、节流） | 回调在**唯一 UI 任务**里执行：必须轻量、不阻塞；周期向上取整到 UI 循环粒度（宿主 5 ms），`period_ms == 0` 等价 suspend |
-| `own_task` | 框架经 `ITaskSpawner` 从静态池里给你分一个槽、建一个 FreeRTOS 任务，周期跑同一个钩子 | 长阻塞、重计算的活 | 栈深/优先级自配（demo：256 字 / 优先级 4，低于 UI 任务的 5）；栈深口径是 `StackType_t` 字（宿主 1 字 = 8 字节，真机 xtensa 1 字 = 1 字节，见 `docs/common-pitfalls.md`）；回调运行在你的任务里，**不能碰 UI 对象、不能 `publish`**，回 UI 走 `post` 信封 |
+| `tick` | 每 `period_ms` 进一次 `onBackgroundTick(now_ms)` | 轻量后台逻辑（计时、轮询状态、节流） | 回调在**唯一 UI 任务**里执行：必须轻量、不阻塞；周期向上取整到 UI 循环粒度（宿主 5 ms），`period_ms == 0` 等价 suspend；**武装之后才起跑**（默认"第一次进前台"，`at_boot` 在 boot 第 9 步） |
+| `own_task` | 框架经 `ITaskSpawner` 从静态池里给你分一个槽、建一个 FreeRTOS 任务，周期跑同一个钩子 | 长阻塞、重计算的活 | 任务在**武装时**才创建（默认"第一次进前台"、不是 boot；`at_boot` 则在 boot 第 9 步）； 栈深/优先级自配（demo：256 字 / 优先级 4，低于 UI 任务的 5）；栈深口径是 `StackType_t` 字（宿主 1 字 = 8 字节，真机 xtensa 1 字 = 1 字节，见 `docs/common-pitfalls.md`）；回调运行在你的任务里，**不能碰 UI 对象、不能 `publish`**，回 UI 走 `post` 信封 |
 
 ```cpp
 // tick 例：clock 每 100 ms 跳一次（宿主每 20 拍）
@@ -82,6 +83,38 @@ AppSettings settings() const override {
   return AppSettings{BackgroundPolicy::own_task, 50U, 256U, 4U};
 }
 ```
+
+```cpp
+// at_boot 例：闹钟这类"上电就要工作"的 App —— 不等用户点开，boot 第 9 步就武装
+AppSettings settings() const override {
+  return AppSettings{BackgroundPolicy::own_task, 50U, 256U, 4U, ArmPolicy::at_boot};
+}
+```
+
+### 武装时机：默认第一次进前台才开跑，`at_boot` 开机就开跑（issue 23 / ADR 0009；issue 24 / ADR 0010）
+
+默认情况下框架**不会**在 boot 时就把所有 App 的后台拉起来：boot 只给 `tick` 策略注册定时器（不 `start`）、
+只校验 `own_task` 策略的数量（超 `max_own_tasks` = 装配失败）；真正的「开跑」发生在 App
+**第一次进过前台**的那一刻（`onEnter` 之后、同一帧）。默认前台（注册表第 0 个）在 boot 里
+就进过前台，所以它当场武装；唯一的例外是 `ArmPolicy::at_boot`（下面第二条）。
+
+- 武装一次即长期有效：之后退回后台（`onPause`）后台照跑 —— 不是「只在前台之外跑」
+  （`own_task` 在平台上是常驻任务，没有暂停/恢复这回事）。
+- 没被打开过的 App，后台**完全不跑**：用户视角「我没开它，它自己在跑」不再成立。
+- 观测：`fw.background_armed(id)`（是否已武装）、`fw.arm_failures()`（运行期武装失败累计）。
+- `entered_` / `armed_` 都是 RAM 位（每次开机清零）：默认口径的准确说法是「**每次开机后被
+  打开过一次才会跑后台**」。
+- **要「开机就开跑」就显式声明**（issue 24 / ADR 0010）：`settings()` 第 5 个字段传
+  `ArmPolicy::at_boot` —— boot 第 9 步先武装所有 `at_boot` 的 App（按注册顺序），再武装默认
+  前台；**任一轮失败 = 装配失败**（不进循环）。代价是这个 App 的前台可能还没加载过，它的
+  后台已经在跑，后台逻辑要自己跳过 UI 相关的事（等 `onEnter` / `onForegroundTick` 之后再做）。
+
+```cpp
+AppSettings settings() const override {
+  return AppSettings{BackgroundPolicy::own_task, 50U, 256U, 4U, ArmPolicy::at_boot};
+}
+```
+- 机制细节与理由：[app-lifecycle/README.md](app-lifecycle/README.md) 4.1 / 4.2、[adr/0009](adr/0009-background-arm-on-first-enter.md)（默认时机）、[adr/0010](adr/0010-arm-at-boot.md)（`at_boot`）。
 
 常用容器与上限（编译期定死，改在 `config/embark_limits.h`）：`max_apps`、
 `max_bus_subscribers`、`max_background_timers`、`message_queue_depth`、`max_own_tasks`

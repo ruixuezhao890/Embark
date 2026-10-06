@@ -15,15 +15,19 @@ _Avoid_: 任务、线程、页面、界面
 _Avoid_: 当前页、活跃任务
 
 **Background app（后台 App）**：
-非前台的 App，按自身的后台策略运行。
+非前台的 App，按自身的后台策略运行；但声明了策略 ≠ 已经在跑 —— 只有**武装过**的 App 才在后台动（默认在第一次进过前台时武装；声明 `ArmPolicy::at_boot` 的在 boot 就武装），见 **Arm**。
 _Avoid_: 挂起的任务、休眠任务
 
 **Background policy（后台策略）**：
 每个 App 的自有设置，决定它退到后台之后的行为：挂起、按周期跑轻量逻辑，或拥有自己的任务。
 _Avoid_: 优先级、调度策略
 
+**Arm（后台武装 / Armed）**：
+声明了后台策略的 App 在**第一次进过前台**（`onEnter` 同一帧）才真正开始跑后台：`tick` 策略此时才 `start` 已注册的定时器，`own_task` 策略此时才经 `ITaskSpawner` 创建任务（框架内部 `Framework::arm_background`，幂等；观测 `background_armed(id)` / `arm_failures()`）。武装一次长期有效 —— 之后退回后台照跑，与前后台无关；没被打开过的 App 后台完全不跑。默认前台（注册表第 0 个）在 boot 里就进过前台，所以 boot 当场武装它。声明 `AppSettings::arm == ArmPolicy::at_boot` 的 App 不等前台：boot 第 9 步（先 at_boot 轮、再默认前台轮）就武装，因为它由持久化状态驱动。语义见 ADR 0009（默认）与 ADR 0010（显式 eager）。
+_Avoid_: 启动后台、初始化后台、后台开关、懒加载
+
 **Background tick（后台节拍）**：
-`BackgroundPolicy::tick` 策略的落地方式：框架在 UI 任务里用 `etl::callback_timer` 按 per-App 周期调用 `onBackgroundTick(now_ms)`；周期以 UI 循环周期（宿主 5 ms）为粒度向上取整，`period_ms == 0` 就是不跑。
+`BackgroundPolicy::tick` 策略的落地方式：框架在 UI 任务里用 `etl::callback_timer` 按 per-App 周期调用 `onBackgroundTick(now_ms)`；周期以 UI 循环周期（宿主 5 ms）为粒度向上取整，`period_ms == 0` 就是不跑。定时器在 boot 只**注册**不启动：默认第一次进前台（**Arm**）才 `start`，周期从那一刻起算；`at_boot` 的 App 在 boot 第 9 步就 `start`。
 _Avoid_: 软件定时器、任务轮询
 
 **Bus（消息总线）**：

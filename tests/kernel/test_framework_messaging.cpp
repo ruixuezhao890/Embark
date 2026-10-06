@@ -4,8 +4,10 @@
 //   boot 后总线广播（AppAdapter 订阅）→ onMessage；
 //   post() 入收件箱，下一帧 step 的派发段广播（信封内容不丢）；
 //   收件箱溢出计满（覆盖最旧，UI 不阻塞）；
-//   tick 策略按 ui_loop_period_ms 粒度周期触发 onBackgroundTick（period 0 = 不跑）；
-//   own_task 策略在 boot 时经 ITaskSpawner 创建（名/栈/优先级），失败路径透传。
+//   tick 策略在"第一次进过前台"（武装）之后按 ui_loop_period_ms 粒度周期触发
+//   onBackgroundTick（period 0 = 没有后台体）；own_task 策略在武装时经 ITaskSpawner
+//   创建（名/栈/优先级），失败路径透传（武装时机：issue 23 / ADR 0009）；
+//   ArmPolicy::at_boot 的 App 不等前台，boot 的 at_boot 轮就武装（issue 24 / ADR 0010）。
 #include <doctest/doctest.h>
 
 #include <cstdint>
@@ -24,6 +26,7 @@
 namespace {
 
 using embark::AppSettings;
+using embark::ArmPolicy;
 using embark::BackgroundPolicy;
 using embark::Framework;
 using embark::Message;
@@ -115,6 +118,26 @@ class OwnApp final : public RecorderApp {
   }
 };
 
+/// at_boot 的 tick App（issue 24 / ADR 0010）：不等前台，boot 就武装。
+class EagerTickApp final : public RecorderApp {
+ public:
+  EagerTickApp() : RecorderApp("eager_tick") {}
+
+  [[nodiscard]] AppSettings settings() const override {
+    return AppSettings{BackgroundPolicy::tick, 40U, 0U, 0U, ArmPolicy::at_boot};
+  }
+};
+
+/// at_boot 的 own_task App（issue 24）：boot 时就经 spawner 创建。
+class EagerOwnApp final : public RecorderApp {
+ public:
+  EagerOwnApp() : RecorderApp("eager_own") {}
+
+  [[nodiscard]] AppSettings settings() const override {
+    return AppSettings{BackgroundPolicy::own_task, 10U, 128U, 4U, ArmPolicy::at_boot};
+  }
+};
+
 /// 记录 spawn 调用的任务创建器替身。
 class FakeSpawner final : public embark::ITaskSpawner {
  public:
@@ -167,6 +190,15 @@ struct Records {
 void bind_records(const embark::AppRegistry& registry, Records& records) {
   static_cast<RecorderApp*>(registry.at(0))->reset(&records.front);
   static_cast<RecorderApp*>(registry.at(1))->reset(&records.back);
+}
+
+// 摘掉注册表里所有 App 的钩子记录。FrontApp 这些是**进程级单实例**
+//（detail::app_instance<T>() 每个类型只有一个），上一个用例的 Records 已经析构 ——
+// boot 会立刻调 onCreate，不先断开就会写进悬垂的 vector（栈被踩 → 段错误）。
+void unbind_records(embark::AppRegistry registry) {
+  for (std::size_t index = 0; index < registry.size(); ++index) {
+    static_cast<RecorderApp*>(registry.at(index))->reset(nullptr);
+  }
 }
 
 std::uint32_t count_hooks(const HookList& list, Hook hook) {
@@ -241,7 +273,7 @@ TEST_CASE("Framework：收件箱满时覆盖最旧并计数溢出") {
   CHECK(fw.inbox_overflows() == 2U);
 }
 
-TEST_CASE("Framework：tick 策略按 UI 循环粒度触发 onBackgroundTick；period 0 = 不跑") {
+TEST_CASE("Framework：tick 策略在武装（第一次进前台）之后按 UI 循环粒度触发") {
   embark::fakes::FakeHal hal;
   auto ctx = hal.context();
   const std::uint32_t period_ticks = 8U;  // 40 ms / 5 ms（ui_loop_period_ms）
@@ -255,14 +287,33 @@ TEST_CASE("Framework：tick 策略按 UI 循环粒度触发 onBackgroundTick；p
   records.front.clear();
   records.back.clear();
 
-  for (std::uint32_t frame = 0; frame < period_ticks - 1U; ++frame) {
+  // tick App 不是默认前台（注册表第 1 个）→ boot 不武装它（issue 23 / ADR 0009）：
+  // 还没被打开过，跑满两个周期也不该有节拍。
+  CHECK_FALSE(fw.background_armed(1U));
+  for (std::uint32_t frame = 0; frame < period_ticks * 2U; ++frame) {
+    fw.step();
+  }
+  CHECK(count_hooks(records.back, Hook::bg_tick) == 0U);  // 没进过前台 = 后台不跑
+
+  // 第一次切到前台 = 武装时机。切换在这一帧的循环边界生效，同帧的后台节拍段已经
+  // 算武装之后的第 1 拍，所以"到期"落在武装后第 period_ticks 拍。
+  REQUIRE(fw.request_switch(1U) == embark::Error::none);
+  fw.step();
+  CHECK(fw.background_armed(1U));
+  records.front.clear();
+  records.back.clear();
+
+  for (std::uint32_t frame = 0; frame < period_ticks - 2U; ++frame) {
     fw.step();
   }
   CHECK(count_hooks(records.back, Hook::bg_tick) == 0U);   // 还差一拍
   CHECK(count_hooks(records.front, Hook::bg_tick) == 0U);  // front 是 suspend
 
-  fw.step();  // 第 period_ticks 帧：到期触发
+  // 注意 0U 本身是空指针常量，会和 request_switch(const char*) 撞重载 → 显式写类型
+  REQUIRE(fw.request_switch(embark::AppId{0U}) == embark::Error::none);  // 退回 front：后台照跑
+  fw.step();  // 武装后第 period_ticks 拍：到期触发
   CHECK(count_hooks(records.back, Hook::bg_tick) == 1U);
+  CHECK(count_hooks(records.front, Hook::bg_tick) == 0U);  // front 仍然没有后台
 
   for (std::uint32_t frame = 0; frame < period_ticks; ++frame) {
     fw.step();
@@ -270,16 +321,21 @@ TEST_CASE("Framework：tick 策略按 UI 循环粒度触发 onBackgroundTick；p
   CHECK(count_hooks(records.back, Hook::bg_tick) == 2U);  // repeating，周期重排
 }
 
-TEST_CASE("Framework：period_ms == 0 的 tick 策略 = suspend（不注册定时器）") {
+TEST_CASE("Framework：period_ms == 0 的 tick 策略 = 没有后台体（武装后也不跑）") {
   embark::fakes::FakeHal hal;
   auto ctx = hal.context();
   Framework fw(ctx, embark::app_registry<FrontApp, TickApp>());
   // 静态实例的 period 会被上一用例的 setter 污染（同为 app_registry<FrontApp,
-  // TickApp>），显式归零后 boot —— 才是本用例要验证的"period 0 = suspend"。
+  // TickApp>），显式归零后 boot —— 才是本用例要验证的"period 0 = 没有后台体"。
   static_cast<TickApp*>(fw.app(1))->set_period_ms(0U);
   Records records;
   bind_records(fw.apps(), records);
   REQUIRE(fw.boot() == embark::Error::none);
+
+  // 先切进去武装它：这样"不跑"就只能解释成 period 0，而不是"还没武装"。
+  REQUIRE(fw.request_switch(1U) == embark::Error::none);
+  fw.step();
+  CHECK(fw.background_armed(1U));
   records.front.clear();
   records.back.clear();
 
@@ -287,9 +343,10 @@ TEST_CASE("Framework：period_ms == 0 的 tick 策略 = suspend（不注册定�
     fw.step();
   }
   CHECK(count_hooks(records.back, Hook::bg_tick) == 0U);
+  CHECK(fw.arm_failures() == 0U);  // 没有后台体不是失败
 }
 
-TEST_CASE("Framework：own_task 在 boot 时经 spawner 创建（名/栈/优先级正确）") {
+TEST_CASE("Framework：own_task 是默认前台 → boot 当场武装并经 spawner 创建") {
   embark::fakes::FakeHal hal;
   auto ctx = hal.context();
   FakeSpawner spawner;
@@ -298,6 +355,7 @@ TEST_CASE("Framework：own_task 在 boot 时经 spawner 创建（名/栈/优先�
   static_cast<RecorderApp*>(fw.app(0))->reset(nullptr);
 
   REQUIRE(fw.boot() == embark::Error::none);
+  CHECK(fw.background_armed(0U));  // 默认前台：boot 里就算"进过前台"，当场武装
   REQUIRE(spawner.calls.size() == 1U);
   CHECK(std::string(spawner.calls[0].name) == "own");
   CHECK(spawner.calls[0].entry != nullptr);
@@ -306,7 +364,7 @@ TEST_CASE("Framework：own_task 在 boot 时经 spawner 创建（名/栈/优先�
   CHECK(spawner.calls[0].priority == 4U);
 }
 
-TEST_CASE("Framework：own_task 装配失败路径（无 spawner / spawner 报错）") {
+TEST_CASE("Framework：own_task 武装失败路径（无 spawner / spawner 报错）") {
   embark::fakes::FakeHal hal;
   auto ctx = hal.context();
 
@@ -314,6 +372,7 @@ TEST_CASE("Framework：own_task 装配失败路径（无 spawner / spawner 报�
   Framework no_spawner(ctx, embark::app_registry<OwnApp>());
   CHECK(no_spawner.boot() == embark::Error::unsupported);
   CHECK_FALSE(no_spawner.booted());
+  CHECK(no_spawner.arm_failures() == 0U);  // boot 期失败走返回值，不计入运行期计数
 
   // spawner 拒绝：错误原样透传，booted 不置位
   FakeSpawner spawner;
@@ -321,4 +380,59 @@ TEST_CASE("Framework：own_task 装配失败路径（无 spawner / spawner 报�
   Framework rejected(ctx, embark::app_registry<OwnApp>(), nullptr, &spawner);
   CHECK(rejected.boot() == embark::Error::no_space);
   CHECK_FALSE(rejected.booted());
+}
+
+TEST_CASE("Framework：ArmPolicy::at_boot 的 tick App 开机即武装（不等前台）") {
+  embark::fakes::FakeHal hal;
+  auto ctx = hal.context();
+  const std::uint32_t period_ticks = 8U;  // 40 ms / 5 ms（ui_loop_period_ms）
+  Framework fw(ctx, embark::app_registry<FrontApp, EagerTickApp>());
+  Records records;
+  bind_records(fw.apps(), records);
+  REQUIRE(fw.boot() == embark::Error::none);
+  records.front.clear();
+  records.back.clear();
+
+  // 一次前台都没切过：boot 的 at_boot 轮已经武装它（issue 24 / ADR 0010）。
+  CHECK(fw.background_armed(1U));
+  CHECK(fw.arm_failures() == 0U);
+  for (std::uint32_t frame = 0; frame < period_ticks - 1U; ++frame) {
+    fw.step();
+  }
+  CHECK(count_hooks(records.back, Hook::bg_tick) == 0U);  // 还差一拍
+  fw.step();                                              // 武装后第 period_ticks 拍
+  CHECK(count_hooks(records.back, Hook::bg_tick) == 1U);
+  CHECK(count_hooks(records.front, Hook::bg_tick) == 0U);  // front 是 suspend
+}
+
+TEST_CASE("Framework：ArmPolicy::at_boot 的 own_task App 不必进前台，boot 就创建") {
+  embark::fakes::FakeHal hal;
+  auto ctx = hal.context();
+  FakeSpawner spawner;
+  Framework fw(ctx, embark::app_registry<FrontApp, EagerOwnApp>(), nullptr, &spawner);
+  unbind_records(fw.apps());  // 防御：上一个用例的 Records 已析构（见 unbind_records）
+
+  REQUIRE(fw.boot() == embark::Error::none);
+  CHECK(fw.background_armed(1U));
+  REQUIRE(spawner.calls.size() == 1U);
+  CHECK(std::string(spawner.calls[0].name) == "eager_own");
+  CHECK(spawner.calls[0].stack_words == 128U);
+}
+
+TEST_CASE("Framework：没声明 at_boot 的 own_task App 仍然等第一次进前台") {
+  embark::fakes::FakeHal hal;
+  auto ctx = hal.context();
+  FakeSpawner spawner;
+  Framework fw(ctx, embark::app_registry<FrontApp, OwnApp>(), nullptr, &spawner);
+  unbind_records(fw.apps());  // 防御：同上
+
+  REQUIRE(fw.boot() == embark::Error::none);
+  CHECK_FALSE(fw.background_armed(1U));  // 默认口径：进过前台才武装
+  CHECK(spawner.calls.empty());
+
+  REQUIRE(fw.request_switch(1U) == embark::Error::none);
+  fw.step();
+  CHECK(fw.background_armed(1U));
+  REQUIRE(spawner.calls.size() == 1U);
+  CHECK(std::string(spawner.calls[0].name) == "own");
 }

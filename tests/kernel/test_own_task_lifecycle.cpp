@@ -2,14 +2,16 @@
  * 内核测试：own task 的运行时生命周期（issue 15）
  *
  * 平台无关的那一半（定容任务池）由 tests/kernel/test_pooled_task_spawner.cpp 逐格验证；
- * 这一份验证**框架侧**的接线：boot 按策略创建、step 每帧回收、运行期再创建一轮。
+ * 这一份验证**框架侧**的接线：武装时按策略创建（声明 ArmPolicy::at_boot 的 App 在 boot
+ * 里就武装，其余等第一次进前台；issue 23 / ADR 0009 + issue 24 / ADR 0010）、
+ * step 每帧回收、运行期再创建一轮。
  *
  * 普通进程里没有调度器，所以"任务入口返回"这件事由 ScriptedSpawner::run() 代劳 —— 它调
  * 的正是框架真正的入口（Framework::own_task_entry），于是整条链路上只有"平台 trampoline"
  * 一段是替身（真机上那一段是 platform/common/pooled_task_spawner.h 的 finish_and_park）。
  *
  * 契约（issues/15-runtime-task-lifecycle.md 验收②：可观测"创建 → 跑完 → 回收 → 再创建"）：
- *   - boot 按 own_task 策略创建任务，名字/栈深/优先级原样交给 ITaskSpawner（0 = 取默认栈）；
+ *   - 武装时按 own_task 策略创建任务，名字/栈深/优先级原样交给 ITaskSpawner（0 = 取默认栈）；
  *   - 入口没返回时回收段什么也不做（release 报 busy 不是错误，下一帧再看）；
  *   - 入口返回后 step 自动回收；回收后槽位可再用，同一个 App 也能再来一轮；
  *   - 回收数也能显式查询（reap_finished_own_tasks() 的返回值）；
@@ -217,6 +219,26 @@ class LoopApp final : public embark::App {
   void onExit() override {}
 };
 
+/// 声明 ArmPolicy::at_boot 的一次性 own task App（issue 24 / ADR 0010）：
+/// 一次前台都没进过，boot 就该把它创建出来。
+class EagerJobApp final : public embark::App {
+ public:
+  [[nodiscard]] const char* name() const override { return "eager_job"; }
+
+  [[nodiscard]] AppSettings settings() const override {
+    return AppSettings{BackgroundPolicy::own_task, 0U, 256U, 4U, embark::ArmPolicy::at_boot};
+  }
+
+  void onCreate(Framework&) override {}
+  void onEnter() override {}
+  void onPause() override {}
+  void onResume() override {}
+  void onBackgroundTick(std::uint32_t) override { ++runs; }
+  void onExit() override {}
+
+  std::uint32_t runs = 0U;
+};
+
 /// 走 n 帧（与 test_system_tour.cpp 同一套喂时钟的方式）。
 void run_frames(Framework& fw, embark::fakes::FakeHal& hal, std::uint32_t count) {
   for (std::uint32_t index = 0U; index < count; ++index) {
@@ -246,8 +268,12 @@ TEST_CASE("系统用例：own task 创建 → 跑完 → 回收 → 再创建（
   CHECK(fw.reap_finished_own_tasks() == 0U);
   CHECK(fw.own_tasks_spawned() == 0U);
 
-  std::printf("② boot：own_task 策略的 App 在这里被创建（名字/栈/优先级原样交出去）\n");
+  CHECK_FALSE(fw.background_armed(job_id));  // 还没被打开过 = 后台还没武装
+
+  std::printf("② boot：job 是默认前台 → 当场武装，own_task 在这里被创建（名字/栈/优先级原样交出去）\n");
   REQUIRE(fw.boot() == Error::none);
+  CHECK(fw.background_armed(job_id));  // 默认前台：boot 里就算"进过前台"
+  CHECK(fw.arm_failures() == 0U);
   CHECK(fw.own_tasks_spawned() == 1U);
   CHECK(fw.own_tasks_released() == 0U);
   CHECK(spawner.live_count() == 1U);
@@ -309,7 +335,7 @@ TEST_CASE("系统用例：own task 创建 → 跑完 → 回收 → 再创建（
   std::printf("===== 一轮循环走完：创建 → 跑完 → 回收 → 再创建 =====\n\n");
 }
 
-TEST_CASE("own task：boot 一次装两个任务，池满后 no_space，失败路径不留记录") {
+TEST_CASE("own task：两个 App 各自在武装时创建，池满后 no_space，失败路径不留记录") {
   embark::fakes::FakeHal hal;
   auto ctx = hal.context();
   REQUIRE(hal.init() == Error::none);
@@ -323,6 +349,18 @@ TEST_CASE("own task：boot 一次装两个任务，池满后 no_space，失败�
 
   Framework fw(ctx, embark::app_registry<JobApp, DefaultStackApp>(), &ui, &spawner);
   REQUIRE(fw.boot() == Error::none);
+
+  // 只有默认前台（job）在 boot 里就武装；第二个 App 还没被打开过 → 一个任务都没建。
+  CHECK(fw.background_armed(job_id));
+  CHECK_FALSE(fw.background_armed(default_stack_id));
+  CHECK(fw.own_tasks_spawned() == 1U);
+  CHECK(spawner.live_count() == 1U);
+
+  // 第一次切到前台 = 武装时机（issue 23 / ADR 0009）：切换生效的这一帧就创建它的任务。
+  REQUIRE(fw.request_switch(default_stack_id) == Error::none);
+  run_frames(fw, hal, 1U);
+  CHECK(fw.background_armed(default_stack_id));
+  CHECK(fw.arm_failures() == 0U);
   CHECK(fw.own_tasks_spawned() == 2U);  // max_own_tasks = 2：两个槽刚好装满
   CHECK(spawner.live_count() == 2U);
 
@@ -365,6 +403,7 @@ TEST_CASE("own task：常驻任务永远不被回收（回收只认「入口已�
 
   Framework fw(ctx, embark::app_registry<LoopApp>(), &ui, &spawner);
   REQUIRE(fw.boot() == Error::none);
+  CHECK(fw.background_armed(loop_id));  // 默认前台：boot 即武装
   CHECK(fw.own_tasks_spawned() == 1U);
   CHECK(spawner.stack_words_of(loop_id) == 128U);
   CHECK(spawner.priority_of(loop_id) == 3U);
@@ -381,4 +420,41 @@ TEST_CASE("own task：常驻任务永远不被回收（回收只认「入口已�
   // shutdown 不终止 own task（v1 口径）：槽位还记着，进程退出时随 .bss 一起没。
   CHECK(fw.own_tasks_released() == 0U);
   CHECK(spawner.live(loop_id));
+}
+
+TEST_CASE("own task：ArmPolicy::at_boot 的 App 开机即武装，不等前台（issue 24 / ADR 0010）") {
+  embark::fakes::FakeHal hal;
+  auto ctx = hal.context();
+  REQUIRE(hal.init() == Error::none);
+  embark::fakes::FakeUiPort ui;
+  ScriptedSpawner spawner;
+
+  JobApp& job = embark::detail::app_instance<JobApp>();
+  EagerJobApp& eager = embark::detail::app_instance<EagerJobApp>();
+  job.runs = 0U;
+  eager.runs = 0U;
+
+  Framework fw(ctx, embark::app_registry<JobApp, EagerJobApp>(), &ui, &spawner);
+  REQUIRE(fw.boot() == Error::none);
+
+  // 一次前台都没切过：at_boot 的 App 已经武装并创建（默认前台照旧在 boot 里武装）。
+  CHECK(fw.background_armed(0U));
+  CHECK(fw.background_armed(1U));
+  CHECK(fw.arm_failures() == 0U);
+  CHECK(fw.own_tasks_spawned() == 2U);
+  CHECK(spawner.live_count() == 2U);
+
+  // 顺序：boot 先 arm 声明 at_boot 的 App（它先拿到池里最低的空槽），再 arm 默认前台。
+  CHECK(std::strcmp(spawner.name_of(0U), "eager_job") == 0);
+  CHECK(std::strcmp(spawner.name_of(1U), "job") == 0);
+  CHECK(spawner.stack_words_of(0U) == 256U);
+
+  // 只有被调度到的那一个跑：at_boot 的 eager_job 跑完一轮，job 没人碰它就不会跑。
+  REQUIRE(spawner.run(0U));
+  CHECK(eager.runs == 1U);
+  CHECK(job.runs == 0U);
+  CHECK(fw.reap_finished_own_tasks() == 1U);
+  CHECK(spawner.live_count() == 1U);
+
+  fw.shutdown();
 }

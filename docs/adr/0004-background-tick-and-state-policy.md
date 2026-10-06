@@ -17,3 +17,4 @@ ETL 依赖版本是"先锁后升"：立项定稿时锁 **20.40.0**（spec §16.3
 - issue 07：节拍机制 + 总线 + 收件箱 + own_task 装配（`src/embark/framework.cpp`、`tests/kernel/test_framework_messaging.cpp`）。
 - issue 08：三种策略各一个 demo App（clock=tick + state_chart、settings=suspend、ticker=own_task），宿主验收 EXIT=0。
 - 交叉阅读：spec §6（执行模型）、§16.3/§16.4（ETL 决策）、`docs/messages-and-background.md`（用法）、`GLOSSARY.md`（Background tick / Own task 词条）。
+- 后续（2026-10-06，ADR 0009）："后台**从何时开始跑**"收紧为 App 第一次进过前台才武装（issue 23）；本 ADR 定下的实现方式与"武装之后后台与前后台无关"不变。

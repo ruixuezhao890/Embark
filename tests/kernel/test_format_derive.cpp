@@ -46,6 +46,7 @@ TEST_CASE("派生打印：枚举整条打名字") {
   char buffer[96];
 
   CHECK(render(buffer, embark::BackgroundPolicy::tick) == "embark::BackgroundPolicy::tick");
+  CHECK(render(buffer, embark::ArmPolicy::at_boot) == "embark::ArmPolicy::at_boot");
   CHECK(render(buffer, embark::hal::PixelFormat::rgb565) == "embark::hal::PixelFormat::rgb565");
   CHECK(render(buffer, embark::hal::InputEventKind::press) == "embark::hal::InputEventKind::press");
 }
@@ -63,17 +64,19 @@ TEST_CASE("派生打印：结构体逐成员打（嵌套枚举也带名字）") 
 }
 
 TEST_CASE("派生打印：数值字段照整数打（1 字节成员会被当字符打，框架已避让）") {
-  char buffer[192];
+  char buffer[256];
 
   const embark::hal::InputEvent event{embark::hal::InputEventKind::press, 160, 170, 113, 7};
   CHECK(render(buffer, event) ==
         "embark::hal::InputEvent { kind = embark::hal::InputEventKind::press, x = 160, y = 170, "
         "key = 113, timestamp_ms = 7 }");
 
+  // 4 字段聚合初始化照旧可用（issue 24 的新字段有默认值 on_first_enter）——
+  // 日志里 arm 必须打全名，且是后台策略里最容易看错的一个字段，所以钉死。
   const embark::AppSettings settings{embark::BackgroundPolicy::own_task, 50, 256, 4};
   CHECK(render(buffer, settings) ==
         "embark::AppSettings { background = embark::BackgroundPolicy::own_task, period_ms = 50, "
-        "task_stack_words = 256, task_priority = 4 }");
+        "task_stack_words = 256, task_priority = 4, arm = embark::ArmPolicy::on_first_enter }");
 
   const embark::CrossTaskMessage envelope{1, 7};
   CHECK(render(buffer, envelope) == "embark::CrossTaskMessage { from_app = 1, seq = 7 }");

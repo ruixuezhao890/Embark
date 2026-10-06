@@ -42,12 +42,22 @@ E_FMT_DERIVE_ENUM(enum class BackgroundPolicy
                       own_task = 2,  ///< 申请自己的 FreeRTOS 任务（栈深/优先级也在这里配）
                   });
 
+/// 后台武装策略（issue 24 / ADR 0010）：声明后台**从什么时候开始跑**。
+/// 默认 on_first_enter = 被用户打开过一次才武装（issue 23 / ADR 0009）；
+/// at_boot = 开机装配时就武装（闹钟这类"一上电就要工作"的 App 才用）。
+E_FMT_DERIVE_ENUM(enum class ArmPolicy
+                  : std::uint8_t{
+                      on_first_enter = 0,  ///< 第一次进过前台才武装（默认）
+                      at_boot = 1,         ///< boot 装配时就武装（不管有没有被打开过）
+                  });
+
 /// 每 App 的后台配置（App::settings() 返回；默认 = 纯前台、后台不跑）。
 E_FMT_DERIVE(struct AppSettings {
   BackgroundPolicy background = BackgroundPolicy::suspend;
   std::uint32_t period_ms = 0;         ///< tick 策略的周期；0 等价 suspend
   std::uint16_t task_stack_words = 0;  ///< own_task 策略的栈深（单位：StackType_t 字）
   std::uint16_t task_priority = 0;  ///< own_task 策略的优先级（2 字节，见 message.h 的说明）
+  ArmPolicy arm = ArmPolicy::on_first_enter;  ///< 何时武装（见上；4 字段聚合初始化照旧可用）
 });
 
 /// App 基类 —— 钩子集合 = spec §5 + onForegroundTick（issue 19 / ADR 0008）。

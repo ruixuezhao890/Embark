@@ -61,9 +61,15 @@ Error Framework::boot() noexcept {
     ELOG_INFO("App {} 后台配置 {}", app->name(), app->settings());
   }
 
-  // --- 后台节拍（issue 07）--------------------------------------------------
+  // --- 后台定时器注册（issue 07；武装时机见 issue 23 / ADR 0009）------------
   // ETL 的 callback_timer 默认关闭（callback_timer.h:602），必须先 enable。
+  // 这里只**注册**：周期定时器建好、编号记进 bg_timer_ids_，但先不 start —— 真正的
+  // 启动在 arm_background()，即 App 第一次进前台的那一刻。容量错误仍然在装配期就
+  // 报出来（fail-fast），运行期不会再碰注册表。
   timers_.enable(true);
+  for (std::size_t index = 0; index < bg_timer_ids_.size(); ++index) {
+    bg_timer_ids_[index] = etl::timer::id::NO_TIMER;
+  }
   std::size_t timer_index = 0;
   for (std::size_t index = 0; index < apps_.size(); ++index) {
     const AppSettings settings = apps_.at(index)->settings();
@@ -80,23 +86,42 @@ Error Framework::boot() noexcept {
     // 精度受 ui_loop_period_ms 限制 —— 宿主 5 ms，真机按自己的循环周期重排）。
     const std::uint32_t period_ticks =
         (settings.period_ms + ui_loop_period_ms - 1U) / ui_loop_period_ms;
-    const etl::timer::id::type id = timers_.register_timer(trampoline, period_ticks, true);
-    timers_.start(id, false);
+    bg_timer_ids_[index] = timers_.register_timer(trampoline, period_ticks, true);
     ++timer_index;
   }
 
-  // --- own task 逃生舱（issues/07、15）---------------------------------------
-  // boot 只把声明了 own_task 策略的 App 装起来：创建细节与失败口径都在
-  // spawn_own_task_internal 里 —— 运行期的 spawn_own_task 走的是同一条路（issue 15）。
+  // --- own task 数量校验（issue 23：装配期的确定性失败点，不再真的创建）-------
+  // 池容量是编译期常量，装配期就能查出来：超了直接 fail-fast、不进循环；创建本身
+  // 推迟到武装（arm_background → spawn_own_task_internal，运行期的 spawn_own_task
+  // 走的是同一条路，issue 15）。
+  std::size_t own_task_apps = 0;
   for (std::size_t index = 0; index < apps_.size(); ++index) {
-    const AppSettings settings = apps_.at(index)->settings();
-    if (settings.background != BackgroundPolicy::own_task) {
-      continue;
+    if (apps_.at(index)->settings().background == BackgroundPolicy::own_task) {
+      ++own_task_apps;
     }
-    const Error spawn_error = spawn_own_task_internal(static_cast<AppId>(index));
-    if (spawn_error != Error::none) {
-      return spawn_error;
+  }
+  if (own_task_apps > max_own_tasks) {
+    return Error::no_space;
+  }
+
+  // --- 武装（issue 23 / ADR 0009 + issue 24 / ADR 0010）----------------------
+  // 第一轮：声明了 ArmPolicy::at_boot 的 App —— "一上电就要工作"（闹钟、定时器），
+  // 不依赖"有没有被打开过"，此刻就武装。
+  // 第二轮：默认前台。它在上面已经 onEnter 过（entered_[0] = true），"进过前台"
+  // 现在就成立，后台该起来了。其余 App 等第一次被切到前台再武装。
+  // 两轮都按同一口径 fail-fast：装配期失败 = 不进循环。
+  for (std::size_t index = 0; index < apps_.size(); ++index) {
+    App* const app = apps_.at(index);
+    if (app != nullptr && app->settings().arm == ArmPolicy::at_boot) {
+      const Error arm_error = arm_background(static_cast<AppId>(index));
+      if (arm_error != Error::none) {
+        return arm_error;
+      }
     }
+  }
+  const Error arm_error = arm_background(static_cast<AppId>(0));
+  if (arm_error != Error::none) {
+    return arm_error;
   }
 
   booted_ = true;
@@ -170,6 +195,47 @@ void Framework::fire_background_tick(AppId app_id) noexcept {
   if (app != nullptr) {
     app->onBackgroundTick(hal_.time.now_ms());
   }
+}
+
+Error Framework::arm_background(AppId id) noexcept {
+  App* const app = apps_.at(id);
+  if (app == nullptr) {
+    return Error::not_found;
+  }
+  if (armed_[id]) {
+    return Error::none;  // 幂等：武装一次就够（切回来 / 每帧都不重复动手）
+  }
+  const AppSettings settings = app->settings();
+
+  // 没有后台体的两种：suspend = 明确不要后台；tick + period_ms 0 = 不跑（与 boot
+  // 的注册口径一致）。它们也算"武装完成" —— 武装时机到了，只是没有事要做。
+  const bool has_background =
+      settings.background == BackgroundPolicy::own_task ||
+      (settings.background == BackgroundPolicy::tick && settings.period_ms != 0U);
+  if (!has_background) {
+    armed_[id] = true;
+    return Error::none;
+  }
+
+  Error result = Error::none;
+  if (settings.background == BackgroundPolicy::own_task) {
+    // 运行期创建（boot 里默认前台走的就是这一支）：失败口径见 spawn_own_task_internal。
+    result = spawn_own_task_internal(id);
+  } else {
+    // tick：定时器在 boot 里就注册好了，这里只是启动它。
+    const etl::timer::id::type timer_id = bg_timer_ids_[id];
+    if (timer_id == etl::timer::id::NO_TIMER || !timers_.start(timer_id, false)) {
+      result = Error::not_ready;  // 注册缺了（装配没走到）；正常路径到不了这儿
+    }
+  }
+
+  if (result == Error::none) {
+    armed_[id] = true;
+    ELOG_INFO("App {} 后台武装：{}", app->name(), settings);
+  } else {
+    ELOG_ERROR("App {} 后台武装失败：{}", app->name(), result);
+  }
+  return result;
 }
 
 void Framework::own_task_entry(void* argument) noexcept {
@@ -301,6 +367,13 @@ void Framework::apply_pending_switch() noexcept {
     } else {
       to->onEnter();  // 第一次当前台
       entered_[foreground_] = true;
+    }
+    // 第一次进前台 = 后台策略的武装时机（issue 23 / ADR 0009）。顺序是"先 onEnter
+    // （UI 先加载好）再武装"，与 boot 里默认前台的处理一致；arm_background 幂等，
+    // 所以每次切进来都调一次也没关系。失败不回滚切换（前台已经切过去了，只是这个
+    // App 没有后台）：细节在 arm_background 里打了 ELOG_ERROR，这里只计数。
+    if (arm_background(foreground_) != Error::none) {
+      ++arm_failures_;
     }
   }
   ++switches_;

@@ -83,12 +83,14 @@ class RecordSpawner final : public embark::ITaskSpawner {
 };
 
 // own_task 后台 App：让 boot 走真装配（周期 50 ms、栈 128 字、优先级 4；
-// 与宿主 TickerApp 同参数档）。
+// 与宿主 TickerApp 同参数档）。声明 ArmPolicy::at_boot（issue 24 / ADR 0010）：
+// 它不在默认前台位，后台也该在 boot 的 at_boot 轮就武装起来。
 class OwnApp final : public embark::App {
  public:
   [[nodiscard]] const char* name() const override { return "own"; }
   [[nodiscard]] embark::AppSettings settings() const override {
-    return embark::AppSettings{embark::BackgroundPolicy::own_task, 50U, 128U, 4U};
+    return embark::AppSettings{embark::BackgroundPolicy::own_task, 50U, 128U, 4U,
+                               embark::ArmPolicy::at_boot};
   }
   void onCreate(Framework&) override {}
   void onEnter() override {}
@@ -163,9 +165,11 @@ TEST_CASE("零分配审计：own_task 装配路径（成功与失败兜底）0 �
   embark::fakes::FakeUiPort ui;
   RecordSpawner spawner;
 
-  // 成功路径：spawn 命中，boot 正常完成。
+  // 成功路径：OwnApp 在第 1 个且声明了 at_boot → boot 的 at_boot 轮就武装并 spawn
+  //（issue 24 / ADR 0010：一趟前台都没进过也照样跑），boot 正常完成。
   Framework fw(ctx, embark::app_registry<AuditApp, OwnApp>(), &ui, &spawner);
   REQUIRE(fw.boot() == embark::Error::none);
+  CHECK(fw.background_armed(1U));
   CHECK(spawner.spawn_calls_ == 1U);
   fw.shutdown();
 

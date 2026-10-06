@@ -72,8 +72,9 @@ if(EMBARK_HOST_SDL2_FOUND)
 
   embark_copy_sdl2_runtime(embark_host_ui)
 
-  # 系统用例：不加参数就完整走一遍"启动 → 后台节拍 → 前台切换 → App 间消息 →
-  # own_task 消息回流 → 关窗收尾"，每步打一行中文解说，末尾给一张 ✓/✗ 自检清单。
+  # 系统用例：不加参数就完整走一遍"启动 → 前台切换（= 武装后台策略）→ 后台节拍 →
+  # App 间消息 → 关窗收尾"，每步打一行中文解说，末尾给一张 ✓/✗ 自检清单。
+  # 后台策略在 App 第一次被切进前台时才武装（issue 23 / ADR 0009）。
   # 它不是单元测试（不进 ctest），而是给人从启动看到任务切换的可运行说明。
   add_executable(embark_host_tour ui_tour.cpp)
 
