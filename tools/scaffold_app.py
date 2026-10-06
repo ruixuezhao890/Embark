@@ -69,10 +69,13 @@ def parse_var(spec: str) -> tuple[str, str]:
     return name, typ
 
 
-def build_header(app_name: str, class_name: str, title: str) -> str:
+def build_header(app_name: str, class_name: str, title: str, policy: str | None = None, period_ms: int = 0) -> str:
     today = datetime.date.today().isoformat()
     guard = guard_upper(app_name)
-    return f"""/**
+    settings_decl = ""
+    if policy == "tick":
+        settings_decl = "\n  [[nodiscard]] AppSettings settings() const override;"
+    return f"""
  * {app_name} App 壳（{today} 由 tools/scaffold_app.py 生成）—— docs/new-app-guide.md 的薄壳模板。
  *
  * 界面全部交给 EEZ：此壳一行 LVGL 都不写。屏名约定：EEZ 屏名 == App 名（{app_name}；
@@ -93,7 +96,7 @@ class {class_name} final : public App {{
   {class_name}() noexcept = default;
 
   [[nodiscard]] const char* name() const override {{ return "{app_name}"; }}
-  [[nodiscard]] const char* title() const override {{ return "{title}"; }}
+  [[nodiscard]] const char* title() const override {{ return "{title}"; }}{settings_decl}
 
   void onCreate(Framework& fw) override;
   void onEnter() override;
@@ -112,7 +115,7 @@ class {class_name} final : public App {{
 """
 
 
-def build_source(app_name: str, class_name: str, vars_: list[tuple[str, str]]) -> str:
+def build_source(app_name: str, class_name: str, vars_: list[tuple[str, str]], policy: str | None = None, period_ms: int = 0) -> str:
     today = datetime.date.today().isoformat()
     L: list[str] = [
         "/**",
@@ -180,6 +183,18 @@ def build_source(app_name: str, class_name: str, vars_: list[tuple[str, str]]) -
         "}  // namespace embark::demo",
         "",
     ])
+    if policy == "tick":
+        L.insert(L.index(f"void {class_name}::onCreate(Framework& fw) {{"),
+                 f"AppSettings {class_name}::settings() const {{\n"
+                 f"  // 后台策略：tick（前台每 {period_ms}ms 周期刷新变量；suspend 收不到前台循环）\n"
+                 f"  return AppSettings{{BackgroundPolicy::tick, {period_ms}U, 0U, 0U}};\n"
+                 "}\n\n")
+    if policy == "tick":
+        L.insert(L.index(f"void {class_name}::onCreate(Framework& fw) {{"),
+                 f"AppSettings {class_name}::settings() const {{\n"
+                 f"  // 后台策略：tick（前台每 {period_ms}ms 周期刷新变量；suspend 收不到前台循环）\n"
+                 f"  return AppSettings{{BackgroundPolicy::tick, {period_ms}U, 0U, 0U}};\n"
+                 "}\n\n")
     return "\n".join(L)
 
 
@@ -188,6 +203,8 @@ def build_vars_txt(app_name: str, vars_: list[tuple[str, str]]) -> str:
         "# EEZ Studio 粘贴清单（tools/scaffold_app.py 生成）——把下面每行声明为 Flow 全局变量并",
         "# 绑定到控件（docs/new-app-guide.md §2.4-2.5）。声明后重新 cmake -B build：构建日志会",
         "# 打印『EEZ 变量：N 个』，或构建后用 --vars-check build/include/embark_eez_vars.h 核对。",
+        "# 建屏时同步设好生命周期（工程已勾 Settings→Build『Screens lifetime support』）：",
+        "# 新页 General 里 createAtStart 关、Delete on unload 开；启动屏 launcher 保持常驻。",
     ]
     if vars_:
         lines += [f"{app_name}_{f}    # {t}" for f, t in vars_]
@@ -203,10 +220,10 @@ def app_table_entry(app_name: str, class_name: str) -> str:
     return f"embark::demo::{class_name}"
 
 
-def dry_run(app_name: str, class_name: str, title: str, vars_: list[tuple[str, str]], repo: Path) -> None:
+def dry_run(app_name: str, class_name: str, title: str, vars_: list[tuple[str, str]], repo: Path, policy: str | None = None, period_ms: int = 0) -> None:
     print(f"== App 蓝图：{app_name}（{class_name}，『{title}』）==")
     print(f"--- 新建 app/{app_name}/{app_name}_app.h / app/{app_name}/{app_name}_app.cpp + eez_vars.txt（薄壳 + {len(vars_)} 个变量骨架）---")
-    print(build_header(app_name, class_name, title))
+    print(build_header(app_name, class_name, title, policy, period_ms))
     if vars_:
         print(f"--- cpp 变量骨架（onForegroundTick 内）---")
         for field, typ in vars_:
@@ -230,6 +247,7 @@ def dry_run(app_name: str, class_name: str, title: str, vars_: list[tuple[str, s
         print(f"  + {UI_DEMO}：EMBARK_APP_TABLE 追加 {entry}")
     print()
     print("== EEZ Studio checklist（不可脚本化，见 docs/new-app-guide.md §2）==")
+    print(f"--- 后台策略：{policy if policy else 'suspend（默认）'}" + (f"，tick {period_ms}ms" if policy == "tick" else "") + " ---")
     steps = [
         "打开源工程 .eez-project（不在仓库；向维护者获取）",
         f"新建页面：屏名 == '{app_name}'（子页 <app名>_<编号>_sub）",
@@ -250,12 +268,12 @@ def dry_run(app_name: str, class_name: str, title: str, vars_: list[tuple[str, s
         print("  核对变量：--vars-check build/include/embark_eez_vars.h（构建后）")
 
 
-def apply(app_name: str, class_name: str, title: str, vars_: list[tuple[str, str]], repo: Path) -> None:
+def apply(app_name: str, class_name: str, title: str, vars_: list[tuple[str, str]], repo: Path, policy: str | None = None, period_ms: int = 0) -> None:
     hp = repo / APP_DIR / app_name / f"{app_name}_app.h"
     cp = repo / APP_DIR / app_name / f"{app_name}_app.cpp"
     vf = repo / APP_DIR / app_name / "eez_vars.txt"
-    hdr = build_header(app_name, class_name, title)
-    src = build_source(app_name, class_name, vars_)
+    hdr = build_header(app_name, class_name, title, policy, period_ms)
+    src = build_source(app_name, class_name, vars_, policy, period_ms)
     (repo / APP_DIR / app_name).mkdir(parents=True, exist_ok=True)
     for p, content in ((hp, hdr), (cp, src)):
         if p.exists():
@@ -314,12 +332,216 @@ def vars_check(vars_file: Path, app_name: str, vars_: list[tuple[str, str]]) -> 
     print(f"  （{vars_file}）")
 
 
+
+
+def interactive(repo: Path) -> None:
+    """无参数运行：菜单式交互向导（python tools/scaffold_app.py）。
+
+    问答收集 App 名/标题/后台策略/Flow 变量，先预览蓝图（dry-run）再确认落地（apply）。
+    与 CLI 参数模式共用 build_header/build_source/dry_run/apply 同一套生成逻辑。
+    """
+    W = 60
+    print("=" * W)
+    print("Embark · App 生成器（tools/scaffold_app.py）")
+    print("生成 app/<名字>/ 薄壳 + 变量骨架 + eez_vars.txt（EEZ Studio 粘贴清单），")
+    print("并自动注册 app/CMakeLists.txt 源列表与 platform/host/ui_demo.cpp 启动表。")
+    print("全程菜单问答，不需要命令行参数；参考 docs/new-app-guide.md。")
+    print("=" * W)
+
+    print()
+    print("请选择操作：")
+    print("  1) 新建 App")
+    print("  2) 给已有 App 追加变量")
+    while True:
+        m = input("选择 [1/2]，回车默认 1：").strip()
+        if m in ("", "1"):
+            mode = "new"
+            break
+        if m == "2":
+            mode = "add"
+            break
+        print("  ✗ 请输入 1 或 2")
+
+    if mode == "add":
+        while True:
+            app_name = input("要加变量的已有 App 名（如 demo_timer）：").strip()
+            if not APP_NAME_RE.match(app_name):
+                print("  ✗ 不合法：须 ^[a-z][a-z0-9_]*$")
+                continue
+            if not (repo / APP_DIR / app_name / f"{app_name}_app.cpp").exists():
+                print(f"  ✗ app/{app_name}/ 不存在——请先新建此 App")
+                continue
+            break
+        vars_ = ask_vars_fields()
+        if not vars_:
+            print("没有要追加的变量，结束。")
+            return
+        preview_add_vars(app_name, vars_, repo)
+        while True:
+            ans = input("确认追加落地？[y/N]：").strip().lower()
+            if ans in ("y", "yes"):
+                add_vars(app_name, vars_, repo)
+                print()
+                print("下一步：把 app/<名字>/eez_vars.txt 里新增的行也在 EEZ Studio 声明")
+                print("为 Flow 全局变量并绑定控件 → 重新 cmake -S . -B build（日志『EEZ 变量』）")
+                print("（屏的生命周期设置见 docs/new-app-guide.md §2.2 旁注 / eez-studio-guide.md）")
+                return
+            if ans in ("", "n", "no"):
+                print("已取消——未写盘。")
+                return
+            print("  ✗ 请输入 y / N")
+
+    reserved = {"launcher", "clock", "settings", "common"}
+    while True:
+        raw = input("App 名（英文小写/数字/下划线，如 demo_timer）：").strip()
+        if not APP_NAME_RE.match(raw):
+            print("  ✗ 不合法：须 ^[a-z][a-z0-9_]*$（小写开头）")
+            continue
+        if raw in reserved:
+            print(f"  ✗ 保留名：{sorted(reserved)} 已被占用")
+            continue
+        if (repo / APP_DIR / raw / f"{raw}_app.cpp").exists():
+            print(f"  ✗ app/{raw}/ 已存在——换一个名字，或先手动删除旧目录")
+            continue
+        app_name = raw
+        break
+
+    title = input("中文标题（菜单/元数据显示）：").strip() or "未命名"
+
+    print()
+    print("后台策略（决定切走后怎么活；1 = 最省心）：")
+    print("  1) suspend —— 默认：切走即挂起，界面类 App 用它就够")
+    print("  2) tick 100ms —— 前台周期性刷新变量（时钟走秒类）")
+    print("  3) tick 500ms —— 同上，周期更省")
+    print("  （own_task 高实时属高级场景，菜单未收录：手改 settings() 或咨询维护者）")
+    policy = None
+    period_ms = 0
+    while True:
+        p = input("选择 [1-3]，回车默认 1：").strip()
+        if p in ("", "1"):
+            break
+        if p in ("2", "3"):
+            policy, period_ms = "tick", 100 if p == "2" else 500
+            break
+        print("  ✗ 请输入 1 / 2 / 3")
+
+    vars_ = ask_vars_fields()
+    class_name = pascal(app_name) + "App"
+    print()
+    dry_run(app_name, class_name, title, vars_, repo, policy, period_ms)
+    while True:
+        ans = input("确认落地生成？[y/N]：").strip().lower()
+        if ans in ("y", "yes"):
+            apply(app_name, class_name, title, vars_, repo, policy, period_ms)
+            print()
+            print("下一步：把 app/<名字>/eez_vars.txt 粘贴到 EEZ Studio 声明变量 →")
+            print("新建同名屏（屏名 == App 名）→ 控件绑变量 → 导出 → 重新 cmake -S . -B build")
+            print("（构建日志应打印『EEZ 屏表：N 个』『EEZ 变量：N 个』）")
+            print("新屏别忘了生命周期：General 里 createAtStart 关 + Delete on unload 开（工程已勾")
+            print("Settings→Build『Screens lifetime support』；启动屏 launcher 保持常驻）——见手册 §7")
+            return
+        if ans in ("", "n", "no"):
+            print("已取消——只在屏幕上预览，未写盘。可重跑向导，或按蓝图手动操作。")
+            return
+        print("  ✗ 请输入 y / N")
+
+def ask_vars_fields() -> list[tuple[str, str]]:
+    """菜单式录入 Flow 全局变量字段（每项一个字段名 + 类型），回车结束，至多 12 个。"""
+    print("Flow 全局变量（界面控件上显示的数据）")
+    print("字段名英文（如 tick / speed），回车 = 结束添加")
+    TYPE_MENU = {"1": "int", "2": "float", "3": "bool", "4": "string"}
+    vars_: list[tuple[str, str]] = []
+    while True:
+        if len(vars_) >= 12:
+            print("  （已达 12 个上限）")
+            break
+        field = input(f"  字段名（第 {len(vars_) + 1} 个，回车结束）：").strip()
+        if not field:
+            break
+        if not re.match(r"^[a-z][a-z0-9_]*$", field):
+            print("  ✗ 字段名须 [a-z][a-z0-9_]*")
+            continue
+        t = input("  类型 [1=int 2=float 3=bool 4=string]：").strip()
+        typ = TYPE_MENU.get(t)
+        if typ is None:
+            print("  ✗ 请输入 1 / 2 / 3 / 4")
+            continue
+        vars_.append((field, typ))
+    return vars_
+
+
+def preview_add_vars(app_name: str, vars_: list[tuple[str, str]], repo: Path) -> None:
+    cp = repo / APP_DIR / app_name / f"{app_name}_app.cpp"
+    if not cp.exists():
+        die(f"app/{app_name}/ 不存在——请先用向导或 CLI 新建此 App，再增量加变量")
+    print(f"== 为已有 App {app_name} 追加 {len(vars_)} 个变量（加 --apply 才落地）==")
+    for field, typ in vars_:
+        full = f"{app_name}_{field}"
+        print(f'  + app/{app_name}/{app_name}_app.cpp:  eez_ui_bridge_{VAR_FN[typ]}("{full}", {VAR_EXPR[typ]});')
+        print(f"  + app/{app_name}/eez_vars.txt:  {full}    # {typ}")
+
+
+def add_vars(app_name: str, vars_: list[tuple[str, str]], repo: Path) -> None:
+    """把变量骨架增量追加进已有 App 的 cpp 与 eez_vars.txt（幂等：已存在的跳过）。"""
+    d = repo / APP_DIR / app_name
+    cp = d / f"{app_name}_app.cpp"
+    vf = d / "eez_vars.txt"
+    if not cp.exists():
+        die(f"app/{app_name}/ 不存在——请先用向导或 CLI 新建此 App，再增量加变量")
+    lines = cp.read_text(encoding="utf-8").split("\n")
+    added: list[str] = []
+    for field, typ in vars_:
+        full = f"{app_name}_{field}"
+        head = f'  eez_ui_bridge_{VAR_FN[typ]}("{full}"'
+        if any(head in ln for ln in lines):
+            print(f"  = {full} 已在 cpp（幂等跳过）")
+            continue
+        row = head + f", {VAR_EXPR[typ]});  // TODO: 换成真实业务值"
+        idxs = [i for i, ln in enumerate(lines) if "eez_ui_bridge_set_var_" in ln]
+        if idxs:
+            lines.insert(idxs[-1] + 1, row)
+        else:
+            ti = next((i for i, ln in enumerate(lines) if "eez_ui_bridge_tick();" in ln), None)
+            lines.insert(ti if ti is not None else len(lines) - 3, row)
+        added.append(full)
+    if added:
+        cp.write_text("\n".join(lines), encoding="utf-8")
+        print(f"  + {cp.relative_to(repo)} 已追加 {len(added)} 行变量骨架")
+    else:
+        print(f"  = {cp.relative_to(repo)} 无需改动")
+    if not vf.exists():
+        vf.write_text(build_vars_txt(app_name, vars_), encoding="utf-8")
+        print(f"  + {vf.relative_to(repo)} 已生成（EEZ Studio 粘贴清单）")
+        return
+    rows = vf.read_text(encoding="utf-8").split("\n")
+    added_txt = 0
+    for field, typ in vars_:
+        r = f"{app_name}_{field}    # {typ}"
+        if r in rows:
+            print(f"  = {r} 已在 eez_vars.txt（幂等跳过）")
+            continue
+        rows.insert(len(rows) - 1, r)
+        added_txt += 1
+    if added_txt:
+        vf.write_text("\n".join(rows), encoding="utf-8")
+        print(f"  + {vf.relative_to(repo)} 已追加 {added_txt} 行")
+    else:
+        print(f"  = {vf.relative_to(repo)} 无需改动")
+
+
+
 def main() -> None:
+    if len(sys.argv) == 1:
+        interactive(REPO_ROOT)
+        return
+
     ap = argparse.ArgumentParser(description="生成带 EEZ 界面的 App 薄壳（docs/new-app-guide.md 路线）")
     ap.add_argument("app_name", help="App 名（小写标识符，须与 EEZ 屏名一致）")
     ap.add_argument("--title", default="未命名", help="中文标题（元数据用）")
     ap.add_argument("--var", action="append", default=[], metavar="字段:类型",
                     help="Flow 全局变量骨架（<app名>_<字段>，类型 int|float|bool|string），可多次")
+    ap.add_argument("--add-var", action="append", default=[], metavar="字段:类型",
+                    help="给已有 App 增量追加变量骨架（默认预览，--apply 落地），可多次")
     ap.add_argument("--apply", action="store_true", help="落地写盘（默认 dry-run 只打印蓝图与清单）")
     ap.add_argument("--repo", type=Path, default=REPO_ROOT, help="仓库根（默认脚本所在仓库；自测用）")
     ap.add_argument("--vars-check", type=Path, default=None, metavar="FILE",
@@ -337,6 +559,14 @@ def main() -> None:
     for rel in (CMAKELISTS, UI_DEMO):
         if not (repo / rel).exists():
             die(f"--repo {repo} 下缺 {rel}（请指向仓库根，或用默认值）")
+
+    if args.add_var:
+        av = [parse_var(v) for v in args.add_var]
+        if args.apply:
+            add_vars(app_name, av, repo)
+        else:
+            preview_add_vars(app_name, av, repo)
+        return
 
     if args.vars_check:
         vp = args.vars_check if args.vars_check.is_absolute() else repo / args.vars_check

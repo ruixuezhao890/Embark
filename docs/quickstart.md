@@ -26,6 +26,18 @@
 
 ## 第 3–5 分钟：加一个自己的 App（薄壳 + EEZ 屏）
 
+**一键（推荐）**：
+
+```sh
+python tools/scaffold_app.py     # 交互菜单：填 App 名/标题/后台策略/变量，先预览再确认
+```
+
+一次做完：生成 `app/<名>/<名>_app.{h,cpp}`、追加进 `app/CMakeLists.txt` 与 `EMBARK_APP_TABLE`、
+写出 `app/<名>/eez_vars.txt`（Studio 变量声明粘贴清单）。**生成后要加变量**：菜单选 `2`，
+或 `python tools/scaffold_app.py <名> --add-var count:int --apply`（不带 `--apply` 只预览）。
+
+**手工**（想理解结构就这么做）：
+
 1. 复制 `app/clock/` → `app/my_app/`，类名改 `MyApp`、`name()` 返回 `"my_app"`；
 2. `app/CMakeLists.txt`：`embark_demo_apps` 源列表加 `my_app/my_app.cpp`；
 3. `platform/host/ui_demo.cpp`：`EMBARK_APP_TABLE(...)` 加 `embark::demo::MyApp`
@@ -45,5 +57,5 @@
 | 屏上按钮点了没反应 | 屏名 ≠ App 名；或按钮用了「回上一屏」（空栈 no-op）——改成 SetPage 到目标屏 |
 | 改了屏 / 变量不生效 | 屏表 / 变量表是**配置期**生成的：改动后要重新 `cmake -B build` |
 | 界面文字是方框 | EEZ 屏用 LVGL 默认字体（Montserrat），无中文——文案用 ASCII |
-| 想给自己的 App 加数据上屏 | Flow 全局变量：Studio 声明 + 绑定控件，`eez_ui_bridge_set_var_*` 推值 |
+| 想给自己的 App 加数据上屏 | **两边同名**：C++ 侧 `eez_ui_bridge_set_var_*("my_count", n)` 推值，EEZ Studio 侧手工声明同名 Flow 全局变量并绑定控件（`app/<名>/eez_vars.txt` 是粘贴清单；名字对不上不崩，只是该控件不刷新，用 `--vars-check` 核对）|
 | 真机上没有界面 | 真机 EEZ 接入待办（`EMBARK_EEZ_UI_BRIDGE` 未定义 = 桥调用 no-op），见根 README 状态 |

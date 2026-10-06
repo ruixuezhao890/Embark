@@ -19,10 +19,38 @@
 
 ## 1. 建 App 壳（C++ 侧，10 分钟）
 
-仓库里已有三个薄壳样例：`app/launcher/`（主屏 + 导航接线）、`app/clock/`（tick + 状态机 + 收 `BrightnessMessage`）、`app/settings/`（suspend + 逻辑入口），照 `app/clock/` 复制改名即可。
+仓库里已有三个薄壳样例：`app/launcher/`（主屏 + 导航接线）、`app/clock/`（tick + 状态机 + 收 `BrightnessMessage`）、`app/settings/`（suspend + 逻辑入口）。
 
+### 1.1 一键生成（推荐，30 秒）
 
-1. **复制并改名**：`app/clock/clock_app.{h,cpp}` → `app/my_app/my_app.{h,cpp}`，类名 `HelloApp` → `MyApp`，
+不用手工复制改名，跑脚本即可：
+
+```sh
+python tools/scaffold_app.py                       # 交互菜单：问答式填 App 名 / 标题 / 后台策略 / 变量，先预览再确认
+```
+
+或直接给参数（默认只预览，加 `--apply` 才落地）：
+
+```sh
+python tools/scaffold_app.py my --title "我的" --var visit_count:int --apply
+```
+
+脚本一次做完四件事：生成 `app/my/my_app.{h,cpp}` 薄壳、把源文件追加进 `app/CMakeLists.txt`
+的锚点行、把 `embark::demo::MyApp` 追加进 `platform/host/ui_demo.cpp` 的 `EMBARK_APP_TABLE`、
+并写出 `app/my/eez_vars.txt` —— **Studio 侧变量声明的粘贴清单**（见 §2.4）。
+
+> **生成之后还要加变量？** 不用重新生成，也不会覆盖你写的业务代码：
+> - 菜单：`python tools/scaffold_app.py` → 选 `2`（给已有 App 追加变量）
+> - 命令行：`python tools/scaffold_app.py my --add-var count:int --add-var active:bool --apply`
+>
+> 新变量插到已有变量之后、`eez_ui_bridge_tick()` 之前；已在的变量自动跳过（幂等），
+> `eez_vars.txt` 同步追加。单次向导最多填 12 个，**追加次数不限**。
+
+### 1.2 手工方式（照做一遍更懂结构）
+
+照 `app/clock/` 复制改名即可：
+
+1. **复制并改名**：`app/clock/clock_app.{h,cpp}` → `app/my_app/my_app.{h,cpp}`，类名 `ClockApp` → `MyApp`，
    `name()` 返回 `"my"`（唯一、小写），`title()` 返回中文标题（如 `"我的"`，元数据用）。
 
 2. **`app/CMakeLists.txt`**：`embark_demo_apps` 源列表加 `my_app/my_app.cpp`。
@@ -44,11 +72,10 @@ cmake --build build
 
 ### 2.1 工程从哪来（先弄清这件事，别卡在这）
 
-仓库 **只存导出产物**（`app/eez_ui/src/ui/`，生成代码，手改会被下次导出覆盖）；
-源工程 `.eez-project` 是 Studio 的二进制文件，**不在仓库**（二进制易冲突、与 Studio 版本绑定）。
-所以：
+仓库同时维护**导出产物**（`app/eez_ui/src/ui/`，生成代码，手改会被下次导出覆盖）与
+**源工程**（`app/eez_ui/embark.eez-project`，Studio 二进制、约 23 KB，随仓库入库，ADR 0008）。
 
-- **已有 Embark 的源工程**（向维护者要 `.eez-project` 打包，或随发布包附带）→ 直接打开，跳到 2.2。
+直接打开仓库里的 `app/eez_ui/embark.eez-project` → 跳到 2.2。
 - **没有源工程** → 不要自己从零建全套 UI：成本高且容易和既有 launcher/clock 屏脱节。
   走第 1 节的"缺屏安全"模式先跑通 C++ 侧，拿到源工程后再回来画。
 
@@ -56,6 +83,11 @@ cmake --build build
 
 Structures 面板 → 加页面，命名 **`my`**（严格等于 `name()`，子页用 `<app名>_<编号>_sub`）。
 画布 240×320（宿主竖屏）。
+
+> **屏的生命周期（内存）**：工程已勾 Settings→Build「Screens lifetime support」。你的**新屏不是
+> 启动屏**：页面 General 里把 **createAtStart 关掉**（默认 true，别用默认）、**Delete on unload 打开**
+> （离开即回收、回来重建）；launcher 保持常驻。详见 [eez-studio-guide.md](eez-studio-guide.md)
+> 「屏生命周期」与 [eez-ui-manual.md](eez-ui-manual.md) §7。
 
 ### 2.3 放控件
 
@@ -66,6 +98,15 @@ Structures 面板 → 加页面，命名 **`my`**（严格等于 `name()`，子�
 
 Flow 面板 → Variables → 新建 `my_visit_count`（int 类型，初值 0）。
 命名约定 `<app名>_<字段>`，这样 App 侧的变量桥按名对得上。
+
+`app/my/eez_vars.txt` 就是脚本给你的**粘贴清单**：每行写明变量全名与类型。
+它是 C++ 侧 `eez_ui_bridge_set_var_int("my_visit_count", n)` 推的那个名字。
+
+> **EEZ 侧的变量声明无法脚本化**：`.eez-project` 是 Studio 的二进制工程文件，只能在 Studio 里手工声明
+> （或从维护者拿现成模板）。**两边名字必须对得上**（桥按名查找、比较时忽略大小写，但仍建议逐字一致）——对不上不会崩，
+> `set_var_*` 找不到名字就返回 `false`（该次推送是 no-op），屏照常显示，只是那个控件不刷新。
+> 构建后用 `python tools/scaffold_app.py --vars-check build/include/embark_eez_vars.h`
+> 可以核对 C++ 侧变量表里有没有这个名字。
 
 ### 2.5 把控件绑到变量
 
@@ -196,5 +237,7 @@ ctest --test-dir build --output-on-failure            # 单测：屏表/变量�
 - 后台策略 / 消息总线 / own_task 生命周期：**[messages-and-background.md](messages-and-background.md)**
 - 适配层设计（切屏、User Action、变量表）：**[adr/0008-eez-studio-adapter.md](adr/0008-eez-studio-adapter.md)**
 
-> 想要脚本化起步（自动生成薄壳 + 注册清单 + 变量骨架）？`python tools/scaffold_app.py --help`
-> （生成后可用 `--vars-check build/include/embark_eez_vars.h` 核对变量表）。
+> 脚本化起步：`python tools/scaffold_app.py`（无参数 = 交互菜单；`--help` 看全部参数）——
+> 一条命令生成薄壳 + 注册 + 变量骨架与 `eez_vars.txt` 粘贴清单；
+> `--add-var 字段:类型` 给已有 App 增量加变量（默认预览，`--apply` 落地）；
+> `--vars-check build/include/embark_eez_vars.h` 核对 C++ 侧变量表与 Studio 声明是否对齐。

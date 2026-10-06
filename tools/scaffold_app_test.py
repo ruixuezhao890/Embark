@@ -102,6 +102,28 @@ def main() -> None:
     if "幂等" not in p2.stdout:
         print("FAIL: 幂等输出缺提示"); sys.exit(1)
 
+    # 3.5) 增量加变量（--add-var）：预览不写盘 → 落地追加到末尾 → 幂等 → 不存在的 App 报错
+    cpp_before = cp.read_text(encoding="utf-8")
+    p35 = run(["demo_timer", "--add-var", "count:int"], repo)
+    if cp.read_text(encoding="utf-8") != cpp_before:
+        print("FAIL: --add-var 预览不应写盘"); sys.exit(1)
+    if "count" not in p35.stdout:
+        print("FAIL: --add-var 预览输出缺变量名"); sys.exit(1)
+    run(["demo_timer", "--add-var", "count:int", "--add-var", "active:bool", "--apply"], repo)
+    cpp_after = cp.read_text(encoding="utf-8")
+    if cpp_after.index('eez_ui_bridge_set_var_int("demo_timer_count"') < cpp_after.index('eez_ui_bridge_set_var_int("demo_timer_tick"') :
+        print("FAIL: 增量变量应追加在已有变量之后"); sys.exit(1)
+    if "eez_ui_bridge_tick();" not in cpp_after:
+        print("FAIL: 追加后丢了 eez_ui_bridge_tick()"); sys.exit(1)
+    vt2 = vf.read_text(encoding="utf-8")
+    for needle in ("demo_timer_count    # int", "demo_timer_active    # bool"):
+        if needle not in vt2:
+            print(f"FAIL: eez_vars.txt 缺增量行 {needle!r}"); sys.exit(1)
+    run(["demo_timer", "--add-var", "count:int", "--apply"], repo)
+    if cp.read_text(encoding="utf-8") != cpp_after:
+        print("FAIL: --add-var 幂等失败（重复追加）"); sys.exit(1)
+    run(["ghost_app", "--add-var", "x:int", "--apply"], repo, expect_code=2)
+
     # 4) vars-check：全在 → 0；缺 → 1
     vh = repo / "build" / "include"
     vh.mkdir(parents=True)
