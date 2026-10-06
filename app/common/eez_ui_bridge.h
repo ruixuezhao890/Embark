@@ -67,6 +67,11 @@ void eez_ui_bridge_tick();
 void eez_ui_bridge_load_current_screen();
 int eez_ui_bridge_current_screen();
 
+/// 只读探针：某屏现在是否已创建（生成代码 objects 表里非空）。UI 未启动 / 屏名未命中
+/// 返回 false。EEZ 工程开了「Screens lifetime support」后，非启动屏离开即被生成代码
+/// 回收（objects.* 置 0、Flow 状态释放），探针供验收用例断言「切走即释放，回来即重建」。
+bool eez_ui_bridge_screen_created(const char* screen_name);
+
 int eez_ui_bridge_screen_count();
 const char* eez_ui_bridge_screen_name(int index);  // 越界返回 nullptr
 int eez_ui_bridge_screen_id(const char* screen_name);

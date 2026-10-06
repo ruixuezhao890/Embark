@@ -92,6 +92,15 @@ void create_screen_launcher() {
     tick_screen_launcher();
 }
 
+void delete_screen_launcher() {
+    lv_obj_del(objects.launcher);
+    objects.launcher = 0;
+    objects.label = 0;
+    objects.obj0 = 0;
+    objects.btn = 0;
+    deletePageFlowState(0);
+}
+
 void tick_screen_launcher() {
     void *flowState = getFlowState(0, 0);
     (void)flowState;
@@ -125,12 +134,45 @@ void create_screen_clock() {
         }
     }
     
+    eez_flow_delete_screen_on_unload(SCREEN_ID_CLOCK - 1);
+    
     tick_screen_clock();
+}
+
+void delete_screen_clock() {
+    lv_obj_del(objects.clock);
+    objects.clock = 0;
+    objects.obj1 = 0;
+    deletePageFlowState(1);
 }
 
 void tick_screen_clock() {
     void *flowState = getFlowState(0, 1);
     (void)flowState;
+}
+
+typedef void (*create_screen_func_t)();
+create_screen_func_t create_screen_funcs[] = {
+    create_screen_launcher,
+    create_screen_clock,
+};
+void create_screen(int screen_index) {
+    create_screen_funcs[screen_index]();
+}
+void create_screen_by_id(enum ScreensEnum screenId) {
+    create_screen_funcs[screenId - 1]();
+}
+
+typedef void (*delete_screen_func_t)();
+delete_screen_func_t delete_screen_funcs[] = {
+    delete_screen_launcher,
+    delete_screen_clock,
+};
+void delete_screen(int screen_index) {
+    delete_screen_funcs[screen_index]();
+}
+void delete_screen_by_id(enum ScreensEnum screenId) {
+    delete_screen_funcs[screenId - 1]();
 }
 
 typedef void (*tick_screen_func_t)();
@@ -234,7 +276,9 @@ void create_screens() {
     eez_flow_init_screen_names(screen_names, sizeof(screen_names) / sizeof(const char *));
     eez_flow_init_object_names(object_names, sizeof(object_names) / sizeof(const char *));
     
+    eez_flow_set_create_screen_func(create_screen);
+    eez_flow_set_delete_screen_func(delete_screen);
+    
     // Create screens
     create_screen_launcher();
-    create_screen_clock();
 }

@@ -82,6 +82,7 @@ constexpr int clock_back_frame = 70;        ///< ⑥ 点 clock 屏按钮：回 l
 constexpr int tick_checkpoint_second = 82;  ///< 第二次看后台节拍（对比增长）
 constexpr int bump_level_frame = 80;        ///< ⑥ settings->bump_level()：广播亮度消息
 constexpr int launcher_reenter_frame = 120; ///< ⑦ 再点 launcher 屏按钮：进 clock（回程交给 EEZ 屏按钮）；72–112 后
+constexpr int screen_life_check_frame = 115; ///< ⑧ 屏生命周期检查：第二段动画（72–112）结束后、⑦ 点击（120）前
 constexpr int quit_frame = 170;            ///< ⑩ 推关窗事件（122–162 动画结束后）
 constexpr int tour_end_frame = 180;        ///< 默认帧数上限
 
@@ -248,6 +249,7 @@ void ui_main(void* argument) noexcept {
   // 前台切换与亮度变化的解说跟踪
   std::uint32_t prev_switches = 0;
   std::uint32_t prev_brightness = 0;
+  bool clock_released_after_leave = false;  // ⑧ 离开 clock 后其对象被回收、launcher 仍常驻
   auto* launcher = static_cast<embark::demo::LauncherApp*>(framework.app(0));
   auto* clock = static_cast<embark::demo::ClockApp*>(framework.app(1));
   auto* settings = static_cast<embark::demo::SettingsApp*>(framework.app(2));
@@ -291,6 +293,14 @@ void ui_main(void* argument) noexcept {
     if (frames_run == tick_checkpoint_second) {
       ELOG_INFO("后台节拍第二次采样：clock ticks={}（继续增长 = 退后台也在跑）", clock->ticks());
     }
+    if (frames_run == screen_life_check_frame) {
+      const bool clock_gone = !embark::demo::eez_ui_bridge_screen_created("clock");
+      const bool launcher_kept = embark::demo::eez_ui_bridge_screen_created("launcher");
+      clock_released_after_leave = clock_gone && launcher_kept;
+      ELOG_INFO("⑧ 屏生命周期（第 {} 帧，离开 clock 后、回程点击前）：clock created={}（应为 0，"
+                "Delete on unload 回收），launcher created={}（应为 1，createAtStart 常驻）",
+                frames_run, clock_gone ? 0 : 1, launcher_kept ? 1 : 0);
+    }
 
     if (options->frames > 0 && frames_run >= options->frames) {
       if (options->screenshot != nullptr && !save_screenshot(display, options->screenshot)) {
@@ -301,7 +311,7 @@ void ui_main(void* argument) noexcept {
     hp::ui_loop_delay(static_cast<std::uint32_t>(options->delay_ms));
   }
 
-  ELOG_INFO("⑧ 收尾统计（共 {} 帧）：", frames_run);
+  ELOG_INFO("⑨ 收尾统计（共 {} 帧）：", frames_run);
   CheckList checklist;
   checklist.check("总帧数跑到位", frames_run >= quit_frame + 1, static_cast<unsigned long>(frames_run),
                   static_cast<unsigned long>(quit_frame) + 1UL);
@@ -334,6 +344,14 @@ void ui_main(void* argument) noexcept {
                   embark::demo::eez_ui_bridge_var_count() > 0 &&
                       embark::demo::eez_ui_bridge_var_index("launcher_tap_count") == 0,
                   static_cast<unsigned long>(embark::demo::eez_ui_bridge_var_count()), 1UL);
+  checklist.check("屏生命周期：离开 clock 后对象被回收（launcher 常驻）",
+                  clock_released_after_leave, clock_released_after_leave ? 1UL : 0UL, 1UL);
+  checklist.check("屏生命周期：回到 clock 后重建，launcher 仍常驻",
+                  embark::demo::eez_ui_bridge_screen_created("clock") &&
+                      embark::demo::eez_ui_bridge_screen_created("launcher"),
+                  static_cast<unsigned long>(embark::demo::eez_ui_bridge_screen_created("clock")) * 10UL +
+                      static_cast<unsigned long>(embark::demo::eez_ui_bridge_screen_created("launcher")),
+                  11UL);
 
   ELOG_INFO("启动器最终：enters={} resumes={} 前台帧={}（界面 = EEZ 屏 launcher）", launcher->enters(),
             launcher->resumes(), launcher->foreground_ticks());

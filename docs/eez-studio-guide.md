@@ -13,9 +13,9 @@ EEZ Flow（生成代码）经 eez-framework（MIT，submodule）驱动 LVGL 8.3.
 ## 安装与导出
 
 1. 装 EEZ Studio（官网下载，Electron 应用）。
-2. 打开 Embark 的 EEZ 源工程 `.eez-project`（**不在仓库**：仓库只存导出产物
-   `app/eez_ui/src/ui/`，源工程是 Studio 二进制、与版本绑定，向维护者获取或随发布包附带）；
-   画布尺寸 240×320（宿主竖屏）。
+2. 打开 Embark 的 EEZ 源工程 `app/eez_ui/embark.eez-project`（**入库**：它是
+   Studio 二进制但体积小（本工程约 23 KB），与导出产物 `app/eez_ui/src/ui/` 一起提交；
+   改完别忘导出 + 重新 cmake 配置）；画布尺寸 240×320（宿主竖屏）。
 3. 加页面（**屏名 == 对应 App 名**：主屏 = launcher、时钟 = clock……）、控件的交互、
    Flow 全局变量（命名 `<app名>_<字段>`，如 `launcher_tap_count`）。
 4. **导出代码到 `app/eez_ui/src/ui/`**（15 个生成文件：actions.h / eez-flow.{cpp,h} / 
@@ -35,9 +35,22 @@ EEZ Flow（生成代码）经 eez-framework（MIT，submodule）驱动 LVGL 8.3.
 - CI 格式门禁已排除 `app/eez_ui/`；编译用 `-w`（生成代码警告不归零）。
 - 缺字审计（issue 17）会把 `app/eez_ui/` 的文案纳入扫描范围。
 
+### 屏生命周期（内存）
+
+工程已开启 **Screens lifetime support**（Settings → Build 勾选），并按页设置了生命周期：
+
+- **launcher**（启动屏）：General 里 **createAtStart 开**（默认）、**Delete on unload 关** → 常驻；
+- **clock 等其余屏**：**createAtStart 关**、**Delete on unload 开** → 首次进入才建、离开即回收
+  （object 表清零 + Flow 状态释放），下次进入再重建。
+
+新页默认 createAtStart=true、Delete on unload=false；**除启动屏外务必改成上述组合**，
+否则「启动全建」会按屏累积内存（空壳实测 ≈1 KB/屏，真实控件设计可到几十 KB）。
+导出后重新 cmake 配置 + 构建（配置日志仍打印屏表/变量表），验收走
+`embark_host_tour`（含「离开即回收、回来即重建」断言）。
+
 ## 应用侧怎么接（摘要，细节见手册）
 
-App 只需在 4 个钩子里调用桥接口（`app/eez_ui_bridge.h`，详见用户手册）：
+App 只需在 4 个钩子里调用桥接口（`app/common/eez_ui_bridge.h`，详见用户手册）：
 
 ```cpp
 onCreate        -> eez_ui_bridge_ensure_init();        // 幂等启动生成代码

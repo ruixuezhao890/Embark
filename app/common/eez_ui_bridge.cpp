@@ -146,6 +146,17 @@ int eez_ui_bridge_current_screen() {
   return static_cast<int>(eez_flow_get_current_screen());
 }
 
+bool eez_ui_bridge_screen_created(const char* screen_name) {
+  if (!g_ui_ready) {
+    return false;  // Flow 未启动（ui_init() 之前对象表还是全 0）
+  }
+  const int screen_id = eez_ui_bridge_screen_id(screen_name);
+  if (screen_id == kEezScreenNone) {
+    return false;  // 屏名未命中
+  }
+  return eez_flow_is_screen_created(static_cast<int16_t>(screen_id));
+}
+
 int eez_ui_bridge_screen_count() {
   return ::embark::demo::eez::kScreenCount;
 }

@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | **EEZ Studio** | 画页面、排控件、配交互（按钮跳转）、声明显示变量 | 桌面的 Studio 工程（.eez-project，导出到 app/eez_ui/src/ui/） |
 | **Embark App（C++）** | 业务逻辑：状态机、定时任务、消息、数据 | app/ 下各 App 的 4 个钩子 |
-| **薄桥（app/eez_ui_bridge.h）** | 生成代码 ↔ App 契约之间的唯一适配点 | App 只调它，不 include 生成代码头 |
+| **薄桥（app/common/eez_ui_bridge.h）** | 生成代码 ↔ App 契约之间的唯一适配点 | App 只调它，不 include 生成代码头 |
 | **导航接线（app/eez_ui_nav.h）** | EEZ 里切屏 → 框架切到同名 App | 主屏 App 的 onCreate 里 eez_ui_nav_attach(fw) 一次 |
 
 ## 2. 两个命名约定（务必遵守）
@@ -88,7 +88,30 @@ void MyApp::onForegroundTick(std::uint32_t) {
 会 pop 空栈 → 什么都没发生（曾经把 clock 屏按钮配成它，点下去完全没反应）。
 按钮要跳转，一律接 **SetPage → 目标屏**（与 launcher 屏按钮对称）。
 
-## 7. 桥的完整接口（查缺补漏用）
+## 7. 屏生命周期与内存（EEZ「Screens lifetime support」）
+
+「启动全建」会按屏累积内存：空壳屏实测 0.8–1.1 KB/屏，但真实设计（控件对象 + 样式 +
+事件 + 每屏 Flow 状态）一屏可以到几十 KB，屏多了不能忍。所以工程开了 EEZ 的**屏生命周期**：
+启动只建 createAtStart 的屏（launcher 常驻），其他屏首次进入才建，离开即回收，下次进入再重建：
+
+- **进入时建**：EEZ 切屏动作（SetPage / replacePageHook）先 createScreen 再上屏；
+- **离开时删**：动画结束触发 LV_EVENT_SCREEN_UNLOADED，生成代码调 delete_screen_X()
+  = lv_obj_del + 该屏 objects.* 全部置 0 + 释放该屏 Flow 状态，下次进入重建；
+- Studio 里对应两个开关（详见 [eez-studio-guide.md](eez-studio-guide.md)）：
+  Settings → Build 勾 **Screens lifetime support**；每页 General 的 **createAtStart**
+  （默认 true）与 **Delete on unload**（仅 Flow 工程，默认 false）。
+- 本仓库约定：launcher 常驻（createAtStart 开、不设 on unload）；其余屏
+  createAtStart 关 + Delete on unload 开（clock 已按此导出）。
+
+三条边界：**已删除的屏 objects.* = 0，禁止再碰**（桥不缓存屏对象指针，App 只按名操作，
+安全）；**活动屏不能删**（引擎在 UNLOADED 事件后才删，LVGL 也不允许删当前屏）；字体/图片
+是共享资源，不随单屏释放。
+
+只读探针（验收/排障）：eez_ui_bridge_screen_created("clock") —— 该屏当前是否已创建
+（未命中 / UI 未启动返回 false）。验收用例（embark_host_tour）会断言：离开 clock 后
+clock 已回收、launcher 常驻；回到 clock 后重建成功。
+
+## 8. 桥的完整接口（查缺补漏用）
 
 ```cpp
 // 启动/运行：
@@ -97,6 +120,7 @@ eez_ui_bridge_ensure_init();             // 幂等版 init
 eez_ui_bridge_tick();                    // = ui_tick()，onForegroundTick 每帧调
 eez_ui_bridge_load_current_screen();     // 把 Flow 当前页 lv_scr_load 上来
 int eez_ui_bridge_current_screen();       // 当前页号（1 起；0 = 未初始化）
+bool eez_ui_bridge_screen_created(const char* n);  // 只读探针：该屏已创建？未命中/未启动 false
 
 // 屏表（构建期从生成代码解析，加屏不用改 C++）：
 int eez_ui_bridge_screen_count();
@@ -123,7 +147,7 @@ void eez_ui_bridge_set_screen_observer(EezScreenObserver, void* user);  // nullp
 onCreate 调一次，幂等）之后，EEZ 里 SetPage 切到某屏 = 框架切到同名 App。
 观测接口：eez_ui_nav_switch_requests()（累计切换次数）、eez_ui_nav_last_screen()（最近切到的屏名）。
 
-## 8. 编译相关
+## 9. 编译相关
 
 - 生成代码在 app/eez_ui/src/ui/：这是 **Studio 导出产物**，改页面去 Studio 改再导出，
   不手改生成文件；app/eez_ui/CMakeLists.txt 用 file(GLOB ... CONFIGURE_DEPENDS)，
@@ -133,17 +157,17 @@ onCreate 调一次，幂等）之后，EEZ 里 SetPage 切到某屏 = 框架切�
   桥调用编译成 no-op（App 逻辑照常，界面后续接真机工程时再开）。
 - 变量名/屏名都不存在时桥接口安全返回（false / nullptr / kEez*None），不会崩。
 
-## 9. 快速验证
+## 10. 快速验证
 
 ```sh
 cmake -S . -B build         # 配置：日志打印「EEZ 屏表：N 个」与「EEZ 变量：N 个」
 cmake --build build
-build/platform/host/embark_host_ui --eez   # 五档验收跑通（--launch/--click/--drag/--own-task/--eez）
+build/platform/host/embark_host_ui --eez   # 四档验收跑通（--launch/--click/--drag/--eez）
 build/platform/host/embark_host_tour       # 系统用例走查
 ctest --test-dir build                    # 单元测试
 ```
 
-## 10. 相关文档
+## 11. 相关文档
 
 - [eez-studio-guide.md](eez-studio-guide.md)：EEZ Studio 安装、建工程、导出代码的完整流程
 - [adr/0008-eez-studio-adapter.md](adr/0008-eez-studio-adapter.md)：适配层架构决策

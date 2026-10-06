@@ -28,11 +28,15 @@ typedef struct _objects_t {
 extern objects_t objects;
 
 void create_screen_launcher();
+void delete_screen_launcher();
 void tick_screen_launcher();
 
 void create_screen_clock();
+void delete_screen_clock();
 void tick_screen_clock();
 
+void create_screen_by_id(enum ScreensEnum screenId);
+void delete_screen_by_id(enum ScreensEnum screenId);
 void tick_screen_by_id(enum ScreensEnum screenId);
 void tick_screen(int screen_index);
 

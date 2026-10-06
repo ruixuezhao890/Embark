@@ -197,7 +197,7 @@ Studio 安装/导出见 [eez-studio-guide.md](eez-studio-guide.md)。
 | [../platform/esp32/README.md](../platform/esp32/README.md) | ESP32-S3 真机端口：板级参数、构建/烧录命令、bring-up 清单、串口日志样例 |
 | [new-app-guide.md](new-app-guide.md) | **新手指南**：30 分钟加一个带界面的 App（建壳 → 画同名屏 → 绑变量 → 构建验收，端到端） |
 | [eez-ui-manual.md](eez-ui-manual.md) | EEZ UI 用户手册：界面交给 EEZ、App 只调 4 个接口（薄桥 API 全集 + 命名约定 + 模板） |
-| [eez-studio-guide.md](eez-studio-guide.md) | EEZ Studio 一条龙：装 Studio、建工程、导出代码入库（源工程 .eez-project 不在仓库） |
+| [eez-studio-guide.md](eez-studio-guide.md) | EEZ Studio 一条龙：装 Studio、建工程、导出代码入库（源工程 .eez-project 随库入库） |
 | [common-pitfalls.md](common-pitfalls.md) | 常见坑：ETL 定容行为、消息非聚合、保留 id、无异常/无堆、MinGW 对齐分配、日志 384 字节上限、派生打印（E_FMT_DERIVE）、宏前置条件…… |
 | [adr/](adr/) | 架构决策记录：单一 UI 任务（0001）、HAL 能力粒度（0002）、零堆无异常（0003）、后台节拍与状态范式（0004）、静态槽位与任务池（0005） |
 | [agents/](agents/) | 面向 agent 的仓库约定（领域模型、issue 追踪规则） |
