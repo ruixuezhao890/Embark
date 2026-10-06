@@ -80,6 +80,15 @@ if(EMBARK_HOST_SDL2_FOUND)
   target_link_libraries(embark_host_tour PRIVATE embark::platform_host_ui embark::demo_apps)
 
   embark_copy_sdl2_runtime(embark_host_tour)
+
+  # 用户示例入口：干净版"模拟单片机常驻运行"（无验收开关、无合成输入）。
+  # 照 user_main.cpp 改 EMBARK_APP_TABLE 换成自己的 App 表即可；
+  # main/ui_main 骨架讲解见 docs/README.md「2. 写你自己的 main」。
+  add_executable(embark_host_user user_main.cpp)
+
+  target_link_libraries(embark_host_user PRIVATE embark::platform_host_ui embark::demo_apps)
+
+  embark_copy_sdl2_runtime(embark_host_user)
 else()
   message(STATUS "  宿主 UI 目标（embark_host_ui）已跳过：没有 SDL2，显示/输入后端与 LVGL 端口不参与构建。")
 endif()

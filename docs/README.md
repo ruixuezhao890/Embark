@@ -6,8 +6,8 @@
 
 ## 最短路径
 
-三步：**跑起来**（构建 + 运行 demo）、**敲起来**（用命令行开关做自动验收）、
-**改起来**（照模板加一个 App）。
+四步：**跑起来**（构建 + 运行 demo）、**写你自己的 main**（不退出、模拟单片机）、
+**敲起来**（用命令行开关做自动验收）、**改起来**（照模板加一个 App）。
 
 ### 1. 跑起来（从零开始，约 15 分钟）
 
@@ -51,12 +51,13 @@ ctest --test-dir build --output-on-failure  # 单元测试（95 用例 / 835 断
 ```
 
 看到 240×320 的 LVGL 窗口（竖屏，标题 "Embark demo"，默认前台是 launcher App —— EEZ launcher 屏）就跑起来了。
-关窗退出。想要"跑够帧数自己退"或验证参数，看下一步。
+不带参数 = **一直跑到关窗**（模拟单片机上电后常驻）。想自己写程序（不退出）看下一节 §2；
+想"跑够帧数自己退"或自动验收，看第 3 节。
 
 `embark_host_tour` 是"一条用例看完整系统"：不加参数就会自己走完
 **启动 → 后台节拍 → 合成点击切前台 → App 间消息 → 再切回来 → 一次性任务跑完并回收 → 关窗收尾**，
 边跑边在控制台用中文解说每一步（前台是谁、谁收到了消息、钩子跑了几次、任务池还剩几个槽），
-最后打一张 10 项自检清单；全部通过退出码 0，任一项不满足退出码 2。
+最后打一张 15 项自检清单；全部通过退出码 0，任一项不满足退出码 2。
 同一条流程的**无窗口版本**是 doctest 用例 `系统用例：从启动到任务切换走一遍`
 （`tests/kernel/test_system_tour.cpp`），在 CLion 里单跑那一条即可从上往下读日志；
 任务生命周期那一步的用例是 `系统用例：own task 创建 → 跑完 → 回收 → 再创建`
@@ -68,7 +69,65 @@ ctest --test-dir build --output-on-failure  # 单元测试（95 用例 / 835 断
 加字段不用改日志行；新类型怎么登记见 [common-pitfalls.md](common-pitfalls.md) 的
 "派生打印"一节（含 384 字节单行上限）。
 
-### 2. 敲起来
+### 2. 写你自己的 main：像真机一样跑（不退出）
+
+上面 §1 的 `embark_host_ui` 是"演示 + 自动验收"二合一，开关都在它身上；你自己的程序
+**不要从它改**。仓库另有一份干净的示例入口：`platform/host/user_main.cpp`
+（构建目标 `embark_host_user`，`cmake --build build` 会一起编出
+`build/platform/host/embark_host_user.exe`，不用改 CMake）。
+
+它模拟"单片机烧录后上电"的常态：`main` 只做两件事——起唯一 UI 任务 + 进调度器
+（`start_scheduler()` 永不返回 = "上电了"）；UI 任务装配好 HAL 与框架后进入 `for(;;)`
+主循环（一拍 = 输入泵 → 前台切换 → 消息/后台节拍 → `lv_timer_handler()`），
+**默认一直跑到关窗**：
+
+```sh
+./build/platform/host/embark_host_user     # Windows 加 .exe；像真机一样跑，直到你关掉窗口
+```
+
+骨架（完整可照抄文件就是 user_main.cpp，注释齐全；改成自己的程序只动三处）：
+
+```cpp
+int main(int argc, char** argv) {
+  Options options = parse_options(argc, argv);   // 可省；--frames N 给脚本/CI 收尾用
+  const Error e = hp::start_ui_task(&ui_main, &options);  // 起唯一 UI 任务
+  if (e != Error::none) return 1;
+  hp::start_scheduler();          // 永不返回 = "上电"，之后 UI 任务在跑
+}
+
+void ui_main(void* argument) noexcept {
+  hp::HostHal& hal = hp::HostHal::instance();
+  hp::HostDisplay display(1, "我的程序");
+  hp::HostInput input(hal.time(), display);
+  hal.attach_display(display);
+  hal.attach_input(input);
+  if (hal.init() != Error::none) hp::exit_process(1);
+
+  embark::platform::LvglUiPort ui_port(hal.context(), &host_exit_query, &input);
+  static hp::HostTaskSpawner spawner;             // 静态：own_task 后台任务的槽位池
+  Framework framework(hal.context(), hp::embark_apps(), &ui_port, &spawner);
+  if (framework.boot() != Error::none) hp::exit_process(1);
+
+  for (;;) {                                      // 一路跑到关窗
+    framework.step();                             // 一拍：输入 → 前台切换 → 消息/节拍 → lv_timer_handler
+    /* 你的每拍业务：推 UI 变量、读传感器、发消息…… */ ;
+    hp::ui_loop_delay();                          // 让出 5 ms，绝不忙等
+  }
+}
+```
+
+改成你自己的程序，只动三处（文件里都标了）：**① `EMBARK_APP_TABLE(...)`** 换成你的
+App 类（第一位 = 上电默认前台）；**②** `HostDisplay` 的窗口标题（可选）；**③** 主循环里
+`framework.step()` 前后想做的每拍业务。
+
+**退出语义**：默认关窗 = 停止模拟（`SDL_QUIT` / 点 X / Alt+F4，像按了电源）；想"永不退出"
+（真机 v1 的样子）就把 `LvglUiPort` 的退出查询参数传 `nullptr`。`--frames N` 只是
+脚本/CI 用的收尾便利（`--help` 有清单），平时不用。
+
+`embark_host_ui` 上的 `--click / --launch / --eez / --drag` 都是**自动验收开关**，不是
+常态运行方式；想看"系统整条生命周期 + 自检清单"用 `embark_host_tour`（见第 3 节末尾）。
+
+### 3. 敲起来
 
 宿主 UI 可执行文件的开关都是为自动验收做的（`--help` 有完整清单）：
 
@@ -81,7 +140,7 @@ ctest --test-dir build --output-on-failure  # 单元测试（95 用例 / 835 断
 退出码约定：0 = 全部验收通过；2 = 某项断言没满足（日志里 `验收失败` 会说出
 是哪个 App、期望什么）；1 = 启动失败。详细的开关表见根 README。
 
-### 3. 改起来：加一个只显示一行字的 App
+### 4. 改起来：加一个只显示一行字的 App
 
 照着 demo 的模板走，总共五步：
 

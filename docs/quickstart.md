@@ -14,6 +14,8 @@
   `app/eez_ui/src/ui/` 的生成代码，App 只是薄壳（业务逻辑），不碰 LVGL。
 - 点 launcher 屏上的按钮切到 clock 屏 —— 这是 EEZ 按钮的 SetPage 动作 + 屏观察者
   把切屏翻成 `request_switch("同名 App")`，链路在 `app/common/eez_ui_nav.cpp`。
+- **不带参数 = 一直跑到关窗**（模拟单片机常驻）；想自己写 main（不退出、像真机烧录后
+  一直跑）用 `embark_host_user`，骨架讲解见 [README.md](README.md) §2。
 
 **完成标志**：窗口出现 launcher 屏，点按钮能切到 clock 屏。
 
@@ -21,7 +23,7 @@
 
 ```sh
 ./build/platform/host/embark_host_ui.exe --click   # 退出码 0 = launcher ⇄ clock 往返成功
-./build/platform/host/embark_host_tour.exe         # 12 项自检全过
+./build/platform/host/embark_host_tour.exe         # 15 项自检全过
 ./build/platform/host/embark_host_ui.exe --eez     # EEZ 屏按钮往返 + 变量桥自检
 ```
 

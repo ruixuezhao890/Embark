@@ -80,19 +80,22 @@ ctest --test-dir build --output-on-failure
 ./build/platform/host/embark_host_ui          # Windows: .\build\platform\host\embark_host_ui.exe
 ```
 
+想写**你自己的程序**（不退出、模拟单片机一直跑）：用 `embark_host_user` —— 干净的示例
+入口 `platform/host/user_main.cpp`，改 `EMBARK_APP_TABLE` 即得自己的程序
+（骨架与退出语义见 [docs/README.md](docs/README.md) §2）；`embark_host_ui` 是
+"演示 + 自动验收"二合一入口。
+
 窗口默认就是 240×320（竖屏，与 ST7789 面板原生方向一致）：面板像素与屏幕像素 1:1，
 不缩放、不取样，所以画面不糊
 （`--scale N`，N ≥ 2 时是整数倍最近邻放大，同样不模糊）。运行在唯一 UI 任务里
 （FreeRTOS 静态任务，5 ms 一跳）：UI 端口 → 输入泵 → 循环边界的前台切换 → 消息/后台节拍 →
-`lv_timer_handler()`。四个演示 App 都在 `app/`（named 空间 `embark::demo`，不含任何平台头）：
+`lv_timer_handler()`。三个演示 App 都在 `app/`（命名空间 `embark::demo`，不含任何平台头）：
 
 | App | 后台策略 | 演示点 |
 | --- | --- | --- |
+| `LauncherApp` | `Suspend` | 上电默认前台（`EMBARK_APP_TABLE` 首位）：挂 EEZ launcher 屏 + 注册屏观察者，EEZ 切屏自动变成切 App |
 | `ClockApp` | `Tick`（100 ms） | 内部用 `etl::state_chart` 表达亮/灭状态机；后台节拍驱动状态转移并刷新界面 |
 | `SettingsApp` | `Suspend` | 前台才有行为的典型设置页；「Level +1」发 `BrightnessMessage` 经总线广播，clock 收到后更新亮度标签 |
-| `TickerApp` | `OwnTask`（50 ms） | 自己的任务每拍发一条 `CrossTaskMessage`，UI 任务收到后经总线回派给 App 自己，不丢不乱序 |
-| `HelloApp` | `Suspend` | 最简 App 模板（只显示一行字）——「加一个 App」的起点，见 [docs/README.md](docs/README.md) |
-| `JobApp` | `OwnTask`（`period_ms = 0`） | 一次性任务：入口跑一轮就返回，槽位被框架回收后可再创建。只挂在系统用例 `embark_host_tour` 的注册表里（宿主演示 `embark_host_ui` 是启动器 + 上面 4 个 + EEZ 宿主 = 6 个；真机固件仍是那 4 个 demo App） |
 
 命令行开关：
 
@@ -102,7 +105,6 @@ ctest --test-dir build --output-on-failure
 | `--click [X,Y]` | 两段合成点击：第 20 帧点 EEZ launcher 屏的按钮（Flow SetPage → clock 屏 → 切 ClockApp）、第 60 帧在 clock 屏点 (X,Y)（默认 120,160 = clock 屏按钮中心，回启动器；`--click 120,220` 可换坐标）；前台切换 2 次，第二次点击没回到启动器则退出码 2 |
 | `--drag X1,Y1,X2,Y2` | 输入通路冒烟：第 15 帧按下、逐帧插值拖到 (X2,Y2)、第 23 帧松开；EEZ 屏上没有可拖对象，断言不误触按钮、不切 App（`switches==0`），不对则退出码 2 |
 | `--eez` | EEZ 验收：屏表自检 + 点 EEZ 屏按钮驱动切 App（Flow SetPage → 屏名约定 → `request_switch`）+ EEZ 宿主 App 前台 tick + 点 clock 屏按钮回启动器（回程由 EEZ 屏内按钮承担）；不对则退出码 2 |
-| `--own-task` | 验证 own_task 后台 App：TickerApp 发出的每条消息都必须被 UI 任务收到（不丢不乱序）；发送或收到为 0 则退出码 2 |
 | `--screenshot FILE` | 最后一帧存成 BMP |
 | `--quit-at N` | 第 N 帧合成关窗事件（等价于点窗口 ×，用来验收"干净退出"） |
 | `--scale S` / `--delay MS` | 窗口放大倍数（默认 1 = 240×320 1:1，不糊）/ 每帧让出的毫秒数（默认 5） |
@@ -116,17 +118,16 @@ ctest --test-dir build --output-on-failure
 ```
 
 启动器 + 前台切换验收（退出码 0 + 日志里 `前台切换完成` 4 次：启动器 → clock → 回启动器 → clock → 回启动器，全程由 EEZ 屏按钮驱动往返；enter/resume 计数符合 "首次 onEnter、回主屏 onResume"）：
-"首次 onEnter、回主屏 onResume"）：
 
 ```sh
 ./build/platform/host/embark_host_ui --launch
 ```
 
-消息与后台任务验收（退出码 0 + 日志里 `ticker 发送 23 条 / UI 收到 23 条`、总线发布与
-收件箱溢出均为 0）：
+EEZ 屏往返验收（退出码 0 + 屏表自检 + 点 launcher 屏按钮进 clock、点 clock 屏按钮回启动器，
+全程由 EEZ 屏按钮驱动）：
 
 ```sh
-./build/platform/host/embark_host_ui --own-task
+./build/platform/host/embark_host_ui --eez
 ```
 
 ### 一条用例看完整系统：`embark_host_tour`
@@ -189,7 +190,8 @@ App 是 `embark::App` 的子类，注册进**编译期静态注册表**即可，
 2. `app/CMakeLists.txt`：`embark_demo_apps` 源列表加 `<名字>/<名字>_app.cpp`；
 3. `platform/host/ui_demo.cpp`：`EMBARK_APP_TABLE(...)` 里加你的 App 类
    （放在 `LauncherApp` 之后 —— 首位必须是启动器：默认前台 + `request_home()` 的目标）；
-4. `cmake --build build` 重新构建，运行 demo 即可看到它。
+   想写自己的程序（不退出、模拟单片机）就用 `platform/host/user_main.cpp` 的
+   `EMBARK_APP_TABLE(...)`（见 [docs/README.md](docs/README.md) §2）；
 4. `cmake --build build` 重新构建，运行 demo 即可看到它。
 
 完整可复制的五步清单（含代码）在 [docs/README.md](docs/README.md) 的
@@ -226,9 +228,9 @@ ELOG_INFO("HAL 就绪：显示 {}", display_info);
 | --- | --- |
 | `include/embark/` | 框架公开头文件（上层只依赖这里，见 spec §11） |
 | `src/` | 内核实现（Framework、日志、错误等） |
-| `platform/host/` | 宿主后端（SDL2 显示/输入、LVGL 端口、宿主文件存储、FreeRTOS 配置与 UI 任务、演示 UI 入口 `ui_demo.cpp`、系统用例入口 `ui_tour.cpp`） |
+| `platform/host/` | 宿主后端（SDL2 显示/输入、LVGL 端口、宿主文件存储、FreeRTOS 配置与 UI 任务、演示 + 自动验收入口 `ui_demo.cpp`、系统用例入口 `ui_tour.cpp`、用户程序示例 `user_main.cpp`） |
 | `platform/esp32/` | ESP32-S3 后端（以 ESP-IDF 组件形式接入） |
-| `app/` | 自带示例 App（clock/settings/ticker 三种后台策略各一 + hello 最简模板；不含平台头） |
+| `app/` | 自带示例 App（launcher 启动器 / clock 后台 tick / settings 挂起；不含平台头） |
 | `tests/` | 宿主单元测试（doctest）：`tests/hal/` 按能力分文件，`tests/fakes/` 是 HAL 假后端，`tests/detail/` 是内部工具，`tests/kernel/` 是 App 注册表与 Framework 契约测试（含无窗口的系统用例 `test_system_tour.cpp`） |
 | `config/` | 编译期宏、`lv_conf.h` 与固定容量上限（单一事实来源） |
 | `cmake/` | 构建辅助（`middleware/` 视图生成、SDL2 探测与运行时拷贝、FreeRTOS 内核目标） |
