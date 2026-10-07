@@ -28,6 +28,9 @@ platform/esp32/project/managed_components/
 # 本机杂项：SDL/crashpad 之类在仓库根留下的日志
 /debug.log
 
+# EEZ Studio：打开工程时生成的瞬时 UI 状态文件（每次打开都会重建，不必提交）
+*.eez-project-ui-state
+
 # 注意：.scratch/ 是 issue 追踪所在地，必须随仓库提交，不要忽略它。
 # 例外：下面这些是本机临时产物（抓帧用的 Chrome user-data-dir 有几百 MB、
 # 演示用的自包含 HTML 与 GIF），只当本地草稿留着，不进仓库。
