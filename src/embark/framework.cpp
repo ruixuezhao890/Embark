@@ -58,7 +58,7 @@ Error Framework::boot() noexcept {
   // （app.h 的 E_FMT_DERIVE / E_FMT_DERIVE_ENUM），以后加字段不用改这一行。
   for (std::size_t index = 0; index < apps_.size(); ++index) {
     const App* app = apps_.at(index);
-    ELOG_INFO("App {} 后台配置 {}", app->name(), app->settings());
+    ELOG_INFO("App {} 后台配置 {:#}", app->name(), app->settings());
   }
 
   // --- 后台定时器注册（issue 07；武装时机见 issue 23 / ADR 0009）------------
@@ -231,7 +231,7 @@ Error Framework::arm_background(AppId id) noexcept {
 
   if (result == Error::none) {
     armed_[id] = true;
-    ELOG_INFO("App {} 后台武装：{}", app->name(), settings);
+    ELOG_INFO("App {} 后台武装：{:#}", app->name(), settings);
   } else {
     ELOG_ERROR("App {} 后台武装失败：{}", app->name(), result);
   }
