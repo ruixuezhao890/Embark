@@ -59,8 +59,8 @@ class AuditMsg final : public embark::MessageT<0x61> {
 
 // 记录型 spawner：走完 Framework 的 own_task 装配路径（参数检查、失败兜底），
 // 但记录而不真正创建任务 —— 真任务创建（xTaskCreateStatic 静态内存）由
-// 宿主验收 --own-task 覆盖。实现与 kernel messaging 测试里的 FakeSpawner
-// 同构，按需精简。
+// test_own_task_lifecycle.cpp 与 test_pooled_task_spawner.cpp 覆盖。
+// 实现与 kernel messaging 测试里的 FakeSpawner 同构，按需精简。
 class RecordSpawner final : public embark::ITaskSpawner {
  public:
   [[nodiscard]] etl::expected<embark::TaskToken, embark::Error> spawn_task(
@@ -82,8 +82,8 @@ class RecordSpawner final : public embark::ITaskSpawner {
   embark::Error result_ = embark::Error::none;
 };
 
-// own_task 后台 App：让 boot 走真装配（周期 50 ms、栈 128 字、优先级 4；
-// 与宿主 TickerApp 同参数档）。声明 ArmPolicy::at_boot（issue 24 / ADR 0010）：
+// own_task 后台 App：让 boot 走真装配（周期 50 ms、栈 128 字、优先级 4）。
+// 声明 ArmPolicy::at_boot（issue 24 / ADR 0010）：
 // 它不在默认前台位，后台也该在 boot 的 at_boot 轮就武装起来。
 class OwnApp final : public embark::App {
  public:

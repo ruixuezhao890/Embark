@@ -3,7 +3,7 @@
 Embark 里 App 之间**不互相 include、不碰对方符号**（spec §7、issue 08 验收项），
 一切协作都走框架的两种消息路径；App 退后台后怎么活，由它自己的后台策略决定。
 本文讲"怎么用"，概念与取舍见 `adr/0004-background-tick-and-state-policy.md` 与
-[GLOSSARY](../GLOSSARY.md)。
+[GLOSSARY](../../GLOSSARY.md)。
 
 ## 消息模型：两条路径
 
@@ -71,14 +71,14 @@ fw.post(embark::CrossTaskMessage(id_of(*this), ++seq_));
 | --- | --- | --- | --- |
 | `suspend`（默认） | 退后台后完全不跑 | 设置页等纯前台交互 App | 前台钩子正常；后台零开销 |
 | `tick` | 每 `period_ms` 进一次 `onBackgroundTick(now_ms)` | 轻量后台逻辑（计时、轮询状态、节流） | 回调在**唯一 UI 任务**里执行：必须轻量、不阻塞；周期向上取整到 UI 循环粒度（宿主 5 ms），`period_ms == 0` 等价 suspend；**武装之后才起跑**（默认"第一次进前台"，`at_boot` 在 `framework.cpp` 的 boot 第 9 步） |
-| `own_task` | 框架经 `ITaskSpawner` 从静态池里给你分一个槽、建一个 FreeRTOS 任务，周期跑同一个钩子 | 长阻塞、重计算的活 | 任务在**武装时**才创建（默认"第一次进前台"、不是 boot；`at_boot` 则在 `framework.cpp` 的 boot 第 9 步）； 栈深/优先级自配（demo：256 字 / 优先级 4，低于 UI 任务的 5）；栈深口径是 `StackType_t` 字（宿主 1 字 = 8 字节，真机 xtensa 1 字 = 1 字节，见 `docs/common-pitfalls.md`）；回调运行在你的任务里，**不能碰 UI 对象、不能 `publish`**，回 UI 走 `post` 信封 |
+| `own_task` | 框架经 `ITaskSpawner` 从静态池里给你分一个槽、建一个 FreeRTOS 任务，周期跑同一个钩子 | 长阻塞、重计算的活 | 任务在**武装时**才创建（默认"第一次进前台"、不是 boot；`at_boot` 则在 `framework.cpp` 的 boot 第 9 步）； 栈深/优先级自配（下面代码块给了一档示例：256 字 / 优先级 4，低于 UI 任务的 5）；栈深按**宿主字长**算（256 字 = 2 KB），真机用 `stack_word_bytes` 换成同样的字节数（见 [reference/pitfalls.md](../reference/pitfalls.md)）；回调运行在你的任务里，**不能碰 UI 对象、不能 `publish`**，回 UI 走 `post` 信封 |
 
 ```cpp
 // tick 例：clock 每 100 ms 跳一次（宿主每 20 拍）
 AppSettings settings() const override {
   return AppSettings{BackgroundPolicy::tick, 100U, 0U, 0U};
 }
-// own_task 例：ticker 每 50 ms，256 字（StackType_t 字）栈，优先级 4
+// own_task 例：每 50 ms 跑一次，256 字栈（= 2 KB；真机按 stack_word_bytes 换算）
 AppSettings settings() const override {
   return AppSettings{BackgroundPolicy::own_task, 50U, 256U, 4U};
 }
@@ -114,7 +114,7 @@ AppSettings settings() const override {
   return AppSettings{BackgroundPolicy::own_task, 50U, 256U, 4U, ArmPolicy::at_boot};
 }
 ```
-- 机制细节与理由：[app-lifecycle/README.md](app-lifecycle/README.md) 4.1 / 4.2、[adr/0009](adr/0009-background-arm-on-first-enter.md)（默认时机）、[adr/0010](adr/0010-arm-at-boot.md)（`at_boot`）。
+- 机制细节与理由：[app-lifecycle.md](app-lifecycle.md) 4.1 / 4.2、[adr/0009](../adr/0009-background-arm-on-first-enter.md)（默认时机）、[adr/0010](../adr/0010-arm-at-boot.md)（`at_boot`）。
 
 常用容器与上限（编译期定死，改在 `config/embark_limits.h`）：`max_apps`、
 `max_bus_subscribers`、`max_background_timers`、`message_queue_depth`、`max_own_tasks`
@@ -172,7 +172,7 @@ flowchart TD
 | 能 `publish()` 吗 | — | 能 | **不能**，只能 `post` 信封回 UI 再进总线 |
 | 并发上限 | — | `max_background_timers` | `max_own_tasks`（默认 2） |
 | `period_ms` 语义 | — | 周期；`0` 等价 `suspend` | `> 0` 常驻循环；`== 0` 跑一轮就结束、槽位回收 |
-| 栈 | — | 借 UI 任务的（`ui_task_stack_words`） | 自己一份（默认 `own_task_stack_words` = 512 字；宿主 1 字 8 字节 = 4 KB，真机按 `stack_word_bytes` 换成同样的字节数，见 [common-pitfalls.md](common-pitfalls.md)） |
+| 栈 | — | 借 UI 任务的（`ui_task_stack_words`） | 自己一份（默认 `own_task_stack_words` = 512 字；宿主 1 字 8 字节 = 4 KB，真机按 `stack_word_bytes` 换成同样的字节数，见 [pitfalls.md](../reference/pitfalls.md)） |
 | 周期精度 | — | UI 帧粒度：`ceil(period_ms / ui_loop_period_ms)` | `vTaskDelay`，毫秒级 |
 | 超限 / 失败 | — | 装配期定时器表满 → `no_space`；武装时 `start` 失败记 `arm_failures()` | 装配期数量超限 → `no_space`（boot 直接失败）；运行期 `no_space` / `busy` / `unsupported` |
 

@@ -3,7 +3,7 @@
 用 EEZ Studio + EEZ Flow 画界面，生成的 LVGL 代码入库、应用照常注册。
 **App 侧怎么接接口 → 先读 [eez-ui-manual.md](eez-ui-manual.md)（用户手册）**；
 本页只讲 Studio 侧的安装、建工程与导出。
-决策记录见 [adr/0008-eez-studio-adapter.md](adr/0008-eez-studio-adapter.md)。
+决策记录见 [adr/0008-eez-studio-adapter.md](../adr/0008-eez-studio-adapter.md)。
 
 ## 背景
 

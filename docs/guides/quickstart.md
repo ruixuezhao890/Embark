@@ -2,7 +2,7 @@
 
 > 目标：从零跑起宿主 UI，看到 **EEZ Studio 导出的屏**（launcher → clock），并加一个自己的 App。
 > 前提：已 `cmake --build build` 成功。**环境从零开始**（装工具 → `git clone --recursive` → 配置构建）
-> 见 [README.md](README.md)「跑起来」①–④。
+> 见 [../index.md](../index.md)「第一次来：三步」与根 [README.md](../../README.md) 的宿主构建一节。
 
 ## 第 1 分钟：跑起来
 
@@ -15,7 +15,7 @@
 - 点 launcher 屏上的按钮切到 clock 屏 —— 这是 EEZ 按钮的 SetPage 动作 + 屏观察者
   把切屏翻成 `request_switch("同名 App")`，链路在 `app/common/eez_ui_nav.cpp`。
 - **不带参数 = 一直跑到关窗**（模拟单片机常驻）；想自己写 main（不退出、像真机烧录后
-  一直跑）用 `embark_host_user`，骨架讲解见 [README.md](README.md) §2。
+  一直跑）用 `embark_host_user`，骨架讲解见 [../../platform/host/user_main.cpp](../../platform/host/user_main.cpp) 的头部注释。
 
 **完成标志**：窗口出现 launcher 屏，点按钮能切到 clock 屏。
 

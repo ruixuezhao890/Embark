@@ -5,7 +5,7 @@
 > 的完整生命周期。看懂这些，写任何 App 都不会在「什么时候被调、在哪条线程上跑、
 > 能不能 publish」上犯迷糊。
 >
-> 对应"怎么用"（示例代码）见 [messages-and-background.md](../messages-and-background.md)；
+> 对应"怎么用"（示例代码）见 [messages-and-background.md](messages-and-background.md)；
 > 契约原文见 [app.h](../../include/embark/app.h)、[framework.h](../../include/embark/framework.h)、
 > [task_spawner.h](../../include/embark/task_spawner.h)；
 > 决策背景见 [adr/0001](../adr/0001-single-ui-task-logic-apps.md)、[0004](../adr/0004-background-tick-and-state-policy.md)、[0005](../adr/0005-static-task-slots-and-pool.md)。
@@ -365,7 +365,7 @@ UI 来不及消化的信号）。契约见 framework.h `:31-34`。
 
 ## 8. 想再深入
 
-- **怎么用**（示例代码 + 三种策略实战）：[messages-and-background.md](../messages-and-background.md)
+- **怎么用**（示例代码 + 三种策略实战）：[messages-and-background.md](messages-and-background.md)
 - **架构决策**：[adr/0001](../adr/0001-single-ui-task-logic-apps.md)（单一 UI 任务）、
   [0004](../adr/0004-background-tick-and-state-policy.md)（后台节拍与状态范式）、
   [0005](../adr/0005-static-task-slots-and-pool.md)（静态槽位与任务池）、

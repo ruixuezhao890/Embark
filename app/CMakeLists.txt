@@ -15,7 +15,7 @@
 #      app/common/ 放跨 App 共用代码：EEZ 薄桥（eez_ui_bridge / eez_ui_nav /
 #      eez_ui_screen_names）与共享消息 app_messages.h。每个 App 独立成目录，
 #      新 App 用 tools/scaffold_app.py 一键生成（自动登记到本文件的源列表与
-#      EMBARK_APP_TABLE，见 docs/quickstart.md）。
+#      EMBARK_APP_TABLE，见 docs/guides/quickstart.md）。
 #
 # App 之间只通过框架消息通信，禁止互相 include（spec §4 / §7）。
 add_library(embark_apps INTERFACE)

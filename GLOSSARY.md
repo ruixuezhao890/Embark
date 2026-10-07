@@ -103,7 +103,7 @@ _Avoid_: LVGL 驱动、GUI 层
 _Avoid_: include 目录、符号链接目录
 
 **Derived printing（派生打印 / 整对象日志）**：
-类型在**声明处**用 efmt 的 `E_FMT_DERIVE`（结构体）或 `E_FMT_DERIVE_ENUM`（枚举）登记打印方式；调用点只写 `{}` 加对象本身，加字段不必改日志行（类里有基类/构造函数时在类型体内写 `E_FMT_FIELDS(...)`）。框架里没有 `to_string` —— 名字只有一份。注意单条日志上限 384 字节、1 字节整型成员会被当字符打（见 `docs/common-pitfalls.md`）。
+类型在**声明处**用 efmt 的 `E_FMT_DERIVE`（结构体）或 `E_FMT_DERIVE_ENUM`（枚举）登记打印方式；调用点只写 `{}` 加对象本身，加字段不必改日志行（类里有基类/构造函数时在类型体内写 `E_FMT_FIELDS(...)`）。框架里没有 `to_string` —— 名字只有一份。注意单条日志上限 384 字节、1 字节整型成员会被当字符打（见 `docs/reference/pitfalls.md`）。
 _Avoid_: 手写 to_string、逐字段拼日志
 
 **Error text（错误码文本）**：

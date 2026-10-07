@@ -1,7 +1,7 @@
 // efmt 派生打印（issue 13）：登记过的框架类型整对象打印成什么样。
 //
 // 这一组用例钉的是"日志里长什么样"：加字段 / 改名字 / 换 efmt 版本导致格式漂移时，
-// 它会先叫起来。两条约定写在 docs/common-pitfalls.md 的"派生打印"一节：
+// 它会先叫起来。两条约定写在 docs/reference/pitfalls.md 的"派生打印"一节：
 //   1) 类型名与成员名来自 E_FMT_DERIVE(_ENUM)，日志里必然带全名（Rust Debug 风格）；
 //   2) 1 字节整型成员会被派生打印当字符输出（上游行为），框架的字段因此都是 2 字节起。
 #include <doctest/doctest.h>

@@ -18,5 +18,5 @@
 - issue 23：武装时机落地（`src/embark/framework.cpp` 的 `arm_background` / boot / `apply_pending_switch`、`include/embark/framework.h` 的 `background_armed()` / `arm_failures()`）。
 - 内核用例：`tests/kernel/test_framework_messaging.cpp`（tick 武装前不跑、武装后按周期跑；`period_ms == 0` 无后台体）、`tests/kernel/test_own_task_lifecycle.cpp`（默认前台 boot 即武装、两个 App 各自在武装时创建）、`tests/kernel/test_system_tour.cpp`（系统用例全程带武装断言）、`tests/kernel/test_zero_alloc.cpp`（武装路径零分配）。
 - 宿主验收：`platform/host/ui_tour.cpp` 增加"进 clock 之前它的后台没跑""clock 在第一次进前台时就已武装""武装失败计数 = 0"三项自检（清单共 17 项）。
-- 交叉阅读：ADR 0004（后台节拍的实现）、ADR 0005（静态槽位与任务池）、`docs/app-lifecycle/README.md` §4.1、`docs/messages-and-background.md`「武装时机」、`GLOSSARY.md`（Arm / Background app / Background tick）。
+- 交叉阅读：ADR 0004（后台节拍的实现）、ADR 0005（静态槽位与任务池）、`docs/concepts/app-lifecycle.md` §4.1、`docs/concepts/messages-and-background.md`「武装时机」、`GLOSSARY.md`（Arm / Background app / Background tick）。
 - 后续（2026-10-07，ADR 0010）："闹钟这类上电即跑"落成显式字段 `ArmPolicy::at_boot`（boot 第 9 步先武装 at_boot 轮、再武装默认前台）；本 ADR 定的默认（`on_first_enter`）不变。

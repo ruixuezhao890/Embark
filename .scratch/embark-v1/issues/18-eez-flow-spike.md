@@ -123,8 +123,8 @@ embark hooks 记账堆）下编译链接通过（MinGW GCC 15.1.0 / Ninja）。l
 
 - spike：`.scratch/embark-v1/spikes/18-eez-flow/`（CMakeLists.txt / main.c / hooks.c /
   lv_conf.h 副本 / lv_drv_conf.h / embark_lvgl_hooks.h / ui/ 生成代码 16 文件 / build.ps1 / README.md）
-- 证据：`.scratch/embark-v1/evidence/18-eez-flow/spike18.png`（Flow 页渲染成功，806×509 窗口截图；
-  perf monitor 已开启，渲染帧率以截图画面为准——当前会话模型不支持读图，画面细节请人工复核）
+- 证据：Flow 页渲染成功（806×509 窗口截图，perf monitor 已开启）。
+  该截图已从仓库移除 —— 二进制证据不再入库，画面结论见下文数字。
 - 数字：本 Answer 表格三组（5 752 / 12 855·13 023 / 13 277·15 039）
 
 ### ⑦ 对 ADR 0008 的结论输入

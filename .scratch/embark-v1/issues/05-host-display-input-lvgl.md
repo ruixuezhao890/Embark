@@ -38,7 +38,7 @@ LVGL 用 submodule 引入并固定一个小补丁版；`lv_conf.h` 自持、不�
 | 构建 | `cmake/embark_sdl2.cmake`（新）、`third_party/CMakeLists.txt`（`LV_CONF_PATH` + `add_subdirectory(lvgl)` + `embark_lvgl`）、顶层 `CMakeLists.txt`、`platform/host/CMakeLists.txt`（基础库 / UI 库 / 可执行三层）、`cmake/embark_middleware.cmake`（注释说明 LVGL 不进视图） |
 | 宿主后端 | `host_display.{h,cpp}`、`host_input.{h,cpp}`、`lvgl_port.{h,cpp}`、`host_lvgl_mem.{h,cpp}`、`ui_demo.cpp`（可执行 `embark_host_ui`）、`host_context.{h,cpp}`（`attach_display`/`attach_input`） |
 | 内核 / 测试 | `include/embark/detail/allocation_counter.h`、`tests/detail/test_allocation_counter.cpp`、`tests/CMakeLists.txt`、`include/embark/hal/types.h`（输入事件 key 约定） |
-| 证据 | `.scratch/embark-v1/evidence/05-host-ui/`（窗口截图 PNG：点击前后全图 + 局部裁剪） |
+| 证据 | 窗口截图（点击前后全图 + 局部裁剪）。PNG 已从仓库移除 —— 二进制证据不再入库 |
 
 ### 定稿契约
 

@@ -22,7 +22,7 @@
  *   - "入口返回"这件事只有平台侧看得见，所以必须停在池的 trampoline 里再记状态。
  *   - 代价：回收责任落在持有者（全工程 = 唯一 UI 任务）头上。忘了 release 的槽位会一直占着，
  *     持有者用 finished() 就能看见（池不在任务栈上打日志：own task 的栈只有几百字节，
- *     elog 一条日志就要在调用者栈上放 385 字节的记录缓冲，见 docs/common-pitfalls.md）。
+ *     elog 一条日志就要在调用者栈上放 385 字节的记录缓冲，见 docs/reference/pitfalls.md）。
  *
  * 线程纪律：spawn_task / release_task 只有持有者任务能调，本类不是线程安全的。唯一的跨任务
  * 访问是任务入口返回时的那一次记账（mark_finished），它是单写者、单调、且只用来把槽位从

@@ -15,10 +15,10 @@
 `Error::no_space`，容量是 `config/embark_limits.h` 里可调的常量）。要注意 FreeRTOS 的"动态"
 （heap_4/heap_5）本身也是编译期定死的静态数组 `ucHeap[configTOTAL_HEAP_SIZE]`，动态并不省掉预留，
 只是把切分推到运行期，并引入碎片与分配期间的 `vTaskSuspendAll()`。代价是预留即占用
-（默认 `max_own_tasks = 2` 个槽：宿主一槽 = 登记项 + `StaticTask_t` + 512 字栈 ≈ 4 KB，
-真机一槽 ≈ 512 字节栈 + TCB —— 同一个 `own_task_stack_words` 在两种 `StackType_t` 口径下
-差 8 倍，见 `docs/common-pitfalls.md`）与尺寸一刀切（App 声明的栈深超过全局槽深直接
-`no_space`），这些代价在"任务集合编译期已知"的前提下成立。
+（默认 `max_own_tasks = 2` 个槽：一槽 = 登记项 + `StaticTask_t` + `own_task_stack_words` 字栈，
+宿主实测 ≈ 4.2 KB、真机 ≈ 4.4 KB —— `*_stack_words` 按宿主字长算、真机用 `stack_word_bytes = 8`
+换成同样的字节数，两个平台预留的是同一份栈字节数，见 `docs/reference/pitfalls.md`）与尺寸
+一刀切（App 声明的栈深超过全局槽深直接 `no_space`），这些代价在"任务集合编译期已知"的前提下成立。
 
 **升级路径已落地（2026-10-04，issue 15）**："运行期创建、完成即回收"（第一个真实用例：WiFi 非阻塞连接 ——
 发起连接时创建任务，连接成功或超时后任务自行结束并归还资源，UI 线程全程不阻塞）按当初定的路线实现：

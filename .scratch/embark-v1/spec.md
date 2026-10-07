@@ -186,7 +186,7 @@ public:
 - 每个容器的容量上限必须是**代码里可查的常量**，集中放在 `config/`。
 - **任务创建：静态槽位 + 固定块池，运行期创建/回收已落地（2026-10-04，ADR 0005，issue 15）**。所有任务都用 `xTaskCreate*Static`（UI 任务在 `platform/host/ui_task.cpp` / `platform/esp32/src/esp32_ui_task.cpp`，App 的 own_task 走 `ITaskSpawner`，实现是 `platform/common/pooled_task_spawner.h` 的 `PooledTaskSpawner<Kernel>`：`.bss` 里一块 `alignas(16)` 的 arena，按 `max_own_tasks` 个槽切给各平台 Kernel）；宿主配 `configSUPPORT_STATIC_ALLOCATION 1` + `configSUPPORT_DYNAMIC_ALLOCATION 0` 且 `heap_4.c` 刻意不参与编译，所以 `pvPortMalloc/vPortFree` 在**符号层面就不存在** —— 零动态分配是结构保证而非纪律。
   **生命周期**（issue 15）：任务入口返回 → 平台 trampoline 标 `finished` 并 park（`vTaskSuspend(nullptr)`，不再被调度）→ 持有者（唯一 UI 任务）`release_task` 确认已停稳后 `vTaskDelete`，槽位还池、`generation` +1。回收**只能由持有者做**，任务自己删自己会踩 FreeRTOS 的"删除中"中间态（静态 TCB 会被空闲任务延迟释放，此时复用存储会写出致命别名）。失败点仍唯一且确定：池满 / 栈深超过槽容量 → `Error::no_space`，参数非法 → `invalid_argument`，正在跑 → `busy`。
-  取舍：静态把"内存够不够"从运行期问题挪成链接期问题（账目在 map 文件 / 真机 `check_sizes.py` 里可核对、0 碎片、0 堆锁），代价是预留即占用（默认 `max_own_tasks = 2` 个槽；宿主一槽 = 登记项 + `StaticTask_t` + 512 字栈 ≈ 4 KB，真机一槽 ≈ 512 字节栈 + TCB）与栈尺寸一刀切（App 声明的栈深超过 `own_task_stack_words` 直接 `no_space`）。静态 vs 动态的逐项对比在 `docs/adr/0005-static-task-slots-and-pool.md`，实现与验收见 `.scratch/embark-v1/issues/15-runtime-task-lifecycle.md`。
+  取舍：静态把"内存够不够"从运行期问题挪成链接期问题（账目在 map 文件 / 真机 `check_sizes.py` 里可核对、0 碎片、0 堆锁），代价是预留即占用（默认 `max_own_tasks = 2` 个槽；一槽 = 登记项 + `StaticTask_t` + 512 字栈 ≈ 4 KB，真机用 `stack_word_bytes` 换成同样的字节数、不是 512 字节）与栈尺寸一刀切（App 声明的栈深超过 `own_task_stack_words` 直接 `no_space`）。静态 vs 动态的逐项对比在 `docs/adr/0005-static-task-slots-and-pool.md`，实现与验收见 `.scratch/embark-v1/issues/15-runtime-task-lifecycle.md`。
 
 ## 11. 目录结构与构建
 
@@ -201,13 +201,13 @@ embark/
 ├─ tests/                         doctest 测试（tests/hal/ 能力、tests/fakes/ 假后端、tests/detail/ 内部工具）
 ├─ config/                        lv_conf.h + LVGL 钩子声明、容量上限、平台开关
 ├─ third_party/{efmt-elog,etl,doctest,lvgl}/   submodule（锁 commit / tag）
-└─ docs/                          使用文档（入口 docs/README.md）
+└─ docs/                          使用文档（入口 docs/index.md，分 concepts/guides/reference 三层）
 ```
 
 - include 约定：内部一律写 `<middleware/efmt/...>`、`<middleware/elog/...>` 与 `<middleware/etl/...>`；efmt-elog 的**仓库根不作为 include 根**，所以没有 `<elog/elog.hpp>` 这种写法（要用 eserde/ecli 时，再给它们各加一条视图链接，而不是把仓库根整个摊开）。`middleware/` 视图在**构建目录里生成**（Windows 用 junction），实际路径是 `<build>/include/middleware/{etl,efmt,elog}`，**include 根给 `<build>/include`** —— 视图本身就叫 `middleware/`，include 根不能再指到它头上，否则 `<middleware/etl/version.h>` 会被解析成 `<build>/middleware/middleware/etl/version.h`（骨架第一次配置就是这么挂的）。源码树保持干净；**绝不把 `etl/` 目录本身加进 include 路径**（同名 `string.h` 会遮蔽标准头）。eserde / ecli 暂不接入。
 - ETL 用上游的 `etl::etl` INTERFACE target；efmt/elog 上游没有 CMake，由我们包一层 `embark_efmt`（INTERFACE）。LVGL 上游自带 CMake：`LV_CONF_PATH` 指到 `config/lv_conf.h`（用 `CACHE PATH`，LVGL 用 `option()` 声明它，已有缓存值不会被覆盖），它在默认构建里会顺带建出空的 `lvgl_examples` / `lvgl_demos`，我们用 `EXCLUDE_FROM_ALL` 把它们挡在默认构建外；`embark_lvgl` 包一层（INTERFACE，链 `lvgl::lvgl`）。**LVGL 不进 `middleware/` 视图**：视图的唯一理由是满足上游写死的 `<middleware/...>` 互相引用，LVGL 按 `<lvgl.h>` 引入即可（再造 junction 只会多出第二套写法）。
 - 命名：类型 PascalCase、函数/变量 snake_case、文件名 snake_case、宏 `EMBARK_*`、命名空间 `embark`。
-- **源列表有两份（一份源码树、两条构建路径的代价）**：宿主在 `src/CMakeLists.txt`（`app/`、`platform/common/` 各有一份），真机在 `platform/esp32/project/components/embark/CMakeLists.txt` 的 `EMBARK_KERNEL_SOURCES` / `EMBARK_APP_SOURCES` / `EMBARK_COMMON_SOURCES`。加/删内核 TU 要两边一起改 —— 显式列出的源文件不存在时 CMake 不会跳过，而是在 configure 阶段报 `Cannot find source file`（issue 13 删 `src/embark/error.cpp` 时踩到，已写进 `docs/common-pitfalls.md`）。
+- **源列表有两份（一份源码树、两条构建路径的代价）**：宿主在 `src/CMakeLists.txt`（`app/`、`platform/common/` 各有一份），真机在 `platform/esp32/project/components/embark/CMakeLists.txt` 的 `EMBARK_KERNEL_SOURCES` / `EMBARK_APP_SOURCES` / `EMBARK_COMMON_SOURCES`。加/删内核 TU 要两边一起改 —— 显式列出的源文件不存在时 CMake 不会跳过，而是在 configure 阶段报 `Cannot find source file`（issue 13 删 `src/embark/error.cpp` 时踩到，已写进 `docs/reference/pitfalls.md`）。
 
 ## 12. 依赖与版本
 
@@ -241,7 +241,7 @@ embark/
 3. ESP32-S3 目标 `idf.py build` 通过；烧写后能显示 demo 的第一屏。
 4. 内核与 App 无动态分配：宿主构建下用分配 hook 统计为 0（或等价的审计方式）。
 5. **换后端不动 App**：切到 esp32 后端时，`app/` 与 `include/embark/` 一行不改。
-6. 文档到位：根 `README.md` + `docs/README.md` 索引 + 一条新手最短路径（跑起来 → 敲起来 → 改起来）。
+6. 文档到位：根 `README.md` + `docs/index.md` 索引 + 一条新手最短路径（跑起来 → 敲起来 → 改起来）。
 
 ## 15. 未决项与风险
 
@@ -249,7 +249,7 @@ embark/
 - 上游 elog 的 `basic_string_stream` 万能 `operator<<` 兜底可能静默接受错误参数——接入时实测确认。
 - **ETL 版本风险：已消（2026-10-03）**。本机副本（20.40.0 / 20.39.4）曾都旧于上游 20.49.0，现已按 §16.3 的 12 条对 20.49.0 逐条复核并把它锁成依赖（`issues/01-etl-version-verify.md`），spec §7 / §16 的行号与结论已同步。唯一仍开放的小项：完全离线构建时是否改为 vendor 本机 20.40.0 副本（不阻塞 v1，需要时再议）。
 - ESP32-S3 板型与触摸控制器型号：**已定（2026-10-04，issue 11）**。用户给了板子手册（`ESP32-S3-Touch-LCD-2.8.pdf`）并确认走参考板：模组 ESP32-S3R8（16 MB flash + 8 MB 八线 PSRAM）、屏 ST7789（原生 240×320 竖屏，**框架直接用这个方向**：真机 ROT_NONE、宿主窗口同向 —— 2026-10-04 由横屏 320×240 改为竖屏，用户要求"像手机竖着拿"）、触摸 CST328（I2C `0x1A`）、板载 I2C 设备（IMU/RTC）在 IO10/IO11。板级常量集中在 `platform/esp32/src/esp32_board.h` 一处，实机方向/颜色不对只动那几个开关（见 `issues/11-esp32s3-backend.md` 的 `## Answer`）。
-- IDF 侧三条硬约束（第一次 `idf.py build` 就栽在前两条上，已写进 `docs/common-pitfalls.md` 与 `docs/hal-backend-guide.md`）：① `platform/esp32/project/{sdkconfig.defaults,partitions.csv}` **必须是纯 ASCII**（IDF 的 `kconfgen` / `gen_esp32part.py` 按宿主编码读，中文 Windows 上是 GBK，直接 `UnicodeDecodeError`）② `CONFIG_FREERTOS_HZ` 必须 ≥1000（100 Hz 下 `pdMS_TO_TICKS(5)==0` ⇒ UI 循环退化成忙等）③ 栈深单位：IDF 的 `xTaskCreate*` 收字节、`uxTaskGetStackHighWaterMark()` 返回字。
+- IDF 侧三条硬约束（第一次 `idf.py build` 就栽在前两条上，已写进 `docs/reference/pitfalls.md` 与 `docs/guides/hal-backend-guide.md`）：① `platform/esp32/project/{sdkconfig.defaults,partitions.csv}` **必须是纯 ASCII**（IDF 的 `kconfgen` / `gen_esp32part.py` 按宿主编码读，中文 Windows 上是 GBK，直接 `UnicodeDecodeError`）② `CONFIG_FREERTOS_HZ` 必须 ≥1000（100 Hz 下 `pdMS_TO_TICKS(5)==0` ⇒ UI 循环退化成忙等）③ 栈深单位：IDF 的 `xTaskCreate*` 收字节、`uxTaskGetStackHighWaterMark()` 返回字。
 - **真机侧还有两件事必须人工确认**（本机没有板子，issue 11 只能做到"编得过"）：① 烧写后能显示 demo 第一屏（`idf.py -C platform/esp32/project -B build-esp32 flash monitor`）② 触摸/按键能切前台。判定与调法都在 `platform/esp32/README.md` 的 bring-up 清单里：启动日志会打出 CST328 自报的 `RES_X/RES_Y`，据此定轴方向。
 - 宿主 FreeRTOS port 来自 `lvgl_template_laste`：**已在 GCC 15.1 上验证可编可跑（2026-10-04，见 `issues/02`）**，源码清单 / CMake 片段 / `FreeRTOSConfig.h` 必改项都在该 issue 的 `## Answer`，证据与探针源码留档在 `.scratch/embark-v1/spikes/02-host-freertos/`。残留两个小项（不阻塞）：① 该端口 tick 比墙钟慢约 2×（见 §3 / §13）；② vendor 进仓库后是否顺手消掉上游的 2 条严格警告（`queue.c:489`、`port.c:249`）。
 - LVGL 补丁版号：**已定 v8.3.11（2026-10-04，issue 05）**。8.3 线上游已停更，选它是因为它与既有两代工程（8.3.6 / 8.3.x）的 API 一致、且是 8.3 线最后的补丁；`LV_MEM_CUSTOM 1` 下上游**没有 `lv_deinit`**（`lv_obj.h:206-214` 的门是 `LV_ENABLE_GC || !LV_MEM_CUSTOM`），所以进程内 LVGL 只初始化一次、退出时靠 `lvgl_outstanding_bytes()` 观测是否有泄漏。

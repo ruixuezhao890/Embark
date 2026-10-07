@@ -10,11 +10,12 @@ ETL 依赖版本是"先锁后升"：立项定稿时锁 **20.40.0**（spec §16.3
 
 - **A. UI 任务内 tick（选定）**：框架在 step 边界 `timers_.tick(1)`，`etl::callback_timer` 到期回调 trampoline → `onBackgroundTick`。零新线程、零新分配，周期粒度 = UI 循环周期（向上取整：`(period_ms + ui_loop_period_ms - 1) / ui_loop_period_ms` 拍）。
 - **B. 每个 tick App 一个定时器任务**：独立任务睡到周期再调回调。周期精确，但每 App 一份任务栈换一个"每拍 5 ms 的活"，明显浪费；且回调仍在碰 UI 对象，跨任务访问反而引入并发问题，收益为负。
-- **own_task 是 A 的逃生舱而不是 B 的变体**：需要真并行的 App 显式声明 `BackgroundPolicy::own_task`（自带栈深/优先级），经 `ITaskSpawner` 创建任务、周期跑同一钩子；回 UI 只走 `post(CrossTaskMessage)` 信封由 UI 任务统一派发（issue 07 落地，见 `docs/messages-and-background.md`）。
+- **own_task 是 A 的逃生舱而不是 B 的变体**：需要真并行的 App 显式声明 `BackgroundPolicy::own_task`（自带栈深/优先级），经 `ITaskSpawner` 创建任务、周期跑同一钩子；回 UI 只走 `post(CrossTaskMessage)` 信封由 UI 任务统一派发（issue 07 落地，见 `docs/concepts/messages-and-background.md`）。
 
 ## 落地与验证
 
 - issue 07：节拍机制 + 总线 + 收件箱 + own_task 装配（`src/embark/framework.cpp`、`tests/kernel/test_framework_messaging.cpp`）。
-- issue 08：三种策略各一个 demo App（clock=tick + state_chart、settings=suspend、ticker=own_task），宿主验收 EXIT=0。
-- 交叉阅读：spec §6（执行模型）、§16.3/§16.4（ETL 决策）、`docs/messages-and-background.md`（用法）、`GLOSSARY.md`（Background tick / Own task 词条）。
+- issue 08：三个 demo App（clock=tick + state_chart、launcher/settings=suspend），宿主验收 EXIT=0；
+  `own_task` 策略当时已装配但没有 demo App 用它（第一个真实用例是 issue 15 的 WiFi 非阻塞连接）。
+- 交叉阅读：spec §6（执行模型）、§16.3/§16.4（ETL 决策）、`docs/concepts/messages-and-background.md`（用法）、`GLOSSARY.md`（Background tick / Own task 词条）。
 - 后续（2026-10-06，ADR 0009）："后台**从何时开始跑**"收紧为 App 第一次进过前台才武装（issue 23）；本 ADR 定下的实现方式与"武装之后后台与前后台无关"不变。

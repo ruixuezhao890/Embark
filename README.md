@@ -1,164 +1,152 @@
 # Embark
 
-可移植的嵌入式应用框架：**全局只有一个 UI 任务**，多个 App 作为"逻辑模块"共享它；
-前台 App 拿到输入焦点、渲染权与事件循环权，后台 App 按各自策略挂起或跑轻量逻辑。
-同一份源码同时构建 **宿主（PC 仿真）** 与 **ESP32-S3** 两个目标。
+[![CI](https://github.com/ruixuezhao890/Embark/actions/workflows/ci.yml/badge.svg)](https://github.com/ruixuezhao890/Embark/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)
 
-- 语言与约束：C++17；内核零堆分配、`-fno-exceptions -fno-rtti`、容器只用 ETL 定容版
-- 硬件抽象：按"芯片功能被抽象出来给上层调用"的粒度，不暴露寄存器与引脚细节
-- 日志与格式化：[efmt-elog](https://github.com/ruixuezhao890/efmt-elog)（`<middleware/...>` 形式引用）
-  —— 类型自己在声明处登记打印方式（`E_FMT_DERIVE`），调用点填整对象，见[日志](#日志)
-- 容器与消息等基础设施：[ETL](https://github.com/ETLCPP/etl)（锁 20.49.0）
-- UI 与图形：[LVGL](https://github.com/lvgl/lvgl)（锁 v8.3.11；宿主走 SDL2 窗口，真机走 ST7789）
+**可移植的嵌入式应用框架**：全局只有**一个 UI 任务**，多个 App 作为「逻辑模块」共享它。
 
-## 状态
+- 前台 App 拿输入焦点、渲染权与事件循环权；后台 App 按各自策略挂起，或按周期跑轻量逻辑
+- **同一份源码**同时构建 **宿主（PC 仿真）** 与 **ESP32-S3** 两个目标，App 层一行不改
+- 内核**零堆分配**、`-fno-exceptions -fno-rtti`、容器只用 ETL 定容版 —— 「内存够不够」是链接期问题，不是运行期问题
+- 界面交给 **EEZ Studio** 导出，App 只调几个接口；改个坐标不用碰 C++
 
-v0.1.0 进行中：构建系统、依赖与配置注入已就位；HAL 七个能力的接口、宿主的**七个后端**
-（时间 / 持久化 / 日志 sink / 系统控制 / 总线 / SDL2 显示 / SDL2 输入）与测试用假后端已落地；
-LVGL 8.3.11 已接入（宿主可跑出窗口、点击有响应、关窗干净退出）。
-**已完成**：App 内核（App 契约 + 编译期注册表 + 唯一 UI 任务 + 前后台切换，宿主 FreeRTOS
-V10.6.2 静态接入、零动态分配）、消息派发与后台节拍（Bus / MessageQueue / callback_timer，
-issue 07）、三种后台策略的演示 App（issue 08：clock 用 `etl::state_chart` + 后台 tick、
-settings 全挂起、ticker 用自己的任务发消息）、零堆审计（issue 09：全局 new/delete 钩子 +
-内核稳态路径断言 0 次）、CI 三个 job（issue 10：宿主构建测试 / ESP32 构建 / clang-format
-检查，`.github/workflows/ci.yml`）、**ESP32-S3 真机后端**（issue 11：ST7789 + CST328 的
-七种能力实现、静态池 LVGL 堆、共享的 `platform/common` 端口层、IDF 5.4 真构建）、
-**整对象日志**（issue 13：`Error` 等枚举/结构体在声明处登记 `E_FMT_DERIVE`，
-撤掉手写 `to_string`，启动日志直接打印 HAL 信息、App 后台配置与跨任务信封）、
-**运行期任务生命周期**（issue 15：own_task 走平台无关的 `PooledTaskSpawner<Kernel>` ——
-静态池分槽 + `xTaskCreateStatic*`，任务入口返回 = 结束，框架每帧回收槽位，`spawn_own_task()`
-可在运行期再创建；失败点仍是唯一且确定的 `no_space`）。
-宿主 UI 演示里切换前台、输入焦点随之切换、后台 tick 计数与跨 App 消息都可观测。
-**还没做**：真机上的界面观感确认（issue 11 的验收项 ③⑤：屏幕方向/颜色、触摸方向/触点）
-——需要板子到手；另有 RTC 对时（`epoch_ms` 目前 `unsupported`）与 SD 卡总线。
-规格书见 `.scratch/embark-v1/spec.md`，新手路径见 [docs/README.md](docs/README.md)。
+---
 
-**新用户入门**：5 分钟快速开始见 [docs/quickstart.md](docs/quickstart.md)（跑起来 → 最短验收 →
-加一个带界面的 App）；完整端到端教程见 [docs/new-app-guide.md](docs/new-app-guide.md)。
+## 它解决什么问题
 
-## 宿主构建
+嵌入式 UI 项目通常会在三个地方翻车：
 
-**从零开始**：先装工具——Windows 要 Git、CMake ≥ 3.24、Ninja、MinGW-w64（C++17）与 SDL2
-（装法见 [docs/README.md](docs/README.md)「跑起来」①，UI 目标依赖 SDL2）；Linux 一行
-`sudo apt install git cmake ninja-build g++ libsdl2-dev`。然后带依赖克隆：
+| 常见做法 | 代价 |
+| --- | --- |
+| 每个页面一个 FreeRTOS 任务 | 并发、栈深、锁 —— 而 LVGL 本来就不是线程安全的 |
+| 业务代码直接 `lv_label_set_text()` / 直接摸寄存器 | 换块板子重写一遍 |
+| 界面用 C++ 手搓像素坐标 | 改个间距要重新编译，设计师没法参与 |
+
+Embark 的三条回答：
+
+1. **唯一 UI 任务 + App 是逻辑模块** —— 所有 App 在同一个任务里被钩子驱动，零并发、零锁。
+   重的、真并行的活走 `own_task` 逃生舱（静态池里的任务，跨任务只走消息）。
+2. **HAL 的能力粒度是「芯片功能」**，不是寄存器也不是设备驱动 —— App 通过 `fw.hal()` 拿总线自己写驱动，
+   于是同一份 App 在宿主机（SDL2）和真机（ST7789 + CST328）上都跑得起来。
+3. **界面是资源，不是代码** —— EEZ Studio 里画屏、导出的 C 代码入库，App 只负责
+   `挂屏` / `写变量` / `收切屏请求`。
+
+---
+
+## 30 秒看一个 App
+
+```cpp
+class ClockApp final : public App {
+ public:
+  const char* name() const noexcept override { return "clock"; }
+  const char* title() const noexcept override { return "时钟"; }
+
+  // 后台跑：每 100 ms 一次 onBackgroundTick（在 UI 任务里，必须轻量）
+  AppSettings settings() const noexcept override {
+    return AppSettings{BackgroundPolicy::tick, 100U, 0U, 0U};
+  }
+
+  void onCreate(Framework& fw) noexcept override { fw_ = &fw; }   // 装配期，恰好一次
+  void onEnter() noexcept override { load_screen(); }              // 第一次成为前台
+  void onForegroundTick(std::uint32_t now_ms) noexcept override;   // 前台每帧一次
+  void onBackgroundTick(std::uint32_t now_ms) noexcept override;   // 后台按周期
+  void onExit() noexcept override {}                               // 关机路径
+ private:
+  Framework* fw_ = nullptr;
+};
+```
+
+完整可运行的最小例子在 [`examples/minimal/`](examples/minimal/)（不依赖 EEZ、不依赖 demo App，
+一个 App + 一个 `main.cpp`，约 250 行含注释）：
+
+```sh
+cmake -G Ninja -B build && cmake --build build --target embark_example_minimal
+./build/examples/minimal/embark_example_minimal --frames 90
+```
+
+---
+
+## 快速开始
+
+**前置**：Git、CMake ≥ 3.24、Ninja、C++17 编译器（GCC / Clang / MSVC）。
+想看窗口还要 SDL2 —— Windows 装 `SDL2-devel-*-mingw`，Linux `sudo apt install libsdl2-dev`。
 
 ```sh
 git clone --recursive https://github.com/ruixuezhao890/Embark.git
 cd Embark
-```
-
-依赖以 git submodule 引入（ETL / efmt-elog / LVGL / FreeRTOS / doctest）；已经 clone 过的仓库补拉：
-
-```sh
-git submodule update --init --recursive
-```
-
-配置、构建、跑测试（Windows 下同样适用，Ninja 由 CMake 自己找）：
-
-```sh
 cmake -G Ninja -B build
 cmake --build build
 ctest --test-dir build --output-on-failure
+
+./build/platform/host/embark_host_ui        # Windows: .\build\platform\host\embark_host_ui.exe
 ```
 
-跑宿主可执行文件（打印版本，并走一遍 HAL 自检：时间 / 持久化 / 总线 / 系统）：
+看到 240×320 的竖屏窗口、里面是 launcher 屏、点按钮能切到 clock 屏 —— 就算跑起来了。
 
-```sh
-./build/platform/host/embark_host              # Windows: .\build\platform\host\embark_host.exe
-```
+> 已经 clone 过但没带子模块：`git submodule update --init --recursive`。
+> 工具安装的逐步说明（含 Windows 上的踩坑）在
+> [docs/guides/quickstart.md](docs/guides/quickstart.md)。
 
-持久化后端默认把键值写到 exe 同目录的 `embark_host_kv.bin`（32 槽 × 92 字节 = 2944 字节）；
-要先清干净就把这个文件删掉，或设 `EMBARK_HOST_STORAGE=<路径>` 换个位置。自检每次会
-`boot_count` + 1，连跑两次数字应当递增 —— 这是"宿主持久化真的落到文件了"的最短证据。
+**下一步**：[加一个自己的 App](docs/guides/new-app-guide.md)（30 分钟端到端，含画 EEZ 屏）。
 
-## 宿主 UI 演示（SDL2 + LVGL）
+---
 
-需要本机有 SDL2（MinGW 发行版即可，`find_package(SDL2 CONFIG)` 找得到就编；找不到时只跳过
-这个目标，内核与测试照常构建——Windows 的 SDL2 安装途径见 [docs/README.md](docs/README.md)「跑起来」①）：
+## 仓库里有什么
 
-```sh
-./build/platform/host/embark_host_ui          # Windows: .\build\platform\host\embark_host_ui.exe
-```
-
-想写**你自己的程序**（不退出、模拟单片机一直跑）：用 `embark_host_user` —— 干净的示例
-入口 `platform/host/user_main.cpp`，改 `EMBARK_APP_TABLE` 即得自己的程序
-（骨架与退出语义见 [docs/README.md](docs/README.md) §2）；`embark_host_ui` 是
-"演示 + 自动验收"二合一入口。
-
-窗口默认就是 240×320（竖屏，与 ST7789 面板原生方向一致）：面板像素与屏幕像素 1:1，
-不缩放、不取样，所以画面不糊
-（`--scale N`，N ≥ 2 时是整数倍最近邻放大，同样不模糊）。运行在唯一 UI 任务里
-（FreeRTOS 静态任务，5 ms 一跳）：UI 端口 → 输入泵 → 循环边界的前台切换 → 消息/后台节拍 →
-`lv_timer_handler()`。三个演示 App 都在 `app/`（命名空间 `embark::demo`，不含任何平台头）：
-
-| App | 后台策略 | 演示点 |
-| --- | --- | --- |
-| `LauncherApp` | `Suspend` | 上电默认前台（`EMBARK_APP_TABLE` 首位）：挂 EEZ launcher 屏 + 注册屏观察者，EEZ 切屏自动变成切 App |
-| `ClockApp` | `Tick`（100 ms） | 内部用 `etl::state_chart` 表达亮/灭状态机；后台节拍驱动状态转移并刷新界面 |
-| `SettingsApp` | `Suspend` | 前台才有行为的典型设置页；「Level +1」发 `BrightnessMessage` 经总线广播，clock 收到后更新亮度标签 |
-
-命令行开关：
-
-| 开关 | 作用 |
+| 路径 | 放什么 |
 | --- | --- |
-| `--launch` | 完整故事：程序化 `request_switch("clock")` → 点 clock 屏按钮回启动器 → 点 launcher 屏按钮再进 clock → 再点 clock 屏按钮回启动器 → settings「Level +1」（消息广播）；前台切换恰好 4 次、钩子计数/亮度/EEZ 回程请求不对则退出码 2 |
-| `--click [X,Y]` | 两段合成点击：第 20 帧点 EEZ launcher 屏的按钮（Flow SetPage → clock 屏 → 切 ClockApp）、第 60 帧在 clock 屏点 (X,Y)（默认 120,160 = clock 屏按钮中心，回启动器；`--click 120,220` 可换坐标）；前台切换 2 次，第二次点击没回到启动器则退出码 2 |
-| `--drag X1,Y1,X2,Y2` | 输入通路冒烟：第 15 帧按下、逐帧插值拖到 (X2,Y2)、第 23 帧松开；EEZ 屏上没有可拖对象，断言不误触按钮、不切 App（`switches==0`），不对则退出码 2 |
-| `--eez` | EEZ 验收：屏表自检 + 点 EEZ 屏按钮驱动切 App（Flow SetPage → 屏名约定 → `request_switch`）+ EEZ 宿主 App 前台 tick + 点 clock 屏按钮回启动器（回程由 EEZ 屏内按钮承担）；不对则退出码 2 |
-| `--screenshot FILE` | 最后一帧存成 BMP |
-| `--quit-at N` | 第 N 帧合成关窗事件（等价于点窗口 ×，用来验收"干净退出"） |
-| `--scale S` / `--delay MS` | 窗口放大倍数（默认 1 = 240×320 1:1，不糊）/ 每帧让出的毫秒数（默认 5） |
-| `--frames N` | 跑满 N 帧就退出（默认按模式：launch 200 / click 90 / drag 80 / eez 110，否则 0 = 一直跑到关窗） |
-| `--help` | 用法 |
+| `include/embark/` | 框架公开头文件 —— **上层只依赖这里** |
+| `src/` | 内核实现（Framework、Bus、AppRegistry、任务池、日志） |
+| `platform/host/` | 宿主后端：SDL2 显示/输入、LVGL 端口、文件存储、FreeRTOS、UI 任务、三个入口 |
+| `platform/esp32/` | ESP32-S3 后端（ESP-IDF 组件形式接入） |
+| `platform/common/` | 两端共享的端口层（LVGL 端口、静态池、任务池） |
+| `app/` | 自带示例 App（launcher / clock / settings）+ EEZ 生成代码 + 薄桥 |
+| `examples/minimal/` | 不依赖 EEZ 的最小可运行 App —— **从这读起** |
+| `tests/` | doctest 用例：`hal/` 按能力分、`kernel/` 是内核契约、`fakes/` 是 HAL 假后端 |
+| `config/` | 编译期宏、`lv_conf.h` 与**全部容量上限**（单一事实来源） |
+| `tools/` | 脚手架（`scaffold_app.py`）、字库生成、真机尺寸检查 |
+| `docs/` | 文档三层：[docs/index.md](docs/index.md)（concepts / guides / reference）+ ADR |
+| `.scratch/` | 规格书与 issue 追踪（随仓库提交，是设计决策的一手记录） |
 
-最短的自动验收（退出码 0 + 日志里 `前台切换完成` 出现 2 次：点 EEZ launcher 屏的按钮切到 clock → 再点 clock 屏的按钮收回启动器）：
+---
+
+## 文档
+
+三层结构，按「你想知道什么」找入口 —— 总索引 [docs/index.md](docs/index.md)：
+
+| 层 | 回答 | 入口 |
+| --- | --- | --- |
+| **concepts** | 为什么这么设计 | [分层总图 + 一帧数据流](docs/concepts/index.md) |
+| **guides** | 怎么用 | [5 分钟跑起来](docs/guides/quickstart.md) → [加一个 App](docs/guides/new-app-guide.md) |
+| **reference** | 具体是多少 / 叫什么 | [8 个钩子的契约表 + API 全集](docs/reference/hooks-and-api.md) |
+
+另外：架构决策记录在 [docs/adr/](docs/adr/)（每条都写了被否决的方案），
+术语表在 [GLOSSARY.md](GLOSSARY.md)（写代码、写 issue、写文档都用表里的词）。
+
+---
+
+## 三个宿主入口
+
+同一个内核、同一套 App，三个不同用途的可执行文件：
+
+| 目标 | 用途 |
+| --- | --- |
+| `embark_host` | 无窗口，走一遍 HAL 自检（时间 / 持久化 / 总线 / 系统） |
+| `embark_host_ui` | **演示 + 自动验收**二合一：`--click` / `--launch` / `--drag` / `--eez` 各是一段脚本化故事 |
+| `embark_host_tour` | 一条用例看完整系统：按 ①→⑨ 走完进程入口到关窗，17 项自检清单全过退出码 0 |
+| `embark_host_user` | **你自己的程序**：干净入口 [platform/host/user_main.cpp](platform/host/user_main.cpp)，改 `EMBARK_APP_TABLE` 即得 |
 
 ```sh
-./build/platform/host/embark_host_ui --click
+./build/platform/host/embark_host_ui --launch      # 完整故事：切前台 ×4 + 跨 App 消息
+./build/platform/host/embark_host_tour             # 17 项系统自检
 ```
 
-启动器 + 前台切换验收（退出码 0 + 日志里 `前台切换完成` 4 次：启动器 → clock → 回启动器 → clock → 回启动器，全程由 EEZ 屏按钮驱动往返；enter/resume 计数符合 "首次 onEnter、回主屏 onResume"）：
-
-```sh
-./build/platform/host/embark_host_ui --launch
-```
-
-EEZ 屏往返验收（退出码 0 + 屏表自检 + 点 launcher 屏按钮进 clock、点 clock 屏按钮回启动器，
-全程由 EEZ 屏按钮驱动）：
-
-```sh
-./build/platform/host/embark_host_ui --eez
-```
-
-### 一条用例看完整系统：`embark_host_tour`
-
-单元测试是按契约切开的（注册表、boot 顺序、切换、消息、own_task 各一条），要看
-"系统装起来是什么样"，用这个目标 —— **不加参数就完整跑一遍**：
-
-```sh
-./build/platform/host/embark_host_tour     # Windows: .\build\platform\host\embark_host_tour.exe
-```
-
-它在真平台后端上（同一个 UI 任务、真 LVGL、真输入、真 FreeRTOS 任务）按 10 步走完
-**进程入口 → HAL → 框架 boot（EEZ launcher 屏登场；后台此时一个都没武装 —— 声明 `ArmPolicy::at_boot` 的 App 会在这里被武装，本仓库暂时没有）→ 点屏上按钮（Flow SetPage 驱动切 App）→ clock 登场（同一帧武装它的后台节拍）→ 后台节拍
-→ 点 clock 屏按钮回启动器（onResume）→ 再点屏上按钮进 clock → 「Level +1」亮度消息回到后台的 clock
-→ own_task 回流 → 一次性任务跑完并回收（再创建一次）→ 关窗收尾**（回程全由 EEZ 屏内按钮承担，导航壳已退役），每一步都用中文解说发生了什么
-，最后打一张 17 项自检清单：全部通过退出码 0，
-任一项不满足退出码 2（日志里 `[失败]` 会说出期望值与实测值）。开关只有
-`--scale / --delay / --frames / --screenshot / --help`（`--help` 有清单）。
-
-同一条流程还有**无窗口版本**（纯假后端，适合放在 CI 或想读断言的时候）：
-doctest 用例 `系统用例：从启动到任务切换走一遍（跟着日志读）`，源码在
-`tests/kernel/test_system_tour.cpp`，在 CLion 里单跑那一条即可从上往下读日志。
-任务生命周期那一步的对应用例是 `系统用例：own task 创建 → 跑完 → 回收 → 再创建（跟着日志读）`
-（`tests/kernel/test_own_task_lifecycle.cpp`）；池本身（槽满 `no_space`、归还后可复用、失败回滚）
-的契约用例在 `tests/kernel/test_pooled_task_spawner.cpp`。
+---
 
 ## ESP32-S3 构建
 
-真机后端在 `platform/esp32/`，以 ESP-IDF 5.4 工程的形式接入（同一个仓库、
-同一份内核与 App 源码；`platform/esp32/project/components/embark` 只是一个
-"把源码喂给 IDF" 的组件壳）。本机 IDF 5.4 上的命令：
+真机后端在 `platform/esp32/`，以 ESP-IDF 5.4 工程接入（同一个仓库、同一份内核与 App 源码）：
 
 ```sh
 idf.py -C platform/esp32/project -B build-esp32 set-target esp32s3
@@ -166,77 +154,31 @@ idf.py -C platform/esp32/project -B build-esp32 build      # 只编不烧
 idf.py -C platform/esp32/project -B build-esp32 -p COM5 flash monitor
 ```
 
-构建目录 `build-esp32/` 由 `.gitignore` 覆盖；`sdkconfig` 是 `idf.py` 在
-`platform/esp32/project/` 下生成的，也不进仓库（要改默认值就改
-`project/sdkconfig.defaults`，注意那两个配置文件必须保持纯 ASCII）。
+板型参数、bring-up 清单与串口日志样例见 [platform/esp32/README.md](platform/esp32/README.md)。
 
-板型参数、bring-up 清单（屏幕方向/颜色、触摸轴、背光）与串口日志样例见
-[platform/esp32/README.md](platform/esp32/README.md)；两块新硬件（屏幕与触摸）
-的"上板才能确认"部分也是 issue 11 的验收项。
+---
 
-宿主侧想顺带看一眼门面：`cmake -S . -B build -DEMBARK_BUILD_ESP32=ON` 会加两个
-自定义目标（打印构建命令 / 直接调 `idf.py`），缺 IDF 时只是提示，不失败。
+## 状态
 
-在宿主上开发 App 的流程不变 —— 同一份 App 代码，换后端不动 `app/` 与 `include/embark/`
-（spec §14.5 验收项，见 [docs/hal-backend-guide.md](docs/hal-backend-guide.md)）。
+**v0.1.0，可以用了，但还不是 1.0。** 诚实的边界：
 
-## 怎么加一个 App
+- ✅ 内核（App 契约、编译期注册表、唯一 UI 任务、前后台切换）、消息总线、三种后台策略、own task 运行期生命周期
+- ✅ 宿主与 ESP32-S3 两个后端、LVGL 8.3.11、EEZ Studio 适配（含屏生命周期回收）
+- ✅ 零堆审计、CI 三个 job（宿主构建测试 / 真机构建 / clang-format）
+- ⚠️ **真机上的界面观感还没确认**（屏幕方向/颜色、触摸方向）—— 需要板子到手
+- ⚠️ RTC 对时（`epoch_ms` 目前返回 `unsupported`）与 SD 卡总线还没做
+- ⚠️ 平台只有 host 与 esp32 两个；API 在 1.0 前仍可能微调
 
-App 是 `embark::App` 的子类，注册进**编译期静态注册表**即可，不需要改框架
-（后台策略、生命周期钩子的完整说明见 [docs/messages-and-background.md](docs/messages-and-background.md)）：
+变更历史见 [CHANGELOG.md](CHANGELOG.md)。
 
-1. 在 `app/<名字>/` 新建 `<名字>_app.h` / `<名字>_app.cpp`（薄壳：不 include LVGL、不建屏，
-   界面全部交给 EEZ；类名自取，`name()` 返回唯一小写名字）；
-2. `app/CMakeLists.txt`：`embark_demo_apps` 源列表加 `<名字>/<名字>_app.cpp`；
-3. `platform/host/ui_demo.cpp`：`EMBARK_APP_TABLE(...)` 里加你的 App 类
-   （放在 `LauncherApp` 之后 —— 首位必须是启动器：默认前台 + `request_home()` 的目标）；
-   想写自己的程序（不退出、模拟单片机）就用 `platform/host/user_main.cpp` 的
-   `EMBARK_APP_TABLE(...)`（见 [docs/README.md](docs/README.md) §2）；
-4. `cmake --build build` 重新构建，运行 demo 即可看到它。
+---
 
-完整可复制的五步清单（含代码）在 [docs/README.md](docs/README.md) 的
-「改起来」最短路径；**带 EEZ 界面的完整新手指南（30 分钟端到端）在
-[docs/new-app-guide.md](docs/new-app-guide.md)**。
+## 参与
 
-## 日志
+Issue 与 PR 都欢迎。动手前请读 [CONTRIBUTING.md](CONTRIBUTING.md) —— 里面写了构建、
+代码风格、提交信息格式，以及这个仓库**特有**的几条纪律（零堆、不用异常、App 不碰平台头）。
 
-类型自己在声明处登记打印方式（efmt 的 `E_FMT_DERIVE` / `E_FMT_DERIVE_ENUM`），
-调用点只填空、不再手打字段 —— 加字段不用改日志行：
-
-```cpp
-ELOG_INFO("HAL 就绪：显示 {}", display_info);
-// [info] [ui_demo.cpp:333 ui_main] 框架就绪：6 个 App，默认前台 launcher（上限 8）
-//   { width = 240, height = 320, format = embark::hal::PixelFormat::rgb565, stride_bytes = 480 }
-```
-
-两条硬规矩（细节与出处见 [docs/common-pitfalls.md](docs/common-pitfalls.md)）：
-
-- 单条日志上限 `ELOG_MAX_RECORD_SIZE`（默认 **384** 字节，含前缀），放不下是
-  **整行丢弃**（不截断、不报错）⇒ 一条日志只放一个整对象，长对象拆两条；
-- 派生输出里 **1 字节整型成员会被当字符打**（上游 efmt 已知问题，0 会写出 NUL
-  截断整行）⇒ 框架里会进日志的字段一律 2 字节起（`AppId`、`AppSettings::task_priority`、
-  `InputEvent::key` 都是 `std::uint16_t`）。
-
-新类型想进日志：枚举写 `E_FMT_DERIVE_ENUM(enum class E : ... { ... });`、
-结构体写 `E_FMT_DERIVE(struct S { ... });`（一行一个字段），类里有基类/构造函数时
-在类型体内写 `E_FMT_FIELDS(a, b);`。要 `const char*` 的出口（`fprintf`、
-`embark::fatal`）用 `char text[24]; embark::error_text(text, error);`。
-
-## 目录
-
-| 路径 | 放什么 |
-| --- | --- |
-| `include/embark/` | 框架公开头文件（上层只依赖这里，见 spec §11） |
-| `src/` | 内核实现（Framework、日志、错误等） |
-| `platform/host/` | 宿主后端（SDL2 显示/输入、LVGL 端口、宿主文件存储、FreeRTOS 配置与 UI 任务、演示 + 自动验收入口 `ui_demo.cpp`、系统用例入口 `ui_tour.cpp`、用户程序示例 `user_main.cpp`） |
-| `platform/esp32/` | ESP32-S3 后端（以 ESP-IDF 组件形式接入） |
-| `app/` | 自带示例 App（launcher 启动器 / clock 后台 tick / settings 挂起；不含平台头） |
-| `tests/` | 宿主单元测试（doctest）：`tests/hal/` 按能力分文件，`tests/fakes/` 是 HAL 假后端，`tests/detail/` 是内部工具，`tests/kernel/` 是 App 注册表与 Framework 契约测试（含无窗口的系统用例 `test_system_tour.cpp`） |
-| `config/` | 编译期宏、`lv_conf.h` 与固定容量上限（单一事实来源） |
-| `cmake/` | 构建辅助（`middleware/` 视图生成、SDL2 探测与运行时拷贝、FreeRTOS 内核目标） |
-| `third_party/` | 依赖（submodule） |
-| `docs/` | 文档：新手最短路径与索引在 [docs/README.md](docs/README.md)，HAL 后端 / 消息与后台策略 / 常见坑各一篇，ADR 在 `docs/adr/` |
-| `.scratch/` | 规格书与 issue 追踪（随仓库提交） |
+---
 
 ## 许可
 

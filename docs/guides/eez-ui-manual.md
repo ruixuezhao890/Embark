@@ -170,6 +170,6 @@ ctest --test-dir build                    # 单元测试
 ## 11. 相关文档
 
 - [eez-studio-guide.md](eez-studio-guide.md)：EEZ Studio 安装、建工程、导出代码的完整流程
-- [adr/0008-eez-studio-adapter.md](adr/0008-eez-studio-adapter.md)：适配层架构决策
-- [adr/0006-launcher-and-nav-shell.md](adr/0006-launcher-and-nav-shell.md)：导航壳与主屏
-- [README.md](../README.md)：仓库总览
+- [adr/0008-eez-studio-adapter.md](../adr/0008-eez-studio-adapter.md)：适配层架构决策
+- [adr/0006-launcher-and-nav-shell.md](../adr/0006-launcher-and-nav-shell.md)：导航壳与主屏
+- [docs/index.md](../index.md)：仓库总览

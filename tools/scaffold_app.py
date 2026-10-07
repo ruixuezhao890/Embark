@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""scaffold_app.py —— 生成一个带 EEZ 界面的 App 薄壳（docs/new-app-guide.md 第 1 节自动化）。
+"""scaffold_app.py —— 生成一个带 EEZ 界面的 App 薄壳（docs/guides/new-app-guide.md 第 1 节自动化）。
 
 用法：
     python tools/scaffold_app.py my                          # dry-run：只打印蓝图与清单
@@ -12,7 +12,7 @@
 
 设计：默认 dry-run（不碰任何文件）；--apply 才写盘，且幂等（已存在且一致 → 跳过；
 内容不一致 → 报错不覆盖）。EEZ 侧（画屏/绑变量/SetPage）是 Studio 二进制，**不可脚本化**，
-脚本只打印对应 checklist（见 docs/new-app-guide.md §2）。剧本只改三处代码：
+脚本只打印对应 checklist（见 docs/guides/new-app-guide.md §2）。剧本只改三处代码：
   - 新建       app/<name>/<name>_app.{h,cpp} + eez_vars.txt（薄壳模板，目录化形态）
   - 追加一行   app/CMakeLists.txt（embark_demo_apps 源列表，锚点源行 common/eez_ui_nav.cpp 之后）
   - 追加一项   platform/host/ui_demo.cpp（EMBARK_APP_TABLE，LauncherApp 之后）
@@ -76,7 +76,7 @@ def build_header(app_name: str, class_name: str, title: str, policy: str | None 
     if policy == "tick":
         settings_decl = "\n  [[nodiscard]] AppSettings settings() const override;"
     return f"""
- * {app_name} App 壳（{today} 由 tools/scaffold_app.py 生成）—— docs/new-app-guide.md 的薄壳模板。
+ * {app_name} App 壳（{today} 由 tools/scaffold_app.py 生成）—— docs/guides/new-app-guide.md 的薄壳模板。
  *
  * 界面全部交给 EEZ：此壳一行 LVGL 都不写。屏名约定：EEZ 屏名 == App 名（{app_name}；
  * 子页 <app名>_<编号>_sub）。Studio 还没画同名屏 → 进入保持当前屏 + 一条告警（缺屏
@@ -201,7 +201,7 @@ def build_source(app_name: str, class_name: str, vars_: list[tuple[str, str]], p
 def build_vars_txt(app_name: str, vars_: list[tuple[str, str]]) -> str:
     lines = [
         "# EEZ Studio 粘贴清单（tools/scaffold_app.py 生成）——把下面每行声明为 Flow 全局变量并",
-        "# 绑定到控件（docs/new-app-guide.md §2.4-2.5）。声明后重新 cmake -B build：构建日志会",
+        "# 绑定到控件（docs/guides/new-app-guide.md §2.4-2.5）。声明后重新 cmake -B build：构建日志会",
         "# 打印『EEZ 变量：N 个』，或构建后用 --vars-check build/include/embark_eez_vars.h 核对。",
         "# 建屏时同步设好生命周期（工程已勾 Settings→Build『Screens lifetime support』）：",
         "# 新页 General 里 createAtStart 关、Delete on unload 开；启动屏 launcher 保持常驻。",
@@ -246,7 +246,7 @@ def dry_run(app_name: str, class_name: str, title: str, vars_: list[tuple[str, s
     else:
         print(f"  + {UI_DEMO}：EMBARK_APP_TABLE 追加 {entry}")
     print()
-    print("== EEZ Studio checklist（不可脚本化，见 docs/new-app-guide.md §2）==")
+    print("== EEZ Studio checklist（不可脚本化，见 docs/guides/new-app-guide.md §2）==")
     print(f"--- 后台策略：{policy if policy else 'suspend（默认）'}" + (f"，tick {period_ms}ms" if policy == "tick" else "") + " ---")
     steps = [
         "打开源工程 .eez-project（不在仓库；向维护者获取）",
@@ -345,7 +345,7 @@ def interactive(repo: Path) -> None:
     print("Embark · App 生成器（tools/scaffold_app.py）")
     print("生成 app/<名字>/ 薄壳 + 变量骨架 + eez_vars.txt（EEZ Studio 粘贴清单），")
     print("并自动注册 app/CMakeLists.txt 源列表与 platform/host/ui_demo.cpp 启动表。")
-    print("全程菜单问答，不需要命令行参数；参考 docs/new-app-guide.md。")
+    print("全程菜单问答，不需要命令行参数；参考 docs/guides/new-app-guide.md。")
     print("=" * W)
 
     print()
@@ -384,7 +384,7 @@ def interactive(repo: Path) -> None:
                 print()
                 print("下一步：把 app/<名字>/eez_vars.txt 里新增的行也在 EEZ Studio 声明")
                 print("为 Flow 全局变量并绑定控件 → 重新 cmake -S . -B build（日志『EEZ 变量』）")
-                print("（屏的生命周期设置见 docs/new-app-guide.md §2.2 旁注 / eez-studio-guide.md）")
+                print("（屏的生命周期设置见 docs/guides/new-app-guide.md §2.2 旁注 / docs/guides/eez-studio-guide.md）")
                 return
             if ans in ("", "n", "no"):
                 print("已取消——未写盘。")
@@ -535,7 +535,7 @@ def main() -> None:
         interactive(REPO_ROOT)
         return
 
-    ap = argparse.ArgumentParser(description="生成带 EEZ 界面的 App 薄壳（docs/new-app-guide.md 路线）")
+    ap = argparse.ArgumentParser(description="生成带 EEZ 界面的 App 薄壳（docs/guides/new-app-guide.md 路线）")
     ap.add_argument("app_name", help="App 名（小写标识符，须与 EEZ 屏名一致）")
     ap.add_argument("--title", default="未命名", help="中文标题（元数据用）")
     ap.add_argument("--var", action="append", default=[], metavar="字段:类型",

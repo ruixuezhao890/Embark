@@ -98,6 +98,7 @@ if(EMBARK_BUILD_ESP32)
   add_subdirectory(platform/esp32)   # ESP-IDF 工程（platform/esp32/README.md），issues/11
 endif()
 add_subdirectory(app)
+add_subdirectory(examples)   # 自包含示例（不依赖 demo App / EEZ Studio）
 
 if(EMBARK_BUILD_TESTS)
   enable_testing()

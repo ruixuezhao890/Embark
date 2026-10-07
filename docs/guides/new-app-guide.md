@@ -234,7 +234,7 @@ void MyApp::onForegroundTick(std::uint32_t) {
 | 推数据给 EEZ 控件 | `onForegroundTick`：先 `set_var_*` 再 `tick` | 只有前台需要刷 |
 | 读传感器 / 硬件数据 | 驱动写在 App 或平台侧，用 `fw.hal().bus` 取总线 | 数据怎么上屏见 [eez-ui-manual.md](eez-ui-manual.md) 第 5 节 |
 | 耗时计算 / 网络 / 长阻塞 | `own_task` 策略 + `onBackgroundTick` | 不能阻塞 UI 任务 |
-| own_task 里回 UI | `fw.post(CrossTaskMessage(...))`，回 UI 再进总线 | 跨任务只能 post 信封（[messages-and-background.md](messages-and-background.md)） |
+| own_task 里回 UI | `fw.post(CrossTaskMessage(...))`，回 UI 再进总线 | 跨任务只能 post 信封（[messages-and-background.md](../concepts/messages-and-background.md)） |
 
 > 框架**不会替你保存任何状态**：`entered_` 只是「进过前台」的记账位（`include/embark/framework.h:299`），
 > 不是状态查询接口。要「记住」什么，自己存成员变量。
@@ -242,7 +242,7 @@ void MyApp::onForegroundTick(std::uint32_t) {
 > 另外：声明了后台策略**默认也不会**一上电就跑 —— 第一次进过前台（`onEnter` 同一帧）才武装，
 > 之后才可能出现 `onBackgroundTick`（查询用 `fw.background_armed(id)`）。要「一上电就跑」
 > （闹钟这类由持久化状态驱动的 App）就显式声明 `ArmPolicy::at_boot`（issue 24 / ADR 0010）。详见
-> [messages-and-background.md](messages-and-background.md) 的「武装时机」。
+> [messages-and-background.md](../concepts/messages-and-background.md) 的「武装时机」。
 
 ## 5. 构建与验收（5 分钟）
 
@@ -278,8 +278,8 @@ ctest --test-dir build --output-on-failure            # 单测：屏表/变量�
 
 - 桥的完整 API、命名约定细节：**[eez-ui-manual.md](eez-ui-manual.md)**（词典）
 - Studio 安装/导出/注意事项：**[eez-studio-guide.md](eez-studio-guide.md)**
-- 后台策略 / 消息总线 / own_task 生命周期：**[messages-and-background.md](messages-and-background.md)**
-- 适配层设计（切屏、User Action、变量表）：**[adr/0008-eez-studio-adapter.md](adr/0008-eez-studio-adapter.md)**
+- 后台策略 / 消息总线 / own_task 生命周期：**[messages-and-background.md](../concepts/messages-and-background.md)**
+- 适配层设计（切屏、User Action、变量表）：**[adr/0008-eez-studio-adapter.md](../adr/0008-eez-studio-adapter.md)**
 
 > 脚本化起步：`python tools/scaffold_app.py`（无参数 = 交互菜单；`--help` 看全部参数）——
 > 一条命令生成薄壳 + 注册 + 变量骨架与 `eez_vars.txt` 粘贴清单；

@@ -64,7 +64,8 @@ if(EMBARK_HOST_SDL2_FOUND)
                  SDL2::SDL2)
 
   # 演示程序：唯一 UI 任务的完整例子 + 无人值守验收开关
-  # （--frames / --click / --switch / --own-task / --screenshot / --quit-at）。
+  # （--frames / --click / --drag / --launch / --eez / --screenshot / --shot-frame /
+  #   --scale / --delay / --quit-at，全集见 ui_demo.cpp 的 print_usage()）。
   # demo App 本体在 app/（embark::demo_apps），issues/08 起宿主侧不再自带。
   add_executable(embark_host_ui ui_demo.cpp)
 
@@ -84,7 +85,7 @@ if(EMBARK_HOST_SDL2_FOUND)
 
   # 用户示例入口：干净版"模拟单片机常驻运行"（无验收开关、无合成输入）。
   # 照 user_main.cpp 改 EMBARK_APP_TABLE 换成自己的 App 表即可；
-  # main/ui_main 骨架讲解见 docs/README.md「2. 写你自己的 main」。
+  # main/ui_main 骨架讲解见 docs/index.md 指向的 quickstart 与「写你自己的 main」一节。
   add_executable(embark_host_user user_main.cpp)
 
   target_link_libraries(embark_host_user PRIVATE embark::platform_host_ui embark::demo_apps)

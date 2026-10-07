@@ -14,7 +14,7 @@
 | ③ | ESP32-S3 目标构建通过 | `cmake --build build-esp32`（环境与命令见 `.scratch/embark-v1/evidence/13-format-derive/esp32-build.txt`） | EXIT=0；`embark_esp32.bin` = 0xbdf90 字节，分区 3 MB 余 75%；我们自己的代码零警告 |
 | ④ | 内核与 App 无动态分配（hook 统计为 0） | 跑 `build\tests\embark_tests.exe`（全量），看 `零分配审计：boot→帧循环→消息→切换→shutdown 全程 0 次堆分配` 与 `零分配审计：own_task 装配路径（成功与失败兜底）0 次堆分配` 两条 | 通过。`tests/detail/zero_alloc_hooks.{h,cpp}` 拦 12 个 `operator new/delete` 重载，两条路径都是 0 次分配，且每条都带"钩子自检"（主动分配一次必须 +1，证明 0 不是假绿） |
 | ⑤ | 换后端不动 App：切到 esp32 后端时 `app/` 与 `include/embark/` 一行不改 | `git show --stat 2134df3`（issue 11 真机后端那次提交） | 基本通过。真机后端只动 `platform/esp32/**` 与 `platform/common/**`；`include/embark/` 零改动。`app/demo_apps.cpp` 有 3 处改动，全部是 **xtensa 下 printf 类型的显式转换**（`uint32_t` 在 xtensa 是 `long unsigned int`，`%u` 会被 `-Werror=format` 拦下）—— 是编译器可移植性调整，不是后端耦合 |
-| ⑥ | 文档到位：根 README + docs 索引 + 新手最短路径 | 打开 [docs/README.md](docs/README.md)；根 [README.md](README.md) | 通过。三条最短路径（跑起来 → 敲起来 → 改起来）就在 `docs/README.md` 开头，另加 `messages-and-background.md`、`hal-backend-guide.md`、`common-pitfalls.md`、`adr/0004-*` |
+| ⑥ | 文档到位：根 README + docs 索引 + 新手最短路径 | 打开 [docs/index.md](../../docs/index.md)；根 [README.md](../../README.md) | 通过。三条最短路径（跑起来 → 敲起来 → 改起来）就在 `docs/index.md` 开头，另加 `concepts/messages-and-background.md`、`guides/hal-backend-guide.md`、`reference/pitfalls.md`、`adr/0004-*`（文档已在 2026-10-07 重组为 concepts/guides/reference 三层） |
 
 ### issue 13 新增项（整对象日志）
 
@@ -22,7 +22,7 @@
 | --- | --- | --- | --- |
 | ⑦ | 类型的名字只有一份：登记处用派生宏，日志里不手拼字段 | `git grep -n "to_string" -- include src app platform tests` | 代码里零调用（只剩两条注释）；`Error`/`BackgroundPolicy`/`PixelFormat`/`InputEventKind` 用 `E_FMT_DERIVE_ENUM`，`Rect`/`DisplayInfo`/`InputEvent`/`AppSettings` 整对象派生，`CrossTaskMessage` 用类型体内 `E_FMT_FIELDS` |
 | ⑧ | 输出口径被测试钉住 | 跑 `build\tests\embark_tests.exe`（全量），看 `派生打印：…` 五条用例 | 通过。`tests/kernel/test_format_derive.cpp` 5 个用例断言 9 个登记类型的完整输出串（如 `embark::hal::InputEvent { kind = embark::hal::InputEventKind::press, x = 160, y = 170, key = 113, timestamp_ms = 7 }`） |
-| ⑨ | 日志行不超 384 字节上限（超了整行会消失） | 跑一次 UI demo，看 stderr 里 `HAL 就绪：显示 embark::hal::DisplayInfo { ... }` 与 `整屏区域 embark::hal::Rect { ... }` **各占一行** | 通过（这两行原本挤成一条时整行不打印，拆两条后正常；规矩写在 `docs/common-pitfalls.md`） |
+| ⑨ | 日志行不超 384 字节上限（超了整行会消失） | 跑一次 UI demo，看 stderr 里 `HAL 就绪：显示 embark::hal::DisplayInfo { ... }` 与 `整屏区域 embark::hal::Rect { ... }` **各占一行** | 通过（这两行原本挤成一条时整行不打印，拆两条后正常；规矩写在 `docs/reference/pitfalls.md`） |
 | ⑩ | 代码格式与宿主/真机双构建零警告 | `clang-format --dry-run --Werror`（命令见 `.github/workflows/ci.yml` 的 format-check job） | 通过：117 个跟踪 C++ 文件零不符；宿主构建 warning/error 行数 0 |
 
 > 小提示：`--test-case=` 过滤器从 PowerShell 传中文名字会因编码对不上而"0 ran"
@@ -56,7 +56,7 @@ issue 11 已标 `⏳ 要上板人工确认`：
   被当**字符**打印（值为 0 时写出 NUL，会把整行日志截断）；顶层 `std::uint8_t` 参数正常。
 - 复现步骤、含 hex 的对照输出、上游代码定位（`format_traits.hpp:160-175`/`:133-155`、
   `format_derive.hpp:1952-1975`/`:2385-2429`）与手册自相矛盾之处（使用手册 `:270` vs `:320`）
-  都在 [.scratch/embark-v1/evidence/13-format-derive/upstream-1byte-bug.md](.scratch/embark-v1/evidence/13-format-derive/upstream-1byte-bug.md)。
+  都在 [evidence/13-format-derive/upstream-1byte-bug.md](evidence/13-format-derive/upstream-1byte-bug.md)。
 - 本仓库的规避：会进日志的 1 字节字段抬到 `std::uint16_t`（`AppId`、`task_priority`、
   `InputEvent::key`，以及两个 `spawn_task` 实现的 `priority`），字段语义不变。
 - 没有改 `third_party/efmt-elog`：它是独立仓库、submodule 钉 commit，本地打补丁会让

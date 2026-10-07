@@ -68,7 +68,7 @@ HAL 是"芯片能力"的抽象（spec §8）：七个纯虚接口 + 一个引用
 八个能力的实现都在 `platform/esp32/src/esp32_*.{h,cpp}`，板级常量（引脚、时序、
 方向开关）集中在 `src/esp32_board.h`，装配与 `hal::Context` 在 `src/esp32_hal.{h,cpp}`，
 入口是 IDF 工程的 `platform/esp32/project/main/main.cpp`（`app_main` → 建唯一 UI 任务）。
-**上板前要动的开关、bring-up 清单、串口日志样例都写在 [platform/esp32/README.md](../platform/esp32/README.md)。**
+**上板前要动的开关、bring-up 清单、串口日志样例都写在 [platform/esp32/README.md](../../platform/esp32/README.md)。**
 
 落地时踩到的坑（同类后端都会遇到，照抄结论即可）：
 
@@ -79,9 +79,13 @@ HAL 是"芯片能力"的抽象（spec §8）：七个纯虚接口 + 一个引用
 2. **`CONFIG_FREERTOS_HZ` 必须 ≥ 1000**：UI 循环周期 5 ms，100 Hz 下
    `pdMS_TO_TICKS(5) == 0`，`vTaskDelay(0)` 不让出 CPU ⇒ UI 任务忙等、空闲任务被
    拖住 ⇒ 触发任务看门狗。后端另有"ticks 算出来是 0 就退化成 1 tick"的兜底。
-3. **栈深口径**：IDF 的 `xTaskCreate*` 收的是**字节**（不是 vanilla FreeRTOS 的字），
-   而 `uxTaskGetStackHighWaterMark()` 返回的是**字** —— 框架里的 `*_stack_words`
-   在创建时要乘 `sizeof(StackType_t)`，报水位时要再乘回去。
+3. **栈深口径**：框架里的 `*_stack_words` 一律按**宿主字长**算（512 字 = 4 KB），后端负责
+   换算成平台自己要的字节数 —— IDF 的 `xTaskCreate*` 收的是**字节**（vanilla FreeRTOS 的
+   `ulStackDepth` 收的才是字，宿主因此直接传字数），真机用 `stack_word_bytes = 8` 换；
+   报水位时 `uxTaskGetStackHighWaterMark()` 返回的是**字**，乘回本平台的字长才是字节
+   （xtensa 的 `StackType_t` 是 `uint8_t`，等于不乘）。**别照字面把框架的字数搬过去** ——
+   issue 21 就是这么把 16 KB 的 UI 任务变成 2 KB 的；也别在别处再乘一次
+   `sizeof(StackType_t)`（口径与现场见 `docs/reference/pitfalls.md`）。
 4. **中间件视图要在 `project()` 之前建**：`project/CMakeLists.txt` 先
    `embark_create_middleware_view(<build>/include/middleware <仓库根>)`（第二个参数
    必须显式传仓库根：IDF 工程的 `PROJECT_SOURCE_DIR` 是 `platform/esp32/project`），

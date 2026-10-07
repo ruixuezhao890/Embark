@@ -97,7 +97,7 @@ EEZ App 作为行走的示例。
 | --eez 行为验收（拖 5 槽→启动→Login Flow 导航→点 + →返回键） | ✅ 断言全过，退出码 0 |
 | 断言明细 | switches==2、selected==5、eez enters==1 resumes==0、foreground_ticks=119>0、counter==1（点 + 一次）、home_requests==1、前台回 launcher |
 | 既有 App 零改动 | ✅ hello/demo/launcher/settings/ticker 未动一字节 |
-| 截屏证据 | .scratch/embark-v1/evidence/19-eez-adapter/{eez_main,eez_home}.png（240×320，主屏与点 + 后 HOME 屏） |
+| 截屏证据 | 主屏与点 + 后 HOME 屏（240×320）。截图已从仓库移除 —— 二进制证据不再入库 |
 
 内存口径：--eez 整场跑完 LVGL 未回收 24115 字节（预算 262144，含全部 6 个 App 的
 screen 树 + Flow 运行时），与 issue 18 量化（Flow 净增 ≈ 常驻 7.1 KB / 峰值 9.3 KB）一致，
