@@ -115,6 +115,14 @@ ctest --test-dir build --output-on-failure
 - **新增/修改公开 API** 要同步 [docs/reference/hooks-and-api.md](docs/reference/hooks-and-api.md)；
   **新增容量常量**要同步 [docs/reference/limits.md](docs/reference/limits.md)；
   **踩过的坑**记进 [docs/reference/pitfalls.md](docs/reference/pitfalls.md)。
+- **新类型进日志前先包 E_FMT_DERIVE**：任何要打进 ELOG 的 Embark 类型先包宏 ——
+  聚合体用 `E_FMT_DERIVE(...)`、枚举用 `E_FMT_DERIVE_ENUM(...)`；
+  有基类/构造函数推不出字段的（如 `CrossTaskMessage`）用类型内一行
+  `E_FMT_FIELDS(字段, ...)`（见 [include/embark/message.h](include/embark/message.h) 文件头注释）。
+  `EFMT_DERIVE_STRICT` 默认开（=1）：漏包的聚合体会**编译期报错**；但**未包裹的
+  枚举不报错、只打数字**（`{:#}` 才展开枚举名），所以要打名字就必须包。
+  ETL 类型（`etl::string` / `etl::optional` / 容器等）由 elog 自带 formatter，
+  不用包。
 - 文档有三层（concepts 为什么 / guides 怎么做 / reference 具体值），
   总索引 [docs/index.md](docs/index.md) —— 别把三种内容混进一个文件。
 
