@@ -221,7 +221,7 @@ void MyApp::onForegroundTick(std::uint32_t) {
 
 1. **`onCreate` 里 publish 会丢**——总线在 `onCreate` 之后才装配（`src/embark/framework.cpp:44-54`），早于它的广播被计为 unknown 并 WARN（`src/embark/bus.cpp:66-71`）。装配消息请放 `onEnter` 之后。
 2. **`onMessage` 会收到自己发的消息**——`publish` 遍历所有订阅者，**发送方的 adapter 也在订阅表里**（`src/embark/bus.cpp:55-75`）。要防自回环，就带个 `from` 字段自己过滤。
-3. **同一个 `onBackgroundTick`，线程语义完全不同**——tick 策略在唯一 UI 任务里被调（`src/embark/framework.cpp:140` → `:181`），own_task 策略在自己的任务里被调（`:250-253`）。跨策略复制粘贴代码前先确认这条。
+3. **同一个 `onBackgroundTick`，线程语义完全不同**——tick 策略在唯一 UI 任务里被调（`src/embark/framework.cpp:152` → `:196`），own_task 策略在自己的任务里被调（`:259` 一次性 / `:264` 常驻循环）。跨策略复制粘贴代码前先确认这条。
 
 > 周期是**帧粒度**：`ceil(period_ms / ui_loop_period_ms)` 个帧（宿主 5 ms 一拍，`config/embark_limits.h:85`）。
 
@@ -236,7 +236,7 @@ void MyApp::onForegroundTick(std::uint32_t) {
 | 耗时计算 / 网络 / 长阻塞 | `own_task` 策略 + `onBackgroundTick` | 不能阻塞 UI 任务 |
 | own_task 里回 UI | `fw.post(CrossTaskMessage(...))`，回 UI 再进总线 | 跨任务只能 post 信封（[messages-and-background.md](messages-and-background.md)） |
 
-> 框架**不会替你保存任何状态**：`entered_` 只是「进过前台」的记账位（`include/embark/framework.h:297`），
+> 框架**不会替你保存任何状态**：`entered_` 只是「进过前台」的记账位（`include/embark/framework.h:299`），
 > 不是状态查询接口。要「记住」什么，自己存成员变量。
 >
 > 另外：声明了后台策略**默认也不会**一上电就跑 —— 第一次进过前台（`onEnter` 同一帧）才武装，

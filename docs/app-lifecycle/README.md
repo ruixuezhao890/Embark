@@ -127,7 +127,7 @@ boot 第 9 步就武装（4.2）。
 | --- | --- | --- | --- | --- |
 | `suspend`（默认） | 谁也不跑 | — | 最省资源；只在被切到前台时有行为 | settings |
 | `tick` | 唯一 UI 任务 | step 第 5 段（ETL callback_timer） | **必须轻量**：阻塞会卡住整个 LVGL 动画；武装之后才 `start`（`at_boot` 的在 boot 第 9 步 start） | clock（100 ms） |
-| `own_task` | 独立 FreeRTOS 任务 | 自己的任务（栈深/优先级自配） | 发消息只能 `post()`，不能 `publish()`；完整生命周期见 §5 | tour 演示 |
+| `own_task` | 独立 FreeRTOS 任务 | 自己的任务（栈深/优先级自配） | 发消息只能 `post()`，不能 `publish()`；完整生命周期见 §5 | 三个 App 都没声明；内核用例 `test_own_task_lifecycle.cpp` |
 
 要点：
 
@@ -288,7 +288,7 @@ flowchart TD
 细节：任务参数（fw 指针 + App 编号）必须在 `spawn_task` 之前写进记录
 （真机上任务建好就可能开跑）；spawn 失败会把记录回滚成空闲，**不留半条记录**。
 
-### 5.3 跑（入口 `own_task_entry` :175-183 → `run_own_task` :185-200）
+### 5.3 跑（framework.cpp：入口 `own_task_entry` `:241-249` → `run_own_task` `:251-266`）
 
 - `period_ms == 0`：**一次性任务** —— `onBackgroundTick` 跑一轮即返回。
 - 否则：`for(;;){ delay_ms(period); onBackgroundTick; }` —— 常驻循环。
@@ -302,7 +302,7 @@ flowchart TD
 - **回收是持有者（唯一 UI 任务）的事**（task_spawner.h `:10-14`）：只有它知道任务
   跑完没、什么时候该把槽位还给池。任务自己回收自己会踩 FreeRTOS 的"删除中"
   中间态（TCB 还在终止链表上，复用静态存储会写出致命的别名）。
-- step 第 7 段 `reap_finished_own_tasks`（:247-266）逐个 `release_task`：
+- step 第 7 段 `reap_finished_own_tasks`（framework.cpp `:313-332`）逐个 `release_task`：
   - 还在跑 → `busy`（**不是错误**，下一帧再试）；
   - 已停稳 → 成功，槽位清零、`++own_tasks_released_`；
   - 成功后该槽位立即可被下一次 spawn 复用。
@@ -320,10 +320,11 @@ flowchart TD
 
 ### 5.7 契约测试（比文档更权威）
 
-`tests/kernel/test_own_task_lifecycle.cpp` 三个用例：① 创建 → 跑完 → 回收 →
-再创建（跟着日志读）；② boot 装两个任务、池满 no_space、失败不留记录；
-③ 常驻任务永远不被回收（回收只认「入口已返回」）。平台池那一半（定容、世代号）
-由 `tests/kernel/test_pooled_task_spawner.cpp` 逐格验证。
+`tests/kernel/test_own_task_lifecycle.cpp` 四个用例：① 创建 → 跑完 → 回收 →
+再创建（跟着日志读，`:252`）；② 两个 App 各自在**武装时**创建、池满 `no_space`、
+失败不留记录（`:338`）；③ 常驻任务永远不被回收（回收只认「入口已返回」，`:397`）；
+④ `ArmPolicy::at_boot` 的 App 开机即武装、不等前台（`:425`）。平台池那一半（定容、
+世代号）由 `tests/kernel/test_pooled_task_spawner.cpp` 六个用例逐格验证。
 
 ## 6. 消息投递：publish 与 post 两条路
 
@@ -335,7 +336,7 @@ flowchart TD
 | 纪律 | **own task 里不能 publish** | 跨任务汇报结果的唯一正道 |
 
 收件箱累计溢出次数可在 `framework.inbox_overflows()` 观测（own task 发太快、
-UI 来不及消化的信号）。契约见 framework.h `:28-31`。
+UI 来不及消化的信号）。契约见 framework.h `:31-34`。
 
 ## 7. 关键源码索引
 
@@ -355,6 +356,8 @@ UI 来不及消化的信号）。契约见 framework.h `:28-31`。
 | App 钩子契约 | `include/embark/app.h:95-119` |
 | step/own task/publish/post 纪律 + 武装时机语义（文件头注释） | `include/embark/framework.h:1-66` |
 | 后台武装的观测接口（`background_armed` / `arm_failures`） | `include/embark/framework.h:156-167` |
+| 后台记账位（`entered_` / `armed_` / `bg_timer_ids_`） | `include/embark/framework.h:298-305` |
+| 运行期武装失败计数 `arm_failures_` | `include/embark/framework.h:326-327` |
 | 任务句柄（slot + 世代号）与 spawn/release 语义 | `include/embark/task_spawner.h:29-67` |
 | 任务池：借（allocate）与还（deallocate）+ 槽位状态机 | `platform/common/pooled_task_spawner.h:97-155` |
 | own task 容量常量（max_own_tasks=2、栈 512 字） | `config/embark_limits.h:65-72` |
