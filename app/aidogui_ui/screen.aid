@@ -259,9 +259,19 @@
               }
             }
           },
-          "events": [],
+          "events": [
+            {
+              "id": "event_embark_ui_open_weather_clicked",
+              "eventType": "CLICKED",
+              "actionType": "CALL_FUNCTION",
+              "actionParams": {
+                "functionName": "embark_ui_open_weather"
+              },
+              "enabled": true
+            }
+          ],
           "flags": {
-            "clickable": false,
+            "clickable": true,
             "scrollable": false
           },
           "state": {},
@@ -1809,6 +1819,1331 @@
         }
       ],
       "animations": []
+    },
+    {
+      "id": "weather",
+      "name": "weather",
+      "isDefault": false,
+      "style": {},
+      "widgets": [
+        {
+          "id": "weather_Desk",
+          "parentId": "weather",
+          "type": "lv_obj",
+          "name": "Desk",
+          "x": 0,
+          "y": 0,
+          "width": 240,
+          "height": 320,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#0b1020ff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 0
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_Btn_Back",
+          "parentId": "weather_Desk",
+          "type": "lv_obj",
+          "name": "Btn_Back",
+          "x": 8,
+          "y": 4,
+          "width": 64,
+          "height": 28,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 8
+              },
+              "PRESSED__MAIN": {
+                "bgColor": "#2a3550ff"
+              }
+            }
+          },
+          "events": [
+            {
+              "id": "event_embark_ui_open_launcher_clicked",
+              "eventType": "CLICKED",
+              "actionType": "CALL_FUNCTION",
+              "actionParams": {
+                "functionName": "embark_ui_open_launcher"
+              },
+              "enabled": true
+            }
+          ],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_Btn_Back_L",
+          "parentId": "weather_Btn_Back",
+          "type": "lv_label",
+          "name": "Btn_Back_L",
+          "x": 0,
+          "y": 5,
+          "width": 64,
+          "height": 18,
+          "text": "返回",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_Title",
+          "parentId": "weather_Desk",
+          "type": "lv_label",
+          "name": "L_Title",
+          "x": 84,
+          "y": 8,
+          "width": 72,
+          "height": 20,
+          "text": "天气",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_CityBar",
+          "parentId": "weather_Desk",
+          "type": "lv_obj",
+          "name": "CityBar",
+          "x": 12,
+          "y": 36,
+          "width": 216,
+          "height": 28,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 10
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_Btn_CityPrev",
+          "parentId": "weather_CityBar",
+          "type": "lv_label",
+          "name": "Btn_CityPrev",
+          "x": 4,
+          "y": 4,
+          "width": 28,
+          "height": 20,
+          "text": "<",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#202b47ff",
+                "radius": 6,
+                "textColor": "#c7d0e6ff",
+                "textFont": "ui_heiti.ttf",
+                "textFontSize": 14,
+                "textAlign": "CENTER",
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0
+              },
+              "PRESSED__MAIN": {
+                "bgColor": "#2a3550ff"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_City",
+          "parentId": "weather_CityBar",
+          "type": "lv_label",
+          "name": "L_City",
+          "x": 38,
+          "y": 4,
+          "width": 140,
+          "height": 20,
+          "text": "北京",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#e8eefcff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_Btn_CityNext",
+          "parentId": "weather_CityBar",
+          "type": "lv_label",
+          "name": "Btn_CityNext",
+          "x": 184,
+          "y": 4,
+          "width": 28,
+          "height": 20,
+          "text": ">",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#202b47ff",
+                "radius": 6,
+                "textColor": "#c7d0e6ff",
+                "textFont": "ui_heiti.ttf",
+                "textFontSize": 14,
+                "textAlign": "CENTER",
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0
+              },
+              "PRESSED__MAIN": {
+                "bgColor": "#2a3550ff"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_Card_Now",
+          "parentId": "weather_Desk",
+          "type": "lv_obj",
+          "name": "Card_Now",
+          "x": 12,
+          "y": 68,
+          "width": 216,
+          "height": 88,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 12
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_NIcon",
+          "parentId": "weather_Card_Now",
+          "type": "lv_label",
+          "name": "L_NIcon",
+          "x": 16,
+          "y": 14,
+          "width": 60,
+          "height": 60,
+          "text": "晴",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#ffd166ff",
+                "textFontSize": 22,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_NTemp",
+          "parentId": "weather_Card_Now",
+          "type": "lv_label",
+          "name": "L_NTemp",
+          "x": 84,
+          "y": 10,
+          "width": 112,
+          "height": 46,
+          "text": "26°",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#e8eefcff",
+                "textFontSize": 28,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_NDesc",
+          "parentId": "weather_Card_Now",
+          "type": "lv_label",
+          "name": "L_NDesc",
+          "x": 84,
+          "y": 58,
+          "width": 112,
+          "height": 18,
+          "text": "空气优",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#a9b6d3ff",
+                "textFontSize": 11,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_Card_D0",
+          "parentId": "weather_Desk",
+          "type": "lv_obj",
+          "name": "Card_D0",
+          "x": 12,
+          "y": 160,
+          "width": 216,
+          "height": 30,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 8
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D0_Dow",
+          "parentId": "weather_Card_D0",
+          "type": "lv_label",
+          "name": "L_D0_Dow",
+          "x": 8,
+          "y": 6,
+          "width": 52,
+          "height": 18,
+          "text": "今天",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "LEFT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D0_Icon",
+          "parentId": "weather_Card_D0",
+          "type": "lv_label",
+          "name": "L_D0_Icon",
+          "x": 62,
+          "y": 5,
+          "width": 34,
+          "height": 20,
+          "text": "晴",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#ffd166ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D0_Desc",
+          "parentId": "weather_Card_D0",
+          "type": "lv_label",
+          "name": "L_D0_Desc",
+          "x": 100,
+          "y": 6,
+          "width": 58,
+          "height": 18,
+          "text": "空气优",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#a9b6d3ff",
+                "textFontSize": 11,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D0_Range",
+          "parentId": "weather_Card_D0",
+          "type": "lv_label",
+          "name": "L_D0_Range",
+          "x": 158,
+          "y": 6,
+          "width": 52,
+          "height": 18,
+          "text": "18°/26°",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#e8eefcff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_Card_D1",
+          "parentId": "weather_Desk",
+          "type": "lv_obj",
+          "name": "Card_D1",
+          "x": 12,
+          "y": 191,
+          "width": 216,
+          "height": 30,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 8
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D1_Dow",
+          "parentId": "weather_Card_D1",
+          "type": "lv_label",
+          "name": "L_D1_Dow",
+          "x": 8,
+          "y": 6,
+          "width": 52,
+          "height": 18,
+          "text": "周六",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "LEFT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D1_Icon",
+          "parentId": "weather_Card_D1",
+          "type": "lv_label",
+          "name": "L_D1_Icon",
+          "x": 62,
+          "y": 5,
+          "width": 34,
+          "height": 20,
+          "text": "晴",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#ffd166ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D1_Desc",
+          "parentId": "weather_Card_D1",
+          "type": "lv_label",
+          "name": "L_D1_Desc",
+          "x": 100,
+          "y": 6,
+          "width": 58,
+          "height": 18,
+          "text": "空气优",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#a9b6d3ff",
+                "textFontSize": 11,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D1_Range",
+          "parentId": "weather_Card_D1",
+          "type": "lv_label",
+          "name": "L_D1_Range",
+          "x": 158,
+          "y": 6,
+          "width": 52,
+          "height": 18,
+          "text": "18°/26°",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#e8eefcff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_Card_D2",
+          "parentId": "weather_Desk",
+          "type": "lv_obj",
+          "name": "Card_D2",
+          "x": 12,
+          "y": 222,
+          "width": 216,
+          "height": 30,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 8
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D2_Dow",
+          "parentId": "weather_Card_D2",
+          "type": "lv_label",
+          "name": "L_D2_Dow",
+          "x": 8,
+          "y": 6,
+          "width": 52,
+          "height": 18,
+          "text": "周六",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "LEFT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D2_Icon",
+          "parentId": "weather_Card_D2",
+          "type": "lv_label",
+          "name": "L_D2_Icon",
+          "x": 62,
+          "y": 5,
+          "width": 34,
+          "height": 20,
+          "text": "晴",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#ffd166ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D2_Desc",
+          "parentId": "weather_Card_D2",
+          "type": "lv_label",
+          "name": "L_D2_Desc",
+          "x": 100,
+          "y": 6,
+          "width": 58,
+          "height": 18,
+          "text": "空气优",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#a9b6d3ff",
+                "textFontSize": 11,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D2_Range",
+          "parentId": "weather_Card_D2",
+          "type": "lv_label",
+          "name": "L_D2_Range",
+          "x": 158,
+          "y": 6,
+          "width": 52,
+          "height": 18,
+          "text": "18°/26°",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#e8eefcff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_Card_D3",
+          "parentId": "weather_Desk",
+          "type": "lv_obj",
+          "name": "Card_D3",
+          "x": 12,
+          "y": 253,
+          "width": 216,
+          "height": 30,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 8
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D3_Dow",
+          "parentId": "weather_Card_D3",
+          "type": "lv_label",
+          "name": "L_D3_Dow",
+          "x": 8,
+          "y": 6,
+          "width": 52,
+          "height": 18,
+          "text": "周六",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "LEFT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D3_Icon",
+          "parentId": "weather_Card_D3",
+          "type": "lv_label",
+          "name": "L_D3_Icon",
+          "x": 62,
+          "y": 5,
+          "width": 34,
+          "height": 20,
+          "text": "晴",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#ffd166ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D3_Desc",
+          "parentId": "weather_Card_D3",
+          "type": "lv_label",
+          "name": "L_D3_Desc",
+          "x": 100,
+          "y": 6,
+          "width": 58,
+          "height": 18,
+          "text": "空气优",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#a9b6d3ff",
+                "textFontSize": 11,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D3_Range",
+          "parentId": "weather_Card_D3",
+          "type": "lv_label",
+          "name": "L_D3_Range",
+          "x": 158,
+          "y": 6,
+          "width": 52,
+          "height": 18,
+          "text": "18°/26°",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#e8eefcff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_Card_D4",
+          "parentId": "weather_Desk",
+          "type": "lv_obj",
+          "name": "Card_D4",
+          "x": 12,
+          "y": 284,
+          "width": 216,
+          "height": 30,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 8
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D4_Dow",
+          "parentId": "weather_Card_D4",
+          "type": "lv_label",
+          "name": "L_D4_Dow",
+          "x": 8,
+          "y": 6,
+          "width": 52,
+          "height": 18,
+          "text": "周六",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "LEFT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D4_Icon",
+          "parentId": "weather_Card_D4",
+          "type": "lv_label",
+          "name": "L_D4_Icon",
+          "x": 62,
+          "y": 5,
+          "width": 34,
+          "height": 20,
+          "text": "晴",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#ffd166ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D4_Desc",
+          "parentId": "weather_Card_D4",
+          "type": "lv_label",
+          "name": "L_D4_Desc",
+          "x": 100,
+          "y": 6,
+          "width": 58,
+          "height": 18,
+          "text": "空气优",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#a9b6d3ff",
+                "textFontSize": 11,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "weather_L_D4_Range",
+          "parentId": "weather_Card_D4",
+          "type": "lv_label",
+          "name": "L_D4_Range",
+          "x": 158,
+          "y": 6,
+          "width": 52,
+          "height": 18,
+          "text": "18°/26°",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#e8eefcff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        }
+      ],
+      "animations": []
     }
   ],
   "stylePresets": [],
@@ -1820,25 +3155,25 @@
       {
         "fontName": "ui_heiti.ttf",
         "fontSize": 11,
-        "symbols": "五优六周四日气空第首",
+        "symbols": "五优六周四日气空第首微风良有闷热雨",
         "range": "0x20-0x7F"
       },
       {
         "fontName": "ui_heiti.ttf",
         "fontSize": 12,
-        "symbols": "一三上二五入六剩周四回图天年按日星月期末标滑点秒第距返进，",
+        "symbols": "一三上二五入六剩周四回图天年按日星月期末标滑点秒第距返进，今°云",
         "range": "0x20-0x7F"
       },
       {
         "fontName": "ui_heiti.ttf",
         "fontSize": 14,
-        "symbols": "一三乐二京六册动北启周器四回天年日时月相置设返钟音",
+        "symbols": "一三乐二京六册动北启周器四回天年日时月相置设返钟音气上海广州深圳晴云阴雨雷小中大多",
         "range": "0x20-0x7F"
       },
       {
         "fontName": "ui_heiti.ttf",
         "fontSize": 22,
-        "symbols": "晴",
+        "symbols": "晴云阴雨雷小中大多",
         "range": "0x20-0x7F"
       },
       {
@@ -1882,7 +3217,7 @@
   ],
   "groups": [],
   "createdAt": "2026-10-12T14:32:04.194Z",
-  "updatedAt": "2026-10-14T15:25:32.226Z",
+  "updatedAt": "2026-10-15T13:14:54.176Z",
   "preview": {
     "path": "previews/8f0e2b6a-2c11-4a5e-9d3a-5b7c1e4f0a92.png",
     "updatedAt": 1791823374296

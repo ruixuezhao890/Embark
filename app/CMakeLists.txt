@@ -47,6 +47,7 @@ if(EMBARK_APP_SDL2_FOUND)
           launcher/launcher_app.cpp
           clock/clock_app.cpp
           settings/settings_app.cpp
+          weather/weather_app.cpp
           common/eez_ui_bridge.cpp
           common/eez_ui_nav.cpp
           common/aidogui_ui_bridge.cpp

@@ -24,12 +24,13 @@
 
 #include "launcher_app.h"
 #include "local_clock.h"
+#include "weather/weather_data.h"  // 天气卡与天气屏同源（ADR 0012）
 
 #if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
 #include "ui_backend.h"
 #endif
 #if defined(EMBARK_AIDOGUI_UI)
-#include "aidogui_ui_bridge.h"  // 控件表：launcher 的时间出口是屏上的两个 label
+#include "aidogui_ui_bridge.h"  // 控件表：launcher 的时间/天气出口都在屏上的 label
 #endif
 
 namespace embark::demo {
@@ -65,6 +66,8 @@ void LauncherApp::onEnter() {
   // 屏刚装载：控件是设计器里的初值（"11:31" 写死的文案），立刻刷一次真时间。
   // 后台策略是 tick（见本文件末尾 settings()），下一次刷新由 onBackgroundTick 接手。
   refresh_clock();
+  shown_city_ = 0xFFU;  // 屏重建过：天气卡的四个文案要重画
+  refresh_weather();
 }
 
 void LauncherApp::onPause() {
@@ -78,6 +81,8 @@ void LauncherApp::onResume() {
   ui_backend_load_for_app(name());
 #endif
   refresh_clock();  // 同 onEnter：屏重建过，控件回到初值
+  shown_city_ = 0xFFU;
+  refresh_weather();
 }
 
 void LauncherApp::onForegroundTick(std::uint32_t now_ms) {
@@ -92,6 +97,7 @@ void LauncherApp::onBackgroundTick(std::uint32_t now_ms) {
   (void)now_ms;
   ++ticks_;
   refresh_clock();
+  refresh_weather();  // 在天气屏里换了城市，回到主屏时卡片跟着变（值没变就不写控件）
 }
 
 void LauncherApp::onExit() {
@@ -117,6 +123,29 @@ void LauncherApp::refresh_clock() {
   for (const char* widget : {"L_Time", "L_Clock0"}) {
     if (lv_obj_t* label = aidogui_ui_bridge_widget("launcher", widget); label != nullptr) {
       lv_label_set_text(label, buf);  // 这两个 label 不染色，不需要 recolor 开关
+    }
+  }
+#endif
+}
+
+void LauncherApp::refresh_weather() {
+#if defined(EMBARK_AIDOGUI_UI)
+  if (fw_ == nullptr) return;
+  // 城市下标与天气屏共用同一个持久化键：谁改都对另一个生效。
+  const std::size_t city = weather_load_city(fw_->hal().storage);
+  if (static_cast<std::uint8_t>(city) == shown_city_) return;  // 没换城市就不动控件
+  shown_city_ = static_cast<std::uint8_t>(city);
+
+  const WeatherCity& w = weather_city(city);
+  struct { const char* widget; const char* text; } kCard[] = {
+      {"L_WCity", w.name},
+      {"L_WTemp", w.temp},
+      {"L_WIcon", w.days[0].icon},
+      {"L_WDesc", w.days[0].desc},
+  };
+  for (const auto& item : kCard) {
+    if (lv_obj_t* label = aidogui_ui_bridge_widget("launcher", item.widget); label != nullptr) {
+      lv_label_set_text(label, item.text);  // 与设计器初值同款纯文本，不染色
     }
   }
 #endif

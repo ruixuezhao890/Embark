@@ -20,7 +20,8 @@
 #define EMBARK_AIDOGUI_HOOK_APPS(X) \
   X(launcher)                       \
   X(clock)                          \
-  X(settings)
+  X(settings)                        \
+  X(weather)
 
 #ifdef __cplusplus
 extern "C" {

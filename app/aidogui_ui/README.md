@@ -66,12 +66,13 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 设计器位置三级查找：`AIDOGUI_HOME` → 仓库根 `.aidogui-home` → `tools/aidogui/home.txt`
 （本机路径，已 gitignore）。换机器时改最后一处即可。
 
-## 两块屏与导航（第 2 步）
+## 三块屏与导航（第 2 步）
 
 | 屏（id == name） | 控件 | 数据 | 回程 |
 | --- | --- | --- | --- |
-| `launcher` | 23（桌面：时间卡 / 天气卡 / 四宫格磁贴 / 提示） | 静态设计文字 | 磁贴 `Tile1` → clock |
+| `launcher` | 23（桌面：时间卡 / 天气卡 / 四宫格磁贴 / 提示） | 时间由 `LauncherApp` 按墙钟刷；**天气卡**由 `LauncherApp::refresh_weather()` 按当前城市刷（与天气屏同源） | 磁贴 `Tile1` → clock；天气卡 `Card_Weather` → weather |
 | `clock` | 25（返回按钮 / 大时间 / 日期 / 真 `lv_calendar` 月历 `Cal` / 年进度 / 明日 / 本月） | `ClockApp` 每拍推 13 个文案 + 1 个条形值；月历走 `lv_calendar_set_today_date / set_showed_date / set_day_names` | `Btn_Back` → launcher |
+| `weather` | 37（返回 / 城市栏 ◀ 城市 ▶ / 「现在」卡 / 5 天逐行 日期·天气字·一句话·温度） | `WeatherApp` 只在进屏/回屏/切城市时写（数据是桩，不会自己变）；城市存 `hal().storage` 的 `wx.city` | `Btn_Back` → launcher |
 
 导航**不挂 `CHANGE_SCREEN`**（`_ui_screen_change()` 会绕过桥的按需 init/destroy），而是给控件挂
 「**调用函数**」动作，函数名约定 `embark_ui_open_<App 名>`：
@@ -81,6 +82,8 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 | launcher | Tile1 | 调用函数 | `embark_ui_open_clock` |
 | launcher | Tile2 | 调用函数 | `embark_ui_open_settings` |
 | clock | Btn_Back | 调用函数 | `embark_ui_open_launcher` |
+| launcher | Card_Weather | 调用函数 | `embark_ui_open_weather` |
+| weather | Btn_Back | 调用函数 | `embark_ui_open_launcher` |
 
 生成代码会吐一句裸调用（`embark_ui_open_clock();`），原型在
 `app/common/aidogui_ui_hooks.h`（该头由 `app/aidogui_ui/CMakeLists.txt` 用 `-include`
@@ -110,8 +113,10 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 直接报「字体 X (Npx) 未配置自定义字符范围」。当前 7 行（11/12/14/22/28/48/56px，CJK 按
 该字号实际显示的字符配、ASCII 用 `range 0x20-0x7F`；两个大时间字号 48/56px 只放
 `0123456789:#abcdef `——时间数字 + recolor 色码需要的字符，全 ASCII 会把这两只撑到
-80 KB+ 撑爆宿主 256 KB 预算）合计 **52,608 B**。加新字号、加会显示动态数字的控件、换字体时，
-这张表都要跟着改。
+80 KB+ 撑爆宿主 256 KB 预算）合计 **56,076 B**（天气屏上线时补了 `多/雨/云/今/°` 与 `上海/广州/深圳/圳` 等城市字）。加新字号、
+加会显示动态数字的控件、换字体时，这张表都要跟着改 —— 漏字符不会报错，只会画方框，所以
+验收侧还有一道 **字形守卫**（`--ui-weather` 用 `lv_font_get_glyph_dsc` 逐字符对表，见
+[.scratch/weather/acceptance.md](../../.scratch/weather/acceptance.md)）。
 
 当前用的 `ui_heiti.ttf` 是「时尚中黑简体」(TRENDS)，**商业授权待确认**；
 若要用在正式产品里，换成 OFL 授权的 Noto Sans SC 更稳。

@@ -6,6 +6,7 @@ SET(SOURCES
     ui_comm.c
     screens/ui_launcher.c
     screens/ui_clock.c
+    screens/ui_weather.c
 )
 
 add_library(ui ${SOURCES})

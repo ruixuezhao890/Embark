@@ -60,11 +60,16 @@ class LauncherApp final : public App {
   /// 只在值变化时写；控件不存在（屏未装载）时静默跳过。
   void refresh_clock();
 
+  /// 把主屏天气卡（Card_Weather 的四个文案）刷成 hal().storage 里记住的那个城市。
+  /// 数据桩与天气屏同源（weather/weather_data.h）：天气卡只是同一份数据的另一种画法。
+  void refresh_weather();
+
   unsigned enters_ = 0;
   unsigned resumes_ = 0;
   unsigned foreground_ticks_ = 0;
   unsigned ticks_ = 0;
   std::uint32_t last_minute_ = 0xFFFFFFFFU;  // 上次刷新的分钟（同分钟不重写）
+  std::uint8_t shown_city_ = 0xFFU;          // 上次画上卡片的城市（0xFF = 屏刚建、必须重画）
   Framework* fw_ = nullptr;  // onCreate 记下；hal().time 是取墙钟的唯一入口
 };
 

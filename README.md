@@ -101,7 +101,7 @@ ctest --test-dir build --output-on-failure
 | `platform/host/` | 宿主后端：SDL2 显示/输入、LVGL 端口、文件存储、FreeRTOS、UI 任务、三个入口 |
 | `platform/esp32/` | ESP32-S3 后端（ESP-IDF 组件形式接入） |
 | `platform/common/` | 两端共享的端口层（LVGL 端口、静态池、任务池） |
-| `app/` | 自带示例 App（launcher / clock / settings）+ AiDoGUI 生成代码 + 薄桥 |
+| `app/` | 自带示例 App（launcher / clock / settings / weather）+ AiDoGUI 生成代码 + 薄桥 |
 | `examples/minimal/` | 不依赖界面生成器的最小可运行 App —— **从这读起** |
 | `tests/` | doctest 用例：`hal/` 按能力分、`kernel/` 是内核契约、`fakes/` 是 HAL 假后端 |
 | `config/` | 编译期宏、`lv_conf.h` 与**全部容量上限**（单一事实来源） |

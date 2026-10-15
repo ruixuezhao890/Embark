@@ -55,6 +55,7 @@
 
 #include "clock/clock_app.h"
 #include "settings/settings_app.h"
+#include "weather/weather_app.h"
 #include "eez_ui_bridge.h"
 #include "eez_ui_nav.h"
 #if defined(EMBARK_AIDOGUI_UI)
@@ -62,6 +63,7 @@
 #include "aidogui_ui_nav.h"
 #include "aidogui_res_fs.h"
 #endif
+#include "weather/weather_data.h"  // --ui-weather：拿数据桩逐字段比对界面
 #include "screens.h"  // EEZ 生成的对象表：合成点击按真实控件几何算（见 widget_center）
 #include "host_context.h"
 #include "host_display.h"
@@ -143,6 +145,28 @@ constexpr int uinav_prev_frame = 88;
 constexpr int uinav_prev_check_frame = 96;
 constexpr int uinav_quit_frame = 100;
 constexpr int uinav_frames = 110;
+// --ui-weather 故事线（ADR 0012）：帧 12 点主屏天气卡（设计器「调用函数」→ 天气 App）→
+//   帧 22 把天气屏逐字段对数据桩（城市/现在区/5 天逐行）→ 帧 30 点「>」切城市 → 帧 40 再对
+//   一遍（换了城市得换数据）+ 断言只切了一次 → 帧 48 点「返回」→ 帧 58 断言主屏天气卡也
+//   换成了同一个城市（卡片与天气屏同源）→ 帧 64 关窗。城市名不写死：起始城市来自
+//   hal().storage，跨次运行会延续（这本身就是持久化的证据）。
+constexpr int uiweather_card_frame = 12;
+constexpr int uiweather_in_frame = 22;
+constexpr int uiweather_next_frame = 30;
+constexpr int uiweather_next_check_frame = 40;
+constexpr int uiweather_back_frame = 48;
+constexpr int uiweather_card_check_frame = 58;
+constexpr int uiweather_quit_frame = 64;
+constexpr int uiweather_frames = 74;
+// 兜底落点（正常路径读真实几何）：launcher 天气卡 = 14,134 212×56 → 中心 120,162；
+//   weather 返回键 = 8,4 64×28 → 中心 40,18；weather 「>」= CityBar(12,36) 内 (184,4) 28×20
+//   → 中心 210,50。
+constexpr int uiweather_card_fallback_x = 120;
+constexpr int uiweather_card_fallback_y = 162;
+constexpr int uiweather_back_fallback_x = 40;
+constexpr int uiweather_back_fallback_y = 18;
+constexpr int uiweather_next_fallback_x = 210;
+constexpr int uiweather_next_fallback_y = 50;
 // 兜底坐标（读不到控件几何时才用；正常路径是读真实几何，设计器里挪位置也点得中）：
 //   launcher 磁贴 Tile1 = 12,202 48×48 → 中心 36,226；launcher 时钟卡 Card_Clock = 14,30
 //   212×96 → 中心 120,78；clock 返回键 Btn_Back = 8,4 64×28 → 中心 40,18；月历翻月键
@@ -191,6 +215,7 @@ struct Options {
   bool eez = false;
   bool ui = false;
   bool ui_nav = false;
+  bool ui_weather = false;
 };
 
 void print_usage() {
@@ -202,6 +227,7 @@ void print_usage() {
 "  --launch            完整验收故事（request_switch('clock')→点屏按钮往返→bump_level 消息）\n"
       "  --ui                AiDoGUI 验收（ADR 0011）：字体 6/6 + 屏表/控件表 + 切走即释放/回来即重建\n"
       "  --ui-nav            双向导航 + 月历翻月验收：点磁贴进 clock → 点返回回 launcher → 点时钟卡再进 clock → 点「>」「<」翻月并校验显示月与标题\n"
+      "  --ui-weather        天气验收（ADR 0012）：点主屏天气卡进天气屏 → 天气屏 5 天逐字段对桩 → 点「>」切城市 → 点返回 → 主屏天气卡跟着换\n"
       "  --eez               EEZ 老代码回归（issue 19）：屏表/变量表自检 + 变量读写往返 + EEZ 屏点按钮切 App\n"
       "  --screenshot FILE  最后一帧存 BMP\n"
       "  --shot-frame N FILE 第 N 帧存 BMP（配 --eez 等故事线抓中途屏）\n"
@@ -294,7 +320,8 @@ namespace embark::platform::host {
 // 整个可执行文件只出现一次的 App 注册表：LauncherApp（启动器）首位 = 默认前台，
 // 之后是 ClockApp/SettingsApp。启动器与 clock/settings 屏的界面都来自 EEZ Studio
 // （app/eez_ui/），启动器仍必须第一位（默认前台）。2026-10-06 精简：只留这三个。
-EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp)
+EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp,
+                 embark::demo::WeatherApp)
 
 }  // namespace embark::platform::host
 
@@ -343,6 +370,7 @@ Options parse_options(int argc, char** argv) {
     else if (std::strcmp(arg, "--eez") == 0) { options.eez = true; }
     else if (std::strcmp(arg, "--ui") == 0) { options.ui = true; }
     else if (std::strcmp(arg, "--ui-nav") == 0) { options.ui_nav = true; }
+    else if (std::strcmp(arg, "--ui-weather") == 0) { options.ui_weather = true; }
     else if (std::strcmp(arg, "--help") == 0) { print_usage(); std::exit(0); }
     else {
       // 严格解析：不认识的选项/缺参数直接报错退出（旧版静默忽略会让 --drag
@@ -547,6 +575,106 @@ bool aidogui_prev_check(int base_y, int base_m) {
             shown_ok ? y : -1, shown_ok ? m : -1, base_y, base_m, title_ok ? "同步" : "不同步");
   return shown_ok && y == base_y && m == base_m && title_ok;
 }
+/// 字形覆盖检查：把控件当前文本逐字符喂给 LVGL 字体表，任何一个字形缺失都算失败。
+/// 为什么必须有这条：字体是按 (ttf, 字号) 子集化的（字符表在 screen.aid 的
+/// i18n.customCharsetRows 里显式维护），漏一个字符**不会**编译或运行报错 —— 屏幕上只是
+/// 一个方框，验收却会"通过"。这里把"方框"变成可断言的失败。
+bool aidogui_font_covers(const char* screen, const char* widget) {
+  lv_obj_t* obj = embark::demo::aidogui_ui_bridge_widget(screen, widget);
+  if (obj == nullptr) { return false; }
+  const lv_font_t* font = lv_obj_get_style_text_font(obj, LV_PART_MAIN);
+  const char* text = lv_label_get_text(obj);
+  if (font == nullptr || text == nullptr) { return false; }
+  bool ok = true;
+  for (const unsigned char* p = reinterpret_cast<const unsigned char*>(text); *p != 0U;) {
+    std::uint32_t cp = 0;
+    int len = 1;
+    if (*p < 0x80U) { cp = *p; }
+    else if ((*p & 0xE0U) == 0xC0U) { cp = *p & 0x1FU; len = 2; }
+    else if ((*p & 0xF0U) == 0xE0U) { cp = *p & 0x0FU; len = 3; }
+    else { cp = *p & 0x07U; len = 4; }
+    for (int i = 1; i < len; ++i) { cp = (cp << 6) | (p[i] & 0x3FU); }
+    p += len;
+    lv_font_glyph_dsc_t dsc{};
+    if (!lv_font_get_glyph_dsc(font, &dsc, cp, 0)) {
+      ELOG_INFO("ui-weather 字形缺失：{}/{} 的字 U+{:04X} 不在该字号字体子集里（screen.aid 的 customCharsetRows 要补）",
+                screen, widget, cp);
+      ok = false;
+    }
+  }
+  return ok;
+}
+
+/// --ui-weather：天气屏是否与数据桩逐字段一致（城市名 / 现在区 / 5 天逐行）。
+/// 城市不写死：比的是"屏幕上的字 == 数据桩里那座城市的字"，起始城市由持久化决定。
+bool aidogui_weather_screen_ok(std::size_t city) {
+  auto text_of = [](const char* widget) -> const char* {
+    lv_obj_t* obj = embark::demo::aidogui_ui_bridge_widget("weather", widget);
+    return obj != nullptr ? lv_label_get_text(obj) : nullptr;
+  };
+  auto eq = [](const char* got, const char* want) {
+    return got != nullptr && want != nullptr && std::strcmp(got, want) == 0;
+  };
+  const embark::demo::WeatherCity& c = embark::demo::weather_city(city);
+  const bool head_ok = eq(text_of("L_City"), c.name) && eq(text_of("L_NIcon"), c.days[0].icon) &&
+                       eq(text_of("L_NTemp"), c.temp) && eq(text_of("L_NDesc"), c.days[0].desc);
+  bool rows_ok = true;
+  char widget[32];
+  for (std::size_t i = 0; i < embark::demo::kWeatherDayCount; ++i) {
+    const embark::demo::WeatherDay& d = c.days[i];
+    std::snprintf(widget, sizeof widget, "L_D%u_Dow", static_cast<unsigned>(i));
+    if (!eq(text_of(widget), d.dow)) { rows_ok = false; }
+    std::snprintf(widget, sizeof widget, "L_D%u_Icon", static_cast<unsigned>(i));
+    if (!eq(text_of(widget), d.icon)) { rows_ok = false; }
+    std::snprintf(widget, sizeof widget, "L_D%u_Desc", static_cast<unsigned>(i));
+    if (!eq(text_of(widget), d.desc)) { rows_ok = false; }
+    std::snprintf(widget, sizeof widget, "L_D%u_Range", static_cast<unsigned>(i));
+    if (!eq(text_of(widget), d.range)) { rows_ok = false; }
+  }
+  bool glyphs_ok = true;
+  char check[32];
+  for (const char* w : {"L_City", "L_NIcon", "L_NTemp", "L_NDesc"}) {
+    if (!aidogui_font_covers("weather", w)) { glyphs_ok = false; }
+  }
+  for (std::size_t i = 0; i < embark::demo::kWeatherDayCount; ++i) {
+    for (const char* suffix : {"Dow", "Icon", "Desc", "Range"}) {
+      std::snprintf(check, sizeof check, "L_D%u_%s", static_cast<unsigned>(i), suffix);
+      if (!aidogui_font_covers("weather", check)) { glyphs_ok = false; }
+    }
+  }
+  const bool created = embark::demo::aidogui_ui_bridge_screen_created("weather");
+  const int widgets = embark::demo::aidogui_ui_bridge_widget_count("weather");
+  ELOG_INFO("ui-weather 天气屏：已创建 {}；控件 {} 个；城市 \"{}\"；现在 {} {}；5 天逐行{}；字形{}",
+            created ? "是" : "否", widgets, text_of("L_City") != nullptr ? text_of("L_City") : "<取不到>",
+            text_of("L_NTemp") != nullptr ? text_of("L_NTemp") : "<取不到>",
+            text_of("L_NIcon") != nullptr ? text_of("L_NIcon") : "<取不到>",
+            rows_ok ? "一致" : "不一致", glyphs_ok ? "齐全" : "有缺");
+  return created && widgets > 0 && head_ok && rows_ok && glyphs_ok;
+}
+
+/// --ui-weather：主屏天气卡是否与同一个城市一致（卡片不是第二份数据）。
+bool aidogui_weather_card_ok(std::size_t city) {
+  auto text_of = [](const char* widget) -> const char* {
+    lv_obj_t* obj = embark::demo::aidogui_ui_bridge_widget("launcher", widget);
+    return obj != nullptr ? lv_label_get_text(obj) : nullptr;
+  };
+  auto eq = [](const char* got, const char* want) {
+    return got != nullptr && want != nullptr && std::strcmp(got, want) == 0;
+  };
+  const embark::demo::WeatherCity& c = embark::demo::weather_city(city);
+  bool glyphs_ok = true;
+  for (const char* w : {"L_WCity", "L_WTemp", "L_WIcon", "L_WDesc"}) {
+    if (!aidogui_font_covers("launcher", w)) { glyphs_ok = false; }
+  }
+  const bool ok = eq(text_of("L_WCity"), c.name) && eq(text_of("L_WTemp"), c.temp) &&
+                  eq(text_of("L_WIcon"), c.days[0].icon) && eq(text_of("L_WDesc"), c.days[0].desc) &&
+                  glyphs_ok;
+  ELOG_INFO("ui-weather 主屏天气卡：\"{}\" {} {} {}（期望 \"{}\" {} {} {}）{}",
+            text_of("L_WCity") != nullptr ? text_of("L_WCity") : "?", text_of("L_WTemp") != nullptr ? text_of("L_WTemp") : "?",
+            text_of("L_WIcon") != nullptr ? text_of("L_WIcon") : "?", text_of("L_WDesc") != nullptr ? text_of("L_WDesc") : "",
+            c.name, c.temp, c.days[0].icon, c.days[0].desc, ok ? "" : " ✘");
+  return ok;
+}
 #endif /* EMBARK_AIDOGUI_UI */
 }  // namespace
 
@@ -578,6 +706,8 @@ void ui_main(void* argument) noexcept {
   ELOG_INFO("框架就绪：{} 个 App，默认前台 {}（上限 {}）", framework.apps().size(),
             framework.apps().at(0)->name(), embark::max_apps);
 
+  const auto* weather = static_cast<const embark::demo::WeatherApp*>(framework.app(3));
+
   // --- 按模式定帧数上限（0 = 一直跑到关窗）-----------------------------------
   int frames_limit = options->frames;
   if (frames_limit <= 0) {
@@ -587,6 +717,7 @@ void ui_main(void* argument) noexcept {
     else if (options->eez) { frames_limit = eez_frames; }
     else if (options->ui) { frames_limit = aidogui_frames; }
     else if (options->ui_nav) { frames_limit = uinav_frames; }
+    else if (options->ui_weather) { frames_limit = uiweather_frames; }
   }
 
   int frames_run = 0;
@@ -598,6 +729,9 @@ void ui_main(void* argument) noexcept {
   bool uinav_prev_ok = false;   // --ui-nav：点「<」显示月回到基准（帧 96）
   int uinav_base_y = 0;         // --ui-nav：月历基准显示月（帧 62 记录）
   int uinav_base_m = 0;
+  bool uiweather_in_ok = false;    // --ui-weather：进天气屏后 5 天与数据桩一致（帧 22）
+  bool uiweather_next_ok = false;  // --ui-weather：点「>」换城市后屏上数据跟着换（帧 40）
+  bool uiweather_card_ok = false;  // --ui-weather：回主屏后天气卡换成同一个城市（帧 58）
   for (;;) {
     framework.step();
     ++frames_run;
@@ -704,6 +838,32 @@ void ui_main(void* argument) noexcept {
       if (frames_run == uinav_prev_check_frame) { uinav_prev_ok = aidogui_prev_check(uinav_base_y, uinav_base_m); }
 #endif
       if (frames_run == uinav_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
+    } else if (options->ui_weather) {
+      // 天气验收：点主屏天气卡（设计器事件）→ 天气屏对桩 → 点「>」切城市 → 点「返回」→
+      // 主屏卡片同源。城市不写死，比的是"屏上的字 == 数据桩里那座城市的字"。
+#if defined(EMBARK_AIDOGUI_UI)
+      const PanelPoint wcard = aidogui_widget_center("launcher", "Card_Weather",
+                                                     uiweather_card_fallback_x, uiweather_card_fallback_y);
+      const PanelPoint wnext = aidogui_widget_center("weather", "Btn_CityNext",
+                                                     uiweather_next_fallback_x, uiweather_next_fallback_y);
+      const PanelPoint wback = aidogui_widget_center("weather", "Btn_Back",
+                                                     uiweather_back_fallback_x, uiweather_back_fallback_y);
+      if (frames_run == uiweather_card_frame) { push_motion_and_press(options->scale, wcard.x, wcard.y); }
+      if (frames_run == uiweather_card_frame + click_release_delta) { push_release(options->scale, wcard.x, wcard.y); }
+      if (frames_run == uiweather_in_frame) { uiweather_in_ok = aidogui_weather_screen_ok(weather->city_index()); }
+      if (frames_run == uiweather_next_frame) { push_motion_and_press(options->scale, wnext.x, wnext.y); }
+      if (frames_run == uiweather_next_frame + click_release_delta) { push_release(options->scale, wnext.x, wnext.y); }
+      if (frames_run == uiweather_next_check_frame) {
+        uiweather_next_ok =
+            aidogui_weather_screen_ok(weather->city_index()) && weather->city_switches() == 1;
+      }
+      if (frames_run == uiweather_back_frame) { push_motion_and_press(options->scale, wback.x, wback.y); }
+      if (frames_run == uiweather_back_frame + click_release_delta) { push_release(options->scale, wback.x, wback.y); }
+      if (frames_run == uiweather_card_check_frame) {
+        uiweather_card_ok = aidogui_weather_card_ok(weather->city_index());
+      }
+#endif
+      if (frames_run == uiweather_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
     }
     if (options->shot_path != nullptr && frames_run == options->shot_frame) {
       if (!save_screenshot(display, options->shot_path)) { hp::exit_process(1); }
@@ -733,6 +893,9 @@ void ui_main(void* argument) noexcept {
   ELOG_INFO("时钟（屏名 clock）：ticks={} 亮度={} settings 档={}；LVGL 未回收 {} 字节",
           clock->ticks(), clock->brightness(), settings->level(),
             embark_lvgl_outstanding_bytes());
+  ELOG_INFO("天气（屏名 weather）：城市 {}（下标 {}）切城 {} 次；enters={} resumes={} 前台帧={}",
+            weather->city_name(), weather->city_index(), weather->city_switches(), weather->enters(),
+            weather->resumes(), weather->foreground_ticks());
 
   int exit_code = 0;
   if (options->launch) {
@@ -785,6 +948,16 @@ void ui_main(void* argument) noexcept {
               framework.apps().at(framework.foreground())->name(), framework.switches(),
               embark::demo::aidogui_ui_nav_click_hits(), uinav_base_y, uinav_base_m);
     if (!uinav_ok) { exit_code = 2; }
+  }
+  if (options->ui_weather) {
+    // --ui-weather 的三段检查在帧 22/40/58 就断完了（各自打了证据行），这里只落结论。
+    const bool uiweather_ok = uiweather_in_ok && uiweather_next_ok && uiweather_card_ok;
+    ELOG_INFO("〔aidogui 天气验收{}〕（前台 {}，switches={}，切城 {} 次，导航命中 {} 次，城市 {}）",
+              uiweather_ok ? "通过" : "失败",
+              framework.apps().at(framework.foreground())->name(), framework.switches(),
+              weather->city_switches(), embark::demo::aidogui_ui_nav_click_hits(),
+              weather->city_name());
+    if (!uiweather_ok) { exit_code = 2; }
   }
   if (options->eez) {
     // 故事线：点 launcher 屏按钮 → Flow SetPage 到 clock 屏 → 桥的屏观察者 →

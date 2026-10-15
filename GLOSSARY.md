@@ -177,3 +177,23 @@ _Avoid_: 字体缓存、字库池
 **Coverage audit（缺字审计）**：
 构建期检查：扫描源码中的 UI 字符串，对照静态子集字库的覆盖清单，发现字库外字符即失败（CI 门禁），从源头防豆腐块。
 _Avoid_: 运行时缺字检查、字体检测
+
+**Weather App（天气 App）**：
+薄壳 App，界面 = AiDoGUI 屏 `weather`（屏名约定 == App 名）。数据来自编译期桩 `app/weather/weather_data.h`；城市选择存 `hal().storage` 的 `wx.city`（一个字节）。屏上 `L_City` / `L_NIcon` / `L_NTemp` / `L_NDesc` 与 `L_D{i}_{Dow,Icon,Desc,Range}`（i = 0..4，0 = 今天）由 App 按名写；`Btn_CityPrev` / `Btn_CityNext` 是 App 侧 `lv_obj_add_event_cb` 挂的回调 —— 设计器事件在本工程里只用来**切 App**，屏内交互归 App。
+_Avoid_: 天气组件、天气页
+
+**Weather card（天气卡）**：
+主屏 launcher 上的 `Card_Weather`（`L_WIcon` / `L_WTemp` / `L_WCity` / `L_WDesc`），既是显示控件也是进天气 App 的入口（设计器「调用函数」`embark_ui_open_weather`）。它不是第二份数据：`LauncherApp::refresh_weather()` 读同一个持久化键、同一张桩表 —— 卡片只是同源数据的另一种画法（在天气屏换了城市，回主屏卡片跟着变）。
+_Avoid_: 天气控件、天气小组件
+
+**Weather stub（天气数据桩）**：
+`app/weather/weather_data.h` 里的编译期常量表（4 城 × 5 天：日期标签 / 天气字 / 一句话 / 温度区间），零堆零 IO。框架当前没有任何网络能力，所以天气是桩不是真数据 —— 决策与将来怎么换成真数据见 docs/adr/0012-weather-data-source.md。
+_Avoid_: mock 数据、假数据源
+
+**City table（城市表）**：
+天气桩里的城市维度（北京 / 上海 / 广州 / 深圳），下标就是持久化键 `wx.city` 的值；切换是环形的（`weather_shift_city`），没有搜索与输入。
+_Avoid_: 城市列表、地区表
+
+**Glyph coverage guard（字形守卫）**：
+`--ui-weather` 验收里的检查：把控件当前文本逐字符喂给 `lv_font_get_glyph_dsc`，缺字形即判失败并打出 U+ 码点。字体按 (字体, 字号) 子集化，漏字符**不会**编译或运行报错，屏幕上只是一个方框而验收照样「通过」—— 这条把方框变成可断言的失败（字符表见 Font charset table）。
+_Avoid_: 缺字检测、字体验证
