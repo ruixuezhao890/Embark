@@ -8,6 +8,7 @@
  */
 #include "aidogui_ui_bridge.h"
 
+#include <cstdio>
 #include <cstring>
 
 #include <embark/log.h>
@@ -174,6 +175,25 @@ void aidogui_ui_bridge_destroy() {
   }
   g_font_report = AidoguiFontReport{0, 0};
   g_initialized = false;
+}
+
+lv_font_t* aidogui_ui_bridge_font(int size) {
+  if (size <= 0) {
+    return nullptr;
+  }
+  // 表项只有 bin_path（构建期从生成代码里正则抓的），所以按"路径后缀"认字号：
+  // "_14.bin" 不会误配 "_114.bin"（后缀长度不同），字号一多也不会串。
+  char suffix[16];
+  std::snprintf(suffix, sizeof suffix, "_%d.bin", size);
+  const std::size_t want = std::strlen(suffix);
+  for (int i = 0; i < AIDOGUI_FONT_COUNT; ++i) {
+    const aidogui_font_entry_t& font = kAidoguiFonts[i];
+    const std::size_t len = std::strlen(font.bin_path);
+    if (len >= want && std::strcmp(font.bin_path + (len - want), suffix) == 0) {
+      return *font.slot;
+    }
+  }
+  return nullptr;
 }
 
 bool aidogui_ui_bridge_ready() {

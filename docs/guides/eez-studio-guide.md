@@ -1,5 +1,10 @@
 # EEZ Studio 一条龙
 
+> ⚠️ **已废弃（EEZ 时代，见 [ADR 0011](../adr/0011-aidogui-ui-source.md)）**：界面来源已换成
+> AiDoGUI Designer，本页只作历史记录保留。当前口径见 [new-app-guide.md](new-app-guide.md)
+> 与 [app/aidogui_ui/README.md](../../app/aidogui_ui/README.md)；EEZ 链路（`app/eez_ui/`、
+> `third_party/eez-framework`）在迁移第二步退役。
+
 用 EEZ Studio + EEZ Flow 画界面，生成的 LVGL 代码入库、应用照常注册。
 **App 侧怎么接接口 → 先读 [eez-ui-manual.md](eez-ui-manual.md)（用户手册）**；
 本页只讲 Studio 侧的安装、建工程与导出。

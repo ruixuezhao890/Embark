@@ -1,5 +1,10 @@
 # 脚手架与工具脚本
 
+> ⚠️ **已废弃（EEZ 时代，见 [ADR 0011](../adr/0011-aidogui-ui-source.md)）**：界面来源已换成
+> AiDoGUI Designer，本页只作历史记录保留。当前口径见 [new-app-guide.md](new-app-guide.md)
+> 与 [app/aidogui_ui/README.md](../../app/aidogui_ui/README.md)；EEZ 链路（`app/eez_ui/`、
+> `third_party/eez-framework`）在迁移第二步退役。**本文里仍然有效的部分**：验收开关与退出码、字体子集生成、各脚本的存在与位置；**已过期的部分**：`tools/scaffold_app.py` 的 EEZ 变量骨架（AiDoGUI 世界不需要 Flow 变量，它生成的 App 不会挂屏 —— 加 App 请照 `app/music/` 抄）。
+
 > **这一层回答"仓库里那几个脚本是干什么的、什么时候该用、改它们要注意什么"**。
 > 只想尽快跑起来 → [quickstart.md](quickstart.md)；想理解生成的代码长什么样 → [new-app-guide.md](new-app-guide.md)。
 

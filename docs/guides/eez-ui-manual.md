@@ -1,5 +1,10 @@
 # EEZ UI 用户手册：界面交给 EEZ，App 只调接口
 
+> ⚠️ **已废弃（EEZ 时代，见 [ADR 0011](../adr/0011-aidogui-ui-source.md)）**：界面来源已换成
+> AiDoGUI Designer，本页只作历史记录保留。当前口径见 [new-app-guide.md](new-app-guide.md)
+> 与 [app/aidogui_ui/README.md](../../app/aidogui_ui/README.md)；EEZ 链路（`app/eez_ui/`、
+> `third_party/eez-framework`）在迁移第二步退役。
+
 > 适用对象：Embark App 的开发者。读完这份手册你就知道——**界面（外观、交互、切屏）全部
 > 由 EEZ Studio 负责，App 侧一行 LVGL 都不用写**，只需要在 4 个钩子里调用薄桥的接口。
 > 旧的手绘 UI 代码（lv_obj_create / lv_scr_load / 按钮回调）已全部退役并从仓库删除。

@@ -6,3 +6,5 @@ ui_comm.c
 screens/ui_launcher.c
 screens/ui_clock.c
 screens/ui_weather.c
+screens/ui_music.c
+screens/ui_album.c

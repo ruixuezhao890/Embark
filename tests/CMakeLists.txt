@@ -26,6 +26,7 @@ add_executable(embark_tests
         hal/test_system.cpp
         hal/test_time.cpp
         kernel/test_app_registry.cpp
+        kernel/test_launcher_pages.cpp
         kernel/test_framework.cpp
         kernel/test_eez_screen_names.cpp
         kernel/test_framework_messaging.cpp

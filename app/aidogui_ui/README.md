@@ -28,7 +28,7 @@ CMakeLists.txt  手写的构建胶水（GLOB export/**.c + 配置期建表）
   生成代码写的是 `S:/fonts/`（复数），磁盘上是 `font/`（单数）——桥做了目录名兜底，
   **GUI 导出完不用改名**。
 - 导航事件是生成代码里的裸调用（`embark_ui_open_*();`），原型在
-  `app/common/aidogui_ui_hooks.h`（被 `-include` 注入，见「两块屏与导航」）。
+  `app/common/aidogui_ui_hooks.h`（被 `-include` 注入，见「五块屏与导航」）。
 - 屏表/控件表/字体表**不入库**：`cmake/embark_aidogui_tables.cmake` 在 CMake 配置期
   解析 `export/screens/ui_*.h` 与 `export/ui.c`，写到构建目录的
   `include/embark_aidogui_ui_tables.h`。改了界面并重导出后，构建会自动重跑配置。
@@ -45,11 +45,17 @@ CMakeLists.txt  手写的构建胶水（GLOB export/**.c + 配置期建表）
 
 ```powershell
 cmake --build build --target embark_host_ui
-build\platform\host\embark_host_ui.exe --ui --frames 40 --delay 20       # 期待〔aidogui 验收通过〕
-build\platform\host\embark_host_ui.exe --ui-nav --delay 20               # 期待〔aidogui 导航验收通过〕
-build\platform\host\embark_host_ui.exe --ui-nav --delay 20 `
+build\platform\host\embark_host_ui.exe --ui --frames 40                  # 期待〔aidogui 验收通过〕
+build\platform\host\embark_host_ui.exe --ui-nav --delay 40              # 期待〔aidogui 导航验收通过〕
+build\platform\host\embark_host_ui.exe --ui-weather --delay 40          # 期待〔aidogui 天气验收通过〕
+build\platform\host\embark_host_ui.exe --ui-launcher-pages --delay 40   # 期待〔主屏分页验收通过〕
+build\platform\host\embark_host_ui.exe --ui-nav --delay 40 `
   --shot-frame 24 .scratch\ui_nav_clock.bmp                            # 抓 clock 屏那一帧
 ```
+
+> **带合成点击/手势的验收必须给 `--delay 40`（或更大）**：LVGL 约每 30 ms 读一次输入，
+> 帧跑得比它快时，一帧里推的"按下 → 移动 → 抬起"会被采样进同一次读取 —— 表现是同一份脚本
+> 一趟过一趟不过（点击晚十几帧生效、拖动看着没吸附）。`--ui` 没有合成输入，不用管。
 
 ## 改界面（可选：无头重导出）
 
@@ -66,24 +72,40 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 设计器位置三级查找：`AIDOGUI_HOME` → 仓库根 `.aidogui-home` → `tools/aidogui/home.txt`
 （本机路径，已 gitignore）。换机器时改最后一处即可。
 
-## 三块屏与导航（第 2 步）
+## 五块屏与导航（第 2 步）
 
 | 屏（id == name） | 控件 | 数据 | 回程 |
 | --- | --- | --- | --- |
-| `launcher` | 23（桌面：时间卡 / 天气卡 / 四宫格磁贴 / 提示） | 时间由 `LauncherApp` 按墙钟刷；**天气卡**由 `LauncherApp::refresh_weather()` 按当前城市刷（与天气屏同源） | 磁贴 `Tile1` → clock；天气卡 `Card_Weather` → weather |
-| `clock` | 25（返回按钮 / 大时间 / 日期 / 真 `lv_calendar` 月历 `Cal` / 年进度 / 明日 / 本月） | `ClockApp` 每拍推 13 个文案 + 1 个条形值；月历走 `lv_calendar_set_today_date / set_showed_date / set_day_names` | `Btn_Back` → launcher |
+| `launcher` | 14（桌面：时间卡 / 天气卡 / **空磁贴带 `Band_Apps`** / **页码点行 `Dots_Row`** / 提示行） | 时间与天气卡由 `LauncherApp` 刷；**磁贴与页码点是运行时按 App 注册表建的**（`app/launcher/launcher_tiles.cpp`），每页 4 个、横向分页 + 吸附 | 磁贴点按 → 目标 App；天气卡 `Card_Weather` → weather |
+| `clock` | 27（返回按钮 / 大时间 / 日期 / 真 `lv_calendar` 月历 `Cal` / 年进度 / 明日 / 本月） | `ClockApp` 每拍推 13 个文案 + 1 个条形值；月历走 `lv_calendar_set_today_date / set_showed_date / set_day_names` | `Btn_Back` → launcher |
 | `weather` | 37（返回 / 城市栏 ◀ 城市 ▶ / 「现在」卡 / 5 天逐行 日期·天气字·一句话·温度） | `WeatherApp` 只在进屏/回屏/切城市时写（数据是桩，不会自己变）；城市存 `hal().storage` 的 `wx.city` | `Btn_Back` → launcher |
+| `music` | 7（返回 / 标题 / 占位卡 + 两行字） | 无（占位屏，App 侧只有薄壳） | `Btn_Back` → launcher |
+| `album` | 7（同上） | 无（占位屏） | `Btn_Back` → launcher |
+
+### 两条不在设计器里的导航
+
+- **主屏磁贴**：磁贴**不是设计稿里的控件** —— 设计稿只放一个空容器 `Band_Apps`，磁贴由
+  `LauncherApp` 在每次屏装载后按注册表重建（顺序 = 注册顺序，跳过第 0 个 = 主屏自己），
+  点按走 `aidogui_ui_nav_request_app()`。所以**新加一个 App 就自动多一个磁贴、自动能进**，
+  不用动设计稿（超过 4 个自动多一页 + 多一个页码点）。分页几何是纯函数
+  `app/launcher/launcher_pages.h`（每页 4 个 / 页数 / 页容器 x / 页码点 x），有 doctest 单测
+  `tests/kernel/test_launcher_pages.cpp`。
+- **上滑返回**：非主屏的屏在装载时由桥给屏根挂 `LV_EVENT_GESTURE`，`LV_DIR_TOP` →
+  `framework.request_home()`；**主屏不挂**（在主屏上滑什么也不发生）。App 与设计器都不用声明，
+  新加的 App 屏自动有（ADR 0013）。
 
 导航**不挂 `CHANGE_SCREEN`**（`_ui_screen_change()` 会绕过桥的按需 init/destroy），而是给控件挂
 「**调用函数**」动作，函数名约定 `embark_ui_open_<App 名>`：
 
 | 屏 | 控件 | 动作 | 函数名（设计器里填） |
 | --- | --- | --- | --- |
-| launcher | Tile1 | 调用函数 | `embark_ui_open_clock` |
-| launcher | Tile2 | 调用函数 | `embark_ui_open_settings` |
-| clock | Btn_Back | 调用函数 | `embark_ui_open_launcher` |
 | launcher | Card_Weather | 调用函数 | `embark_ui_open_weather` |
+| clock | Btn_Back | 调用函数 | `embark_ui_open_launcher` |
 | weather | Btn_Back | 调用函数 | `embark_ui_open_launcher` |
+| music | Btn_Back | 调用函数 | `embark_ui_open_launcher` |
+| album | Btn_Back | 调用函数 | `embark_ui_open_launcher` |
+
+（磁贴不带设计器事件：它们是运行时建的，见上一节。）
 
 生成代码会吐一句裸调用（`embark_ui_open_clock();`），原型在
 `app/common/aidogui_ui_hooks.h`（该头由 `app/aidogui_ui/CMakeLists.txt` 用 `-include`
@@ -113,10 +135,13 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 直接报「字体 X (Npx) 未配置自定义字符范围」。当前 7 行（11/12/14/22/28/48/56px，CJK 按
 该字号实际显示的字符配、ASCII 用 `range 0x20-0x7F`；两个大时间字号 48/56px 只放
 `0123456789:#abcdef `——时间数字 + recolor 色码需要的字符，全 ASCII 会把这两只撑到
-80 KB+ 撑爆宿主 256 KB 预算）合计 **56,076 B**（天气屏上线时补了 `多/雨/云/今/°` 与 `上海/广州/深圳/圳` 等城市字）。加新字号、
-加会显示动态数字的控件、换字体时，这张表都要跟着改 —— 漏字符不会报错，只会画方框，所以
-验收侧还有一道 **字形守卫**（`--ui-weather` 用 `lv_font_get_glyph_dsc` 逐字符对表，见
-[.scratch/weather/acceptance.md](../../.scratch/weather/acceptance.md)）。
+80 KB+ 撑爆宿主 256 KB 预算）合计 **57,364 B**（天气屏上线时补了 `多/雨/云/今/°` 与 `上海/广州/深圳/圳` 等城市字；
+音乐/相册屏上线时 12px 行补了 `左右动翻页界面还没做`、22px 行补了 `占位屏`）。**加一个 App
+要顺手补这张表**：磁贴标题走 14px 行、提示行与占位说明走 12px 行 —— 新 App 的标题字必须
+在 14px 行的 `symbols` 里，否则主屏磁贴上是方框。加新字号、加会显示动态数字的控件、
+换字体时这张表都要跟着改 —— 漏字符不会报错，只会画方框，所以验收侧还有一道 **字形守卫**
+（`--ui-weather` / `--ui-launcher-pages` 用 `lv_font_get_glyph_dsc` 逐字符对表，见
+[.scratch/launcher-pages/acceptance.md](../../.scratch/launcher-pages/acceptance.md)）。
 
 当前用的 `ui_heiti.ttf` 是「时尚中黑简体」(TRENDS)，**商业授权待确认**；
 若要用在正式产品里，换成 OFL 授权的 Noto Sans SC 更稳。

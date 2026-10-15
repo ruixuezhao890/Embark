@@ -12,8 +12,10 @@
 
 namespace embark {
 
-// App 总数（静态注册表；注册顺序 = 默认前台顺序）
-inline constexpr std::size_t max_apps = 8;
+// App 总数（静态注册表；注册顺序 = 默认前台顺序，主屏固定是第 0 个）
+// issue launcher-pages：主屏磁贴改为按注册表运行时生成 + 横向分页，容量从 8 提到 12
+// （12 = 主屏自己 + 11 个 App 磁贴 = 3 页；同步 docs/reference/limits.md）。
+inline constexpr std::size_t max_apps = 12;
 
 // 框架定时器数量（后台节拍用 etl::callback_timer<max_background_timers>）
 inline constexpr std::size_t max_background_timers = 8;

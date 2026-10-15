@@ -36,13 +36,15 @@
  *   - aidogui_ui_bridge_widget(screen, widget_name)：按名拿 lv_obj_t*（屏未装载、
  *     控件名不存在一律返回 nullptr）。控件在 AiDoGUI 里改名只会让这里查不到
  *     （日志能看出来），不会像直接引 ui_<控件> 全局那样编译期静默断链。
- *   控件名 = AiDoGUI 里的控件名（如 L_Time、Tile1、Card_Clock）。
+ *   控件名 = AiDoGUI 里的控件名（如 L_Time、Card_Clock；主屏磁贴是运行时生成的，不在控件表里）。
  *
  * 四、屏切换事件（反向：AiDoGUI 里的动作 → Embark 能听到）
  *   AiDoGUI 的事件动作 CHANGE_SCREEN 会调生成代码里的 _ui_screen_change()（LVGL 切屏），
  *   本桥包装在那个出口上：aidogui_ui_bridge_set_screen_observer(observer, user) 装的
  *   观察者会收到目标屏名，再经 app/common/aidogui_ui_nav.h 解析成 App 名请求切前台。
- *   桥自己发起的 load_screen* 不回调（那不该回灌成「切 App」）。
+ *   桥自己发起的 load_screen* **也**会回调（notify=true）：App 在 onEnter 里装载自己的屏时，
+ *   观察者会收到同名屏，导航侧按"已经在前台"忽略。于是"每次屏装载都要做的事"（点击绑定、
+ *   上滑返回手势）只需要挂在观察者这一处，不必区分屏是谁装载的。
  *
  * 头只 include <lvgl.h>：不把生成代码的头泄进 Embark App 编译面。
  */
@@ -70,6 +72,12 @@ bool aidogui_ui_bridge_ready();
 
 /// 字体报告（未 init 时两项都是 0）。
 AidoguiFontReport aidogui_ui_bridge_font_report();
+
+/// 按字号取已加载的字体：AiDoGUI 的字体 BIN 文件名以 "_<字号>.bin" 结尾
+/// （如 ui_font_ui_heiti_14.bin），没有该字号或它加载失败时返回 nullptr
+/// （调用方保持 LVGL 内置字体即可）。运行时新建的控件（启动器磁贴）要用设计器同款字体，
+/// 只能走这里 —— 生成代码的 ui_font_* 符号不泄进 App 编译面（见本文件头）。
+lv_font_t* aidogui_ui_bridge_font(int size);
 
 // --- 屏表 -------------------------------------------------------------------
 int aidogui_ui_bridge_screen_count();

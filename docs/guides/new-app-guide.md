@@ -1,287 +1,240 @@
 # 新手指南：30 分钟加一个带界面的 App
 
 > 目标读者：第一次在 Embark 上加 App 的开发者（人，或 agent）。
-> 读完并走完本指南，你会掌握 Embark 的完整 App 工作流——**C++ 侧建壳 → EEZ Studio 画同名屏 →
-> 变量桥接线 → 构建验收**。之后加任何 App 都是同一个套路。
-> 前置条件：仓库能构建（见根 README「宿主构建」）；EEZ Studio 已安装（[eez-studio-guide.md](eez-studio-guide.md) 第 1 步）。
-> 接口速查与完整 API 见 [eez-ui-manual.md](eez-ui-manual.md)（本指南是流程，那是词典）。
+> 读完并走完本指南，你会掌握完整的 App 工作流——**跑起来 → 敲起来（C++ 薄壳）→ 改起来
+> （AiDoGUI 设计工程）→ 验收**。之后加任何 App 都是同一个套路。
+> 前置条件：仓库能构建（见 [quickstart.md](quickstart.md)）；界面来源与生成链路见
+> [app/aidogui_ui/README.md](../../app/aidogui_ui/README.md) 与
+> [adr/0011-aidogui-ui-source.md](../adr/0011-aidogui-ui-source.md)。
+> 只想先看现成样板：`app/music/` 与 `app/album/` 是两个最小的完整 App（薄壳 + 同名占位屏 + 字符表 + 验收），
+> 本指南的每个数字都来自它们。
+>
+> **EEZ 时代的旧指南**（[eez-ui-manual.md](eez-ui-manual.md)、[eez-studio-guide.md](eez-studio-guide.md)）
+> 已加废弃横幅，只作历史阅读。
 
 ## 0. 三个角色，一张分工表
 
 | 谁 | 管什么 | 在哪做 |
 | --- | --- | --- |
-| **EEZ Studio** | 画页面、排控件、配交互、声明显示变量 | 桌面工程（`.eez-project`，**仓库外**维护） |
-| **Embark App（C++）** | 业务逻辑：状态机、定时任务、消息、数据 | `app/<名字>/` 下，6 个钩子 |
-| **薄桥 `app/common/eez_ui_bridge.h`** | 生成代码 ↔ App 契约的唯一适配点 | App 只调它，不 include 生成代码头 |
+| **AiDoGUI Designer** | 画屏、排控件、配"点按钮切屏"、维护字体字符表 | 设计工程 `app/aidogui_ui/screen.aid`（**随仓库入库**，导出产物同样入库） |
+| **Embark App（C++）** | 业务逻辑：状态机、定时任务、消息、数据 | `app/<名字>/` 下两个文件，5 个钩子 |
+| **薄桥 `app/common/aidogui_ui_bridge.h`** | 生成代码 ↔ App 契约的唯一适配点（按屏名/控件名查找） | App 只调它，**不 include 生成代码头** |
+| **导航 `app/common/aidogui_ui_nav.{h,cpp}`** | 屏变化 → 切前台 App；**非主屏上滑返回** | App 只在 `onCreate` 里 `ui_backend_attach_nav(fw)` |
 
-铁的约定只有两条（手册 §2）：**EEZ 屏名 == App 名**；**Flow 全局变量名 = `<app名>_<字段>`**。
-其余都是照葫芦画瓢。
+铁的约定只有三条（[ADR 0011](../adr/0011-aidogui-ui-source.md)）：
 
-## 1. 建 App 壳（C++ 侧，10 分钟）
+1. **屏名 == App 名**（`name()` 返回 `"music"` ⇒ 设计器里屏的 id/name 都得是 `music`）；
+2. **生成代码不手改**（`app/aidogui_ui/export/` 每次导出整体覆盖，改界面去设计器/工程文件）；
+3. **数据接口走控件表按名查找**（`aidogui_ui_bridge_widget("屏名", "控件名")`），App 不直接引
+   `ui_<屏id>_<控件名>` 全局——控件改名不会静默断链。
 
-仓库里已有三个薄壳样例：`app/launcher/`（主屏 + 导航接线）、`app/clock/`（tick 100ms 推进显示变量 + 收 `BrightnessMessage`）、`app/settings/`（suspend + 逻辑入口）。
+另外两条**免费得到**的能力（不用你写一行）：
 
-### 1.1 一键生成（推荐，30 秒）
+- **主屏磁贴**：磁贴由注册表运行时生成（[ADR 0013](../adr/0013-launcher-paged-tiles.md)），
+  **加 App 自动多一个磁贴**（每页 4 个，超过自动多一页 + 多一个页码点），不用改设计稿；
+- **上滑返回**：任意**非主屏**屏上向上滑 = 回主屏，新 App 自动适配（主屏自己上滑无效果）。
 
-不用手工复制改名，跑脚本即可：
+## 1. 跑起来（10 分钟）
 
-```sh
-python tools/scaffold_app.py                       # 交互菜单：问答式填 App 名 / 标题 / 后台策略 / 变量，先预览再确认
-```
+打开终端（Windows 用 PowerShell / pwsh 都行）：
 
-或直接给参数（默认只预览，加 `--apply` 才落地）：
+    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+    cmake --build build
+    ctest --test-dir build --output-on-failure
+    ./build/platform/host/embark_host_ui          # Windows 用 .\build\platform\host\embark_host_ui.exe
 
-```sh
-python tools/scaffold_app.py my --title "我的" --var visit_count:int --apply
-```
+> **Windows 上把构建目录放短路径**（例如 `-B C:\eb\app`，别用仓库里的 `build/`）：
+> 仓库 cwd 很长时，LVGL 的依赖文件路径会超过 250 字符，编译期直接报
+> `fatal error: opening dependency file third_party\lvgl\CMakeFiles\lvgl.dir\src\draw\...obj.d: No such file or directory`。
+> 这是路径长度问题，不是代码问题。
 
-脚本一次做完四件事：生成 `app/my/my_app.{h,cpp}` 薄壳、把源文件追加进 `app/CMakeLists.txt`
-的锚点行、把 `embark::demo::MyApp` 追加进 `platform/host/ui_demo.cpp` 的 `EMBARK_APP_TABLE`、
-并写出 `app/my/eez_vars.txt` —— **Studio 侧变量声明的粘贴清单**（见 §2.4）。
+看到 240×320 的竖屏窗口里：
 
-> **生成之后还要加变量？** 不用重新生成，也不会覆盖你写的业务代码：
-> - 菜单：`python tools/scaffold_app.py` → 选 `2`（给已有 App 追加变量）
-> - 命令行：`python tools/scaffold_app.py my --add-var count:int --add-var active:bool --apply`
->
-> 新变量插到已有变量之后、`eez_ui_bridge_tick()` 之前；已在的变量自动跳过（幂等），
-> `eez_vars.txt` 同步追加。单次向导最多填 12 个，**追加次数不限**。
+- 标题「启动器」+ 右上角实时时间；时钟卡、天气卡；
+- **磁贴带**：第 1 页「时钟 / 设置 / 天气 / 音乐」，下面 2 个**页码点**（居中）；
+- 点磁贴进 App；**在非主屏上向上滑回主屏**；左右拖动磁贴带翻页（松手吸附）。
 
-### 1.2 手工方式（照做一遍更懂结构）
+四条验收命令（**带合成点击/手势的必须给 `--delay 40`**，见 §4）：
 
-照 `app/clock/` 复制改名即可：
+    ./build/platform/host/embark_host_ui --ui                          # 字体/屏表/切走即释放
+    ./build/platform/host/embark_host_ui --ui-nav --delay 40           # 点磁贴 → 进屏 → 返回
+    ./build/platform/host/embark_host_ui --ui-launcher-pages --delay 40  # 分页 + 上滑返回 + 字形守卫
+    ./build/platform/host/embark_host_ui --ui-weather --delay 40       # 天气屏与主屏卡片同源
 
-1. **复制并改名**：`app/clock/clock_app.{h,cpp}` → `app/my_app/my_app.{h,cpp}`，类名 `ClockApp` → `MyApp`，
-   `name()` 返回 `"my"`（唯一、小写），`title()` 返回中文标题（如 `"我的"`，元数据用）。
+每条都会打一行结论（例如 `〔主屏分页验收通过〕（磁贴 5 / 页 2 / 点 2；上滑返回命中 1 次；…）`），
+退出码 0 = 通过、非 0 = 失败。
 
-2. **`app/CMakeLists.txt`**：`embark_demo_apps` 源列表加 `my_app/my_app.cpp`。
+## 2. 敲起来（10 分钟，C++ 侧）
 
-3. **`platform/host/ui_demo.cpp`**：`EMBARK_APP_TABLE(...)` 里加 `embark::demo::MyApp`
-   （放在 `LauncherApp` 之后，首位必须是启动器）。
-
-4. **构建验证**（此时 Studio 还没画屏，能过吗？能——薄壳是"缺屏安全"的）：
-
-```sh
-cmake --build build
-./build/platform/host/embark_host_ui --frames 60   # Windows: .\\build\\...\\embark_host_ui.exe
-```
-
-会看到 launch 日志里 App `my` 进入前台时打印一条告警（`enter_app_screen` 找不到同名屏 →
-保持当前屏 + 告警，见手册 §3），界面照常，不会黑屏。
-
-## 2. 画同名屏（EEZ Studio 侧，15 分钟）
-
-### 2.1 工程从哪来（先弄清这件事，别卡在这）
-
-仓库同时维护**导出产物**（`app/eez_ui/src/ui/`，生成代码，手改会被下次导出覆盖）与
-**源工程**（`app/eez_ui/embark.eez-project`，Studio 二进制、约 23 KB，随仓库入库，ADR 0008）。
-
-直接打开仓库里的 `app/eez_ui/embark.eez-project` → 跳到 2.2。
-- **没有源工程** → 不要自己从零建全套 UI：成本高且容易和既有 launcher/clock 屏脱节。
-  走第 1 节的"缺屏安全"模式先跑通 C++ 侧，拿到源工程后再回来画。
-
-### 2.2 新建页面，屏名必须等于 App 名
-
-Structures 面板 → 加页面，命名 **`my`**（严格等于 `name()`，子页用 `<app名>_<编号>_sub`）。
-画布 240×320（宿主竖屏）。
-
-> **屏的生命周期（内存）**：工程已勾 Settings→Build「Screens lifetime support」。你的**新屏不是
-> 启动屏**：页面 General 里把 **createAtStart 关掉**（默认 true，别用默认）、**Delete on unload 打开**
-> （离开即回收、回来重建）；launcher 保持常驻。详见 [eez-studio-guide.md](eez-studio-guide.md)
-> 「屏生命周期」与 [eez-ui-manual.md](eez-ui-manual.md) §7。
-
-### 2.3 放控件
-
-拖文本/值显示/按钮等控件，样式在 Studio 里排（深色科技风参考 launcher 屏的配色）。
-**文案用 ASCII**（EEZ 屏当前用 LVGL 默认字体 Montserrat，不含中文；中文需要字库方案，见 §6 踩坑）。
-
-### 2.4 声明 Flow 全局变量
-
-Flow 面板 → Variables → 新建 `my_visit_count`（int 类型，初值 0）。
-命名约定 `<app名>_<字段>`，这样 App 侧的变量桥按名对得上。
-
-`app/my/eez_vars.txt` 就是脚本给你的**粘贴清单**：每行写明变量全名与类型。
-它是 C++ 侧 `eez_ui_bridge_set_var_int("my_visit_count", n)` 推的那个名字。
-
-> **EEZ 侧的变量声明无法脚本化**：`.eez-project` 是 Studio 的二进制工程文件，只能在 Studio 里手工声明
-> （或从维护者拿现成模板）。**两边名字必须对得上**（桥按名查找、比较时忽略大小写，但仍建议逐字一致）——对不上不会崩，
-> `set_var_*` 找不到名字就返回 `false`（该次推送是 no-op），屏照常显示，只是那个控件不刷新。
-> 构建后用 `python tools/scaffold_app.py --vars-check build/include/embark_eez_vars.h`
-> 可以核对 C++ 侧变量表里有没有这个名字。
-
-### 2.5 把控件绑到变量
-
-值显示控件的属性面板 → 文本/值属性 → 选「绑定变量」→ 选 `my_visit_count`。
-生成代码每帧 `tick_screen_my()` 会把变量值刷进控件（由 App 侧 `eez_ui_bridge_tick()` 驱动）。
-
-### 2.6 按钮跳转：SetPage，别用「回上一屏」
-
-放一个按钮「回主屏」→ 交互设为 **SetPage → launcher**。
-⚠ 不要用「回上一屏（changeToPreviousScreen）」：EEZ 屏栈恒空，pop 是 no-op，点了没反应
-（历史上 clock 屏按钮配成过它，对应坑详细见手册 §6）。
-
-### 2.7 导出 + 重配构建
-
-导出代码到 `app/eez_ui/src/ui/`（覆盖现有生成文件），然后：
-
-```sh
-cmake -S . -B build        # 必须重配：配置日志打印「EEZ 屏表：N 个」「EEZ 变量：1 个」
-cmake --build build
-```
-
-变量表是**构建期解析**的（`cmake/embark_eez_vars.cmake` → `build/include/embark_eez_vars.h`），
-Studio 里加/删变量后只要重配即可，不用改 C++、不用动 CMakeLists。
-
-## 3. 接线（C++，5 分钟）
-
-在 `MyApp` 的四个钩子里调桥接口。完整接线版（照抄，改名字即可）：
+照 `app/music/` 抄两个文件（`music_app.h` / `music_app.cpp`），改名即可。最小形状：
 
 ```cpp
-// my_app/my_app.h —— 薄壳：不需要任何 LVGL 成员，只有钩子声明
-#include <embark/app.h>
-#include <embark/framework.h>
-
+// app/my/my_app.h
 class MyApp final : public embark::App {
  public:
-  [[nodiscard]] const char* name() const override { return "my"; }
-  [[nodiscard]] const char* title() const override { return "我的"; }
-  void onCreate(embark::Framework& fw) override;
-  void onEnter() override;
-  void onPause() override;
-  void onResume() override;
-  void onExit() override;
-  void onForegroundTick(std::uint32_t now_ms) override;
+  [[nodiscard]] const char* name() const override { return "my"; }     // 必须等于屏名
+  [[nodiscard]] const char* title() const override { return "我的"; }  // 主屏磁贴上的字
+  [[nodiscard]] const char* icon() const override { return LV_SYMBOL_EDIT; }  // 预留，磁贴现在是纯文字
+  [[nodiscard]] AppSettings settings() const override { return AppSettings{}; }  // 后台策略，默认 suspend
 
+  void onCreate(Framework& fw) override;   // 只记账 + 存 fw_
+  void onEnter() override;                 // 装自己的屏
+  void onPause() override;                 // 只打日志
+  void onResume() override;                // 回前台再装一次屏
+  void onExit() override;                  // 只打日志
+  void onForegroundTick(std::uint32_t now_ms) override;  // 推数据 + ui_backend_tick()
  private:
-  std::uint32_t visits_ = 0;   // 业务数据
+  Framework* fw_ = nullptr;
 };
 ```
 
 ```cpp
-// my_app.cpp
+// app/my/my_app.cpp
+#include <embark/framework.h>
 #include <embark/log.h>
-#include "my_app/my_app.h"
-#if defined(EMBARK_EEZ_UI_BRIDGE)
-#include "eez_ui_bridge.h"
+#include "my_app.h"
+#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#include "ui_backend.h"
 #endif
 
-void MyApp::onCreate(embark::Framework& fw) {
-  (void)fw;
-  ELOG_INFO("App {} onCreate", name());
-#if defined(EMBARK_EEZ_UI_BRIDGE)
-  eez_ui_bridge_ensure_init();          // 幂等：谁先来谁启动生成代码
-#endif
-}
-
+void MyApp::onCreate(Framework& fw) { fw_ = &fw; }
 void MyApp::onEnter() {
-#if defined(EMBARK_EEZ_UI_BRIDGE)
-  eez_ui_bridge_enter_app_screen(name());  // 挂同名屏；缺屏 → 保持当前屏 + 告警
+#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+  ui_backend_load_for_app(name());   // 屏名 == App 名；缺屏只记日志、不黑屏
 #endif
 }
-void MyApp::onResume() {
-#if defined(EMBARK_EEZ_UI_BRIDGE)
-  eez_ui_bridge_enter_app_screen(name());  // 回前台时再挂一次自己的屏
-#endif
-}
+void MyApp::onResume() { /* 同上：回前台时屏可能已被别的 App 覆盖 */ }
+void MyApp::onPause() {}
+void MyApp::onExit() {}
+void MyApp::onForegroundTick(std::uint32_t) { /* 有数据时在这里 ui_backend_tick(); */ }
+```
 
-void MyApp::onForegroundTick(std::uint32_t) {
-#if defined(EMBARK_EEZ_UI_BRIDGE)
-  ++visits_;
-  eez_ui_bridge_set_var_int("my_visit_count", int(visits_));  // 推数据给 UI
-  eez_ui_bridge_tick();                                       // 推进 Flow（变量刷进控件）
-#endif
+`ui_backend.h` 是**唯一接缝**（[ADR 0011](../adr/0011-aidogui-ui-source.md)）：宏选后端
+（`EMBARK_AIDOGUI_UI` 优先），真机当前没有 UI 后端时四个函数编译成空操作，App 照常编过。
+
+**注册（两处，别漏）**：
+
+1. `app/CMakeLists.txt` 的 `embark_demo_apps` 源列表加 `my/my_app.cpp`；
+2. `platform/host/ui_demo.cpp` 的 `EMBARK_APP_TABLE(...)` 加 `embark::demo::MyApp`。
+
+> **注册顺序就是主屏磁贴顺序**（第 0 个是主屏自己，不出磁贴），也是默认前台 App。
+> 排在后面 = 在第 2 页。`max_apps` 现在是 12（= 3 页），超了是编译期 `static_assert`。
+> 真机清单 `platform/esp32/project/components/embark/CMakeLists.txt` 在第三步（真机界面）之前
+> **不用动**；`platform/host/ui_tour.cpp` 与 `user_main.cpp` 是精简系统用例，也不必加。
+
+**一键生成脚本的现状**：`tools/scaffold_app.py` 仍在，但它生成的是 **EEZ 时代的变量骨架**
+（AiDoGUI 没有变量层），生成出来的 App 不会挂屏、不该照抄。**现在照 `app/music/` 抄更快**；
+脚本与其余工具见 [scaffold-and-tools.md](scaffold-and-tools.md)（已标出废弃范围）。
+
+**还没画屏时会怎样**：`ui_backend_load_for_app` 找不到同名屏 → 保持当前屏 + 一行 INFO 日志
+（`AiDoGUI 工程里还没有 App my 的屏（约定：screen == App 名）`），**不会黑屏**。
+所以 C++ 可以先敲、先构建、先跑通，再去做界面。
+
+## 3. 改起来（10 分钟，设计侧）
+
+**A. 打开工程**：AiDoGUI Designer → 首页「打开工程」→ 选 `app/aidogui_ui/screen.aid`
+（设计器会在这里建 `.ai-workspace/`，已 gitignore）。
+
+**B. 新建屏**：
+
+- 屏 id 与 name **都要等于 App 名**（`my`）；画布 240×320；
+- 控件 **id 必须是 `屏id_控件名`**（如 `my_Btn_Back`），**parentId 必须是同屏已存在的控件 id**
+  —— 这两条是生成器的硬校验，违反时导出直接失败并报
+  `控件"Card_Time"：ID 必须为屏幕ID_控件名称`；
+- 最省事的做法：**克隆一个占位屏**（music / album 的 7 个控件：`Desk` / `Btn_Back` + 文字 /
+  `L_Title` / `Card_Placeholder` + 卡内两行字），逐个改 id 前缀与文案 —— 颜色、字号、圆角照抄。
+
+**C. 挂导航**：选中按钮 → 添加事件 → 动作选「**调用函数**」→ 函数名 `embark_ui_open_launcher`
+（回主屏）或 `embark_ui_open_<目标 App 名>`。可选函数名清单 =
+`app/common/aidogui_ui_hooks.h` 的 `EMBARK_AIDOGUI_HOOK_APPS`
+（**这张表只列"能被界面动作打开的 App"**；只从主屏磁贴进的 App 不用加）。
+`export.ps1` 会数生成代码里的 `embark_ui_open_*`：0 条告警、名字没在表里直接报错。
+> 不要用 `CHANGE_SCREEN`：`_ui_screen_change()` 绕过桥的"按需 init/destroy"，会破坏"切走即释放"。
+
+**D. 推数据**（界面要显示动态值时才需要）：AiDoGUI **没有变量层**，App 侧按名字拿控件：
+
+```cpp
+if (lv_obj_t* label = aidogui_ui_bridge_widget("my", "L_Value")) {
+  lv_label_set_text(label, buf);   // 值变了才写；屏未装载时返回 nullptr
 }
 ```
 
-想再勤快点：`onPause/onExit` 只打日志（薄壳惯例）。
+**E. 补字符表（每次都做，最容易忘）**：工程里 `i18n.customCharsetRows` 是**显式维护**的，
+每个 (字体, 字号) 一行，只收你写进去的字符。加一个 App 至少要：
 
-**UI 事件反过来进 C++ 的两条路**：
-- 切屏（按钮 SetPage）→ 框架自动：`eez_ui_nav` 观察者把切屏翻成 `request_switch(同名 App)`，
-  主屏 App 的 `onCreate` 里 `eez_ui_nav_attach(fw)` 一次即可（`app/launcher/launcher_app.cpp` 就是样板）。
-- 业务动作（发消息、改状态）→ User Action：Studio 里定义 action，C++ 实现对应函数
-  （ADR 0008 决策 4：User Action 在生成代码的 Flow action 里实现，由 Studio 生成的 dispatch 表进入 C++，位置见 `app/eez_ui/src/ui/eez-flow.cpp`；也可以改成自己 App 目录里的实现文件，只要 CMake 源列表里登记）。
+- **14px 行**加新 App 的 `title()` 全部字符（主屏磁贴标题用 14px，漏了就是方框）；
+- **12px 行**加屏上小字（提示行 / 占位说明）；屏上其他文字按各自字号行补；
+- ⚠ `ui_heiti.ttf` **没有中点 `·`（U+00B7）**：写进字符表会让导出直接失败
+  （`Font "ui_heiti.ttf" doesn't have glyph U+00B7`）。要分隔符就用全角逗号。
 
-## 4. 钩子契约速查（8 个钩子：几次、哪个线程、能做什么）
+漏字符**不会报错**，只会画成方框 —— 所以验收侧有字形守卫
+（`--ui-launcher-pages` 逐字符 `lv_font_get_glyph_dsc`，见 §4）。
 
-> 一句话：**框架不认识「App 在干什么」**。没有 status / visible 字段可查，也不存在「先查询状态再决定调哪个钩子」——
-> 全部是「事件驱动 + 定时器自发 + 每帧无条件」三类机制，外加一个「进过前台」的记账位。
-> 所以写 App 真正要知道的不是框架内部判定，而是**分派契约**：下面这张表。
+**F. 导出**（两条路，产物相同）：
 
-| 钩子 | 调用次数 | 线程 | 能做什么（纪律） |
-| --- | --- | --- | --- |
-| `onCreate(Framework&)` | 恰好 1 次（boot 装配期，按注册顺序） | UI | 存 `fw_ = &fw`、注入 HAL 能力（`fw.hal()`）、`eez_ui_bridge_ensure_init()`。**别 publish**：总线这时还没装配，发出去没人收（计 unknown + WARN）——要发消息放 `onEnter` 之后 |
-| `onEnter()` | ≤ 1 次（第一次成为前台） | UI | 建屏 / 挂自己的 EEZ 屏、启动计时状态机；**同一帧框架武装这个 App 的后台策略**（issue 23 / ADR 0009）；声明 `ArmPolicy::at_boot` 的 App 在 boot 就已武装，这里不重复（issue 24 / ADR 0010） |
-| `onPause()` | 每次离开前台 | UI | **只通知**：框架不碰你的 UI，保存状态请自己做 |
-| `onResume()` | 每次回到前台 | UI | 恢复显示、**再挂一次屏**（你的屏可能已被别的 App 覆盖过） |
-| `onForegroundTick(now_ms)` | 每帧一次（仅前台） | UI | 推数据给 UI：先 `set_var_*` 再 `eez_ui_bridge_tick()`。**必须轻**——它就在 UI 循环里 |
-| `onBackgroundTick(now_ms)` | 武装之后：按 `settings().period_ms` 周期（默认没被打开过 = 一次都不跑；`ArmPolicy::at_boot` 的在 boot 第 9 步就武装） | **tick 策略 = UI 任务；own_task 策略 = 独立任务** | 轻活走 tick；阻塞/重计算走 own_task。own_task 里**不许碰 UI、不许 publish**，回 UI 只能 `post` 信封 |
-| `onMessage(const Message&)` | 每条广播一次 | UI | 按 `msg.get_message_id()` 自分发。**v1 是广播：自己发的消息也会回到自己** |
-| `onExit()` | 恰好 1 次 | UI | 收尾、打日志。**v1 只有关机路径会触发**，没有别的退役路径 |
+- GUI：菜单「导出 C 代码」向导 → 输出目录选 `<仓库>/app/aidogui_ui/export`，图片 / 字体格式都选 **BIN**；
+- 无头（CI / agent 首选）：
 
-最容易写错的三条（都有源码证据）：
+```powershell
+# 需要能找到 AiDoGUI 安装目录：AIDOGUI_HOME → .aidogui-home → tools/aidogui/home.txt
+pwsh -NoProfile -File tools/aidogui/export.ps1
+```
 
-1. **`onCreate` 里 publish 会丢**——总线在 `onCreate` 之后才装配（`src/embark/framework.cpp:44-54`），早于它的广播被计为 unknown 并 WARN（`src/embark/bus.cpp:66-71`）。装配消息请放 `onEnter` 之后。
-2. **`onMessage` 会收到自己发的消息**——`publish` 遍历所有订阅者，**发送方的 adapter 也在订阅表里**（`src/embark/bus.cpp:55-75`）。要防自回环，就带个 `from` 字段自己过滤。
-3. **同一个 `onBackgroundTick`，线程语义完全不同**——tick 策略在唯一 UI 任务里被调（`src/embark/framework.cpp:152` → `:196`），own_task 策略在自己的任务里被调（`:259` 一次性 / `:264` 常驻循环）。跨策略复制粘贴代码前先确认这条。
+它打印「完成：代码 N 个 · 字体BIN M 个 · 屏：…」与「导航事件：embark_ui_open_* xK」——
+**屏列表里没有你的新屏 = 没导成功**。
 
-> 周期是**帧粒度**：`ceil(period_ms / ui_loop_period_ms)` 个帧（宿主 5 ms 一拍，`config/embark_limits.h:85`）。
+> ⚠ `export.ps1` 是**先整目录删掉 `export/` 再重建**：生成失败会让工作树一片删除。
+> 恢复只要一句 `git checkout -- app/aidogui_ui/export`，报错内容就是失败原因，照着改工程文件再跑。
 
-**「要写的东西 → 放哪个钩子」对照**：
+**G. 构建**：`cmake --build build`。屏表 / 控件表 / 字体表不入库，由 CMake **配置期**解析
+`export/`（导出产物变了会自动重跑配置），配置日志会打印屏表。
 
-| 你要写的 | 放这里 | 理由 |
-| --- | --- | --- |
-| 建屏 / 手绘 LVGL 对象 | `onCreate` | 一次性，装配期做完 |
-| 挂自己的 EEZ 屏 | `onEnter` + `onResume` | 首次进入 + 每次回来（屏会被覆盖） |
-| 推数据给 EEZ 控件 | `onForegroundTick`：先 `set_var_*` 再 `tick` | 只有前台需要刷 |
-| 读传感器 / 硬件数据 | 驱动写在 App 或平台侧，用 `fw.hal().bus` 取总线 | 数据怎么上屏见 [eez-ui-manual.md](eez-ui-manual.md) 第 5 节 |
-| 耗时计算 / 网络 / 长阻塞 | `own_task` 策略 + `onBackgroundTick` | 不能阻塞 UI 任务 |
-| own_task 里回 UI | `fw.post(CrossTaskMessage(...))`，回 UI 再进总线 | 跨任务只能 post 信封（[messages-and-background.md](../concepts/messages-and-background.md)） |
-
-> 框架**不会替你保存任何状态**：`entered_` 只是「进过前台」的记账位（`include/embark/framework.h:299`），
-> 不是状态查询接口。要「记住」什么，自己存成员变量。
->
-> 另外：声明了后台策略**默认也不会**一上电就跑 —— 第一次进过前台（`onEnter` 同一帧）才武装，
-> 之后才可能出现 `onBackgroundTick`（查询用 `fw.background_armed(id)`）。要「一上电就跑」
-> （闹钟这类由持久化状态驱动的 App）就显式声明 `ArmPolicy::at_boot`（issue 24 / ADR 0010）。详见
-> [messages-and-background.md](../concepts/messages-and-background.md) 的「武装时机」。
-
-## 5. 构建与验收（5 分钟）
+## 4. 验收（5 分钟）
 
 ```sh
-cmake -S . -B build && cmake --build build
-./build/platform/host/embark_host_ui --frames 60      # 看着你的屏出来、变量数字在跳
-./build/platform/host/embark_host_tour                # 系统用例：不回归已有 App
-ctest --test-dir build --output-on-failure            # 单测：屏表/变量表自检在里面
+ctest --test-dir build --output-on-failure              # 内核 + 分页纯函数单测
+./build/platform/host/embark_host_ui --ui                 --frames 40
+./build/platform/host/embark_host_ui --ui-nav             --delay 40
+./build/platform/host/embark_host_ui --ui-launcher-pages  --delay 40
+./build/platform/host/embark_host_ui --ui-weather         --delay 40
 ```
 
-缺屏/缺变量时的安全行为（都是"照常运行 + 日志"，不崩）：
+四条都要退出码 0。**你的新 App 至少要出现在 `--ui-launcher-pages` 的磁贴清单里**
+（它会核对磁贴数、顺序、每格文案，并对每个磁贴逐个字符做字形检查）。
 
 | 情况 | 行为 |
 | --- | --- |
-| Studio 没画同名屏 | `enter_app_screen` 保持当前屏 + ELOG_WARN 告警（不黑屏） |
-| `set_var` 的变量名 Studio 没声明 | 返回 false，无副作用；构建期变量表里也没有该名字 |
-| 屏名拼错（≠ App 名） | 同上，挂不上屏 |
-| Studio 加了变量忘了重配 | 变量表没刷新，桥查不到 → set/get false；重配即可 |
+| 没画同名屏 / 屏名拼错 | 保持当前屏 + INFO 日志（不黑屏） |
+| 磁贴标题字形缺失 | 主屏画方框；`--ui-launcher-pages` 的字形守卫变红 |
+| 控件名拼错（`bridge_widget` 找不到） | 返回 `nullptr`，App 侧判空即可（不崩） |
+| 生成器校验不过（id / parentId / 字体） | 导出失败且 `export/` 被清空 → `git checkout -- app/aidogui_ui/export` |
+| `--ui-nav` 时好时坏 | 忘了 `--delay 40`（见下） |
 
-## 6. 踩坑清单（新用户第一周必看）
+> **带合成点击/手势的验收必须给 `--delay 40`**：LVGL 约每 30 ms 读一次输入；帧跑得比它快时，
+> 一帧里推的"按下 → 移动 → 抬起"会被采样进同一次读取 —— 同一份脚本会一趟过一趟不过
+> （点击晚十几帧生效、拖动看着没吸附）。
 
-1. **屏名 ≠ App 名** → 挂不上屏（症状：一直在上一屏 + 告警日志）。
-2. **按钮用了「回上一屏」** → 点了没反应（屏栈恒空）。一律 SetPage。
-3. **改了变量/屏没重新 cmake 配置** → 桥查不到、`set_var` 一直 false。
-4. **手改生成文件**（`app/eez_ui/src/ui/`）→ 下次导出被覆盖；改页面去 Studio。
-5. **EEZ 屏中文文案** → 默认字体 Montserrat 无中文；当前仓库的字库方案是
-   `tools/font/gen_font.mjs` 生成的静态子集（`assets/fonts/embark_zh_14.c`，导航壳退役后保留备用，
-   需 `LV_USE_FONT_COMPRESSED=1`，见 `config/lv_conf.h:100-107`）。新 App 的中文界面要复用这套
-   （在 Studio 里引用该字体并把文案纳入缺字审计，issue 17）。
-6. **app 名字冲突** → 注册表里必须唯一（`EMBARK_APP_TABLE` 展开时同名 App 编译期报错）。
+## 5. 踩坑清单（新用户第一周必看）
 
-## 7. 从这里往哪走
+1. **屏名 ≠ App 名** → 挂不上屏（症状：一直停在上一屏 + 一行 INFO 日志）。
+2. **控件 id 不是 `屏id_名`、或 parentId 指到别的屏** → 生成器报错、`export/` 被清空（照报错改工程文件再跑）。
+3. **字符表漏字** → 屏上是方框；**中点 `·` 一定不要写**（`ui_heiti.ttf` 里没有，导出直接失败）。
+4. **手改 `export/`** → 下次导出被覆盖；要改界面就改设计器 / 工程文件，导出后重新构建。
+5. **忘了把新 App 加进注册表** → 磁贴不出现、也切不过去（注册表是唯一入口）。
+6. **注册顺序**决定磁贴顺序与默认前台：想让新 App 排在第 1 页，就把注册位置放在前 4 个里。
+7. **Windows 构建路径过长** → `obj.d` 打不开；把 `-B` 指到短路径（如 `C:\eb\app`）。
+8. **`onForegroundTick` 里做重活** → 它就跑在唯一 UI 任务里，会拖慢整机；重活 / 阻塞走
+   `own_task` 后台策略（[messages-and-background.md](../concepts/messages-and-background.md)）。
+9. **`onCreate` 里 publish** → 总线这时还没装配，消息被计为 unknown（放到 `onEnter` 之后）。
+10. **App 名重名** → `EMBARK_APP_TABLE` 展开时编译期报错。
 
-- 桥的完整 API、命名约定细节：**[eez-ui-manual.md](eez-ui-manual.md)**（词典）
-- Studio 安装/导出/注意事项：**[eez-studio-guide.md](eez-studio-guide.md)**
+钩子契约（几次 / 哪个线程 / 该放什么）见 [reference/hooks-and-api.md](../reference/hooks-and-api.md)；
+容量上限见 [reference/limits.md](../reference/limits.md)（`max_apps = 12`）。
+
+## 6. 从这里往哪走
+
+- 界面工程目录、字体 BIN、验收命令细节：**[app/aidogui_ui/README.md](../../app/aidogui_ui/README.md)**
+- 界面来源 / 分页与上滑返回的决策：**[adr/0011](../adr/0011-aidogui-ui-source.md)**、**[adr/0013](../adr/0013-launcher-paged-tiles.md)**
+- 本功能的规格与验收剧本：**[.scratch/launcher-pages/spec.md](../../.scratch/launcher-pages/spec.md)**、**[acceptance.md](../../.scratch/launcher-pages/acceptance.md)**
 - 后台策略 / 消息总线 / own_task 生命周期：**[messages-and-background.md](../concepts/messages-and-background.md)**
-- 适配层设计（切屏、User Action、变量表）：**[adr/0008-eez-studio-adapter.md](../adr/0008-eez-studio-adapter.md)**
-
-> 脚本化起步：`python tools/scaffold_app.py`（无参数 = 交互菜单；`--help` 看全部参数）——
-> 一条命令生成薄壳 + 注册 + 变量骨架与 `eez_vars.txt` 粘贴清单；
-> `--add-var 字段:类型` 给已有 App 增量加变量（默认预览，`--apply` 落地）；
-> `--vars-check build/include/embark_eez_vars.h` 核对 C++ 侧变量表与 Studio 声明是否对齐。
+- 脚本与工具（验收开关与退出码部分仍然有效）：**[scaffold-and-tools.md](scaffold-and-tools.md)**

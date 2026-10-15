@@ -310,11 +310,15 @@ def apply(app_name: str, class_name: str, title: str, vars_: list[tuple[str, str
     if entry in utext:
         print(f"  = {UI_DEMO} 注册表已含 {class_name}（幂等跳过）")
     else:
-        anchor = "EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp)"
-        if anchor not in utext:
+        # 锚只认表头：注册表现在是多行排版（加过 App 就会换行），认整行会一改就断。
+        # 新条目插在表的收尾括号前 = 落在末位，主屏第 0 项仍是 LauncherApp（默认前台）。
+        anchor = "EMBARK_APP_TABLE(embark::demo::LauncherApp"
+        start = utext.find(anchor)
+        close = utext.find(")", start) if start >= 0 else -1
+        if start < 0 or close < 0:
             die(f"{UI_DEMO} 找不到注册表锚（文件结构变了，手工处理）")
         indent = " " * 17
-        utext = utext.replace(anchor, anchor + ",\n" + indent + entry, 1)
+        utext = utext[:close] + ",\n" + indent + entry + utext[close:]
         ui.write_text(utext, encoding="utf-8")
         print(f"  + {UI_DEMO} 注册表已加 {class_name}")
 

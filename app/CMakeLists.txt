@@ -45,9 +45,12 @@ if(EMBARK_APP_SDL2_FOUND)
   # 真机清单锚点（scaffold_app.py 在这里追加新 App 的源文件）：
   add_library(embark_demo_apps STATIC
           launcher/launcher_app.cpp
+          launcher/launcher_tiles.cpp   # 主屏磁贴：按 App 注册表运行时分页生成（见该文件头）
           clock/clock_app.cpp
           settings/settings_app.cpp
           weather/weather_app.cpp
+          music/music_app.cpp             # 占位 App：证明主屏磁贴能翻到第 2 页
+          album/album_app.cpp             # 占位 App：同上（磁贴数 5 → 2 页）
           common/eez_ui_bridge.cpp
           common/eez_ui_nav.cpp
           common/aidogui_ui_bridge.cpp

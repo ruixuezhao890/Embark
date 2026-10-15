@@ -12,7 +12,7 @@
 
 | 常量 | 值 | 含义 | 改它意味着什么 |
 | --- | --- | --- | --- |
-| `max_apps` | `8` | 静态注册表的 App 上限 | 注册表是定容数组；超了 `app_registry<Apps...>()` 直接编译期 `static_assert` 失败（消息：「App 太多了…」）。调大 = 每个 App 多一份 `AppAdapter` + 记账位，内存增长很小；但**顺序就是默认前台顺序**，加 App 会改默认首页 |
+| `max_apps` | `12` | 静态注册表的 App 上限 | 注册表是定容数组；超了 `app_registry<Apps...>()` 直接编译期 `static_assert` 失败（消息：「App 太多了…」）。调大 = 每个 App 多一份 `AppAdapter` + 记账位，内存增长很小；但**顺序就是默认前台顺序**，也是主屏磁贴顺序（第 0 个是主屏自己，其余每个 App 一个磁贴，每页 4 个 → 12 个的上限 = 3 页），加 App 会改默认首页。分页几何见 [`app/launcher/launcher_pages.h`](../../app/launcher/launcher_pages.h) |
 | `max_background_timers` | `8` | 后台节拍定时器数量（`etl::callback_timer<max_background_timers>`） | 这是 `tick` 策略的硬上限。注意它**不是**「最多 8 个 tick App」——见下方「定时器 vs App」 |
 | `max_bus_subscribers` | `8` | 总线订阅者上限（`etl::message_bus` 的 `MAX_ROUTERS`，镜像订阅表同容量） | 每个 App 启动时自动订阅一次，所以**有效上限 ≈ max_apps**。再挂自定义 router 就会挤掉别人 |
 | `message_queue_depth` | `16` | 跨任务收件箱深度（own task → UI 任务） | 满了丢**最旧**并计数（`inbox_overflows()`）。宁可丢消息，不阻塞生产端。own task 高频 post 就调大 |

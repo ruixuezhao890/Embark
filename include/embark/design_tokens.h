@@ -40,8 +40,24 @@ inline constexpr std::uint32_t ring = 0x41536BU;
 /// 与背景同族，屏幕上不出现"挖洞"感。
 inline constexpr std::uint32_t accent_contrast = bg;
 
+/// 启动器 App 磁贴底色（issue launcher-pages；与 AiDoGUI 设计稿 ui_launcher 的磁贴一致）。
+/// 磁贴是“深蓝底 + 浅蓝字”的一族，与面板 panel 不是同一个色，所以单列令牌。
+inline constexpr std::uint32_t tile_bg = 0x202B47U;
+
+/// 启动器 App 磁贴文字。
+inline constexpr std::uint32_t tile_text = 0xC7D0E6U;
+
+/// 启动器页码点：非当前页（与设计稿 ui_launcher 的 Dot2/Dot3 一致）。
+inline constexpr std::uint32_t page_dot = 0x2A3550U;
+
+/// 启动器页码点：当前页（设计稿 Dot1）。翻页时由 launcher_tiles 重涂。
+inline constexpr std::uint32_t page_dot_active = 0x6EA0FFU;
+
 /// 面板圆角（px）。
 inline constexpr std::uint16_t radius = 8U;
+
+/// 启动器磁贴圆角（px）：磁贴比面板小，圆角相对更大一点才不显方。
+inline constexpr std::uint16_t tile_radius = 10U;
 
 /// 旧导航壳状态行高（px；导航壳已退役，令牌保留以防 EEZ 屏需要）。
 inline constexpr std::uint16_t status_h = 28U;

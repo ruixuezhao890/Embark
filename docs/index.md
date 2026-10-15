@@ -46,15 +46,16 @@ ctest --test-dir build --output-on-failure
 | 文档 | 内容 |
 | --- | --- |
 | [guides/quickstart.md](guides/quickstart.md) | **从零跑起来**：装工具 → clone → 构建 → 跑 → 最短验收 → 加一个 App 的入口 |
-| [guides/new-app-guide.md](guides/new-app-guide.md) | **新手指南**：30 分钟加一个带界面的 App（建壳 → 画同名屏 → 绑变量 → 构建验收，端到端） |
+| [guides/new-app-guide.md](guides/new-app-guide.md) | **新手指南（当前）**：30 分钟加一个带界面的 App（跑起来 → C++ 薄壳 → AiDoGUI 设计工程里画同名屏 + 补字符表 → 重导出 → 构建验收，端到端） |
 | [guides/state-machine-and-messages.md](guides/state-machine-and-messages.md) | 状态机与消息：`etl::fsm` 怎么接进 App 契约（收消息即切状态、事件从 `onBackgroundTick` 喂、运行语义与坑） |
 | [../app/aidogui_ui/README.md](../app/aidogui_ui/README.md) | **界面怎么改（当前）**：AiDoGUI 设计工程 → 一条命令重生成 → 编译；目录、字体与真机资源约定 |
 | [adr/0011-aidogui-ui-source.md](adr/0011-aidogui-ui-source.md) | **界面来源决策（当前）**：BIN 资源走 S 盘、薄桥按需建屏、空屏不变量、三步迁移 |
 | [adr/0012-weather-data-source.md](adr/0012-weather-data-source.md) | **天气数据来源（当前）**：框架无网络 ⇒ 编译期桩；一处数据两处画；将来怎么换成真数据 |
+| [adr/0013-launcher-paged-tiles.md](adr/0013-launcher-paged-tiles.md) | **主屏磁贴分页 + 上滑返回（当前）**：磁贴按注册表运行时生成（加 App 自动多一个）、吸附式横向翻页、非主屏上滑回主屏；`max_apps` 8 → 12 |
 | [guides/eez-ui-manual.md](guides/eez-ui-manual.md) | **历史（EEZ 时代）**：EEZ UI 用户手册 —— 迁移第二步随 `app/eez_ui/` 一起归档 |
 | [guides/eez-studio-guide.md](guides/eez-studio-guide.md) | **历史（EEZ 时代）**：EEZ Studio 一条龙（装 Studio、导出代码入库） |
 | [guides/hal-backend-guide.md](guides/hal-backend-guide.md) | 怎么写一个 HAL 后端：宿主骨架（照 `platform/host/`）、共享层（`platform/common/`）与真机实现（`platform/esp32/`，含 IDF 坑清单） |
-| [guides/scaffold-and-tools.md](guides/scaffold-and-tools.md) | 脚本与工具：`tools/scaffold_app.py` 生成 App 薄壳、字体子集生成、验收开关与退出码 |
+| [guides/scaffold-and-tools.md](guides/scaffold-and-tools.md) | 脚本与工具：**验收开关与退出码、字体子集生成仍然有效**；`tools/scaffold_app.py` 的 EEZ 变量骨架部分已过期（AiDoGUI 世界没有变量层，加 App 照 `app/music/` 抄） |
 
 ### reference —— 查表
 
@@ -72,6 +73,7 @@ ctest --test-dir build --output-on-failure
 | [../GLOSSARY.md](../GLOSSARY.md) | 术语表（Arm / Background tick / Own task / 薄壳……） |
 | [../platform/esp32/README.md](../platform/esp32/README.md) | ESP32-S3 真机端口：板级参数、构建/烧录命令、bring-up 清单、串口日志样例 |
 | [../.scratch/embark-v1/spec.md](../.scratch/embark-v1/spec.md) | v1 规格书（设计与约束的来源）；工单在 `../.scratch/embark-v1/issues/` |
+| [../.scratch/launcher-pages/spec.md](../.scratch/launcher-pages/spec.md) | 主屏分页磁贴与上滑返回的规格 + 裁决表（Q1–Q10）；验收剧本 [acceptance.md](../.scratch/launcher-pages/acceptance.md)、工单在 `../.scratch/launcher-pages/issues/` |
 
 ## 交叉参考
 

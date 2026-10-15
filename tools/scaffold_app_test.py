@@ -40,8 +40,10 @@ def make_fake_repo() -> Path:
         "        common/eez_ui_bridge.cpp\n"
         "        common/eez_ui_nav.cpp)\n",
         encoding="utf-8")
+    # ui_demo.cpp 的注册表真实形状：加过 App 后是多行排版（锚只认表头，见 scaffold_app.py）
     (tmp / "platform" / "host" / "ui_demo.cpp").write_text(
-        "EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp)\n",
+        "EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp,\n"
+        "                 embark::demo::WeatherApp)\n",
         encoding="utf-8")
     return tmp
 

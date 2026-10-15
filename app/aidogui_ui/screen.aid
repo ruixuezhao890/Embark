@@ -239,6 +239,80 @@
           "align": "TOP_LEFT"
         },
         {
+          "id": "launcher_Band_Apps",
+          "parentId": "launcher_Desk",
+          "type": "lv_obj",
+          "name": "Band_Apps",
+          "x": 0,
+          "y": 202,
+          "width": 240,
+          "height": 56,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "bgColor": "#00000000",
+                "radius": 0,
+                "bgOpa": 0,
+                "borderWidth": 0
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": true
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "OFF",
+            "scroll_dir": "HOR",
+            "scroll_snap_x": "START",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_Dots_Row",
+          "parentId": "launcher_Desk",
+          "type": "lv_obj",
+          "name": "Dots_Row",
+          "x": 0,
+          "y": 258,
+          "width": 240,
+          "height": 6,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "bgColor": "#00000000",
+                "radius": 0,
+                "bgOpa": 0,
+                "borderWidth": 0
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "OFF",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
           "id": "launcher_Card_Weather",
           "parentId": "launcher_Desk",
           "type": "lv_obj",
@@ -416,407 +490,6 @@
           "align": "TOP_LEFT"
         },
         {
-          "id": "launcher_Tile1",
-          "parentId": "launcher_Desk",
-          "type": "lv_obj",
-          "name": "Tile1",
-          "x": 12,
-          "y": 202,
-          "width": 48,
-          "height": 48,
-          "style": {
-            "styles": {
-              "DEFAULT__MAIN": {
-                "padLeft": 0,
-                "padRight": 0,
-                "padTop": 0,
-                "padBottom": 0,
-                "bgColor": "#202b47ff",
-                "radius": 10
-              }
-            }
-          },
-          "events": [
-            {
-              "id": "event_embark_ui_open_clock_clicked",
-              "eventType": "CLICKED",
-              "actionType": "CALL_FUNCTION",
-              "actionParams": {
-                "functionName": "embark_ui_open_clock"
-              },
-              "enabled": true
-            }
-          ],
-          "flags": {
-            "clickable": true,
-            "scrollable": false
-          },
-          "state": {},
-          "scrolling": {
-            "scrollbar_mode": "AUTO",
-            "scroll_dir": "ALL",
-            "scroll_snap_x": "NONE",
-            "scroll_snap_y": "NONE"
-          },
-          "align": "TOP_LEFT"
-        },
-        {
-          "id": "launcher_Tile1_L",
-          "parentId": "launcher_Tile1",
-          "type": "lv_label",
-          "name": "Tile1_L",
-          "x": 0,
-          "y": 15,
-          "width": 48,
-          "height": 20,
-          "text": "时钟",
-          "style": {
-            "styles": {
-              "DEFAULT__MAIN": {
-                "textFont": "ui_heiti.ttf",
-                "textColor": "#c7d0e6ff",
-                "textFontSize": 14,
-                "textAlign": "CENTER"
-              }
-            }
-          },
-          "events": [],
-          "flags": {
-            "clickable": false,
-            "scrollable": false
-          },
-          "state": {},
-          "scrolling": {
-            "scrollbar_mode": "AUTO",
-            "scroll_dir": "ALL",
-            "scroll_snap_x": "NONE",
-            "scroll_snap_y": "NONE"
-          },
-          "align": "TOP_LEFT"
-        },
-        {
-          "id": "launcher_Tile2",
-          "parentId": "launcher_Desk",
-          "type": "lv_obj",
-          "name": "Tile2",
-          "x": 68,
-          "y": 202,
-          "width": 48,
-          "height": 48,
-          "style": {
-            "styles": {
-              "DEFAULT__MAIN": {
-                "padLeft": 0,
-                "padRight": 0,
-                "padTop": 0,
-                "padBottom": 0,
-                "bgColor": "#202b47ff",
-                "radius": 10
-              }
-            }
-          },
-          "events": [
-            {
-              "id": "event_embark_ui_open_settings_clicked",
-              "eventType": "CLICKED",
-              "actionType": "CALL_FUNCTION",
-              "actionParams": {
-                "functionName": "embark_ui_open_settings"
-              },
-              "enabled": true
-            }
-          ],
-          "flags": {
-            "clickable": true,
-            "scrollable": false
-          },
-          "state": {},
-          "scrolling": {
-            "scrollbar_mode": "AUTO",
-            "scroll_dir": "ALL",
-            "scroll_snap_x": "NONE",
-            "scroll_snap_y": "NONE"
-          },
-          "align": "TOP_LEFT"
-        },
-        {
-          "id": "launcher_Tile2_L",
-          "parentId": "launcher_Tile2",
-          "type": "lv_label",
-          "name": "Tile2_L",
-          "x": 0,
-          "y": 15,
-          "width": 48,
-          "height": 20,
-          "text": "设置",
-          "style": {
-            "styles": {
-              "DEFAULT__MAIN": {
-                "textFont": "ui_heiti.ttf",
-                "textColor": "#c7d0e6ff",
-                "textFontSize": 14,
-                "textAlign": "CENTER"
-              }
-            }
-          },
-          "events": [],
-          "flags": {
-            "clickable": false,
-            "scrollable": false
-          },
-          "state": {},
-          "scrolling": {
-            "scrollbar_mode": "AUTO",
-            "scroll_dir": "ALL",
-            "scroll_snap_x": "NONE",
-            "scroll_snap_y": "NONE"
-          },
-          "align": "TOP_LEFT"
-        },
-        {
-          "id": "launcher_Tile3",
-          "parentId": "launcher_Desk",
-          "type": "lv_obj",
-          "name": "Tile3",
-          "x": 124,
-          "y": 202,
-          "width": 48,
-          "height": 48,
-          "style": {
-            "styles": {
-              "DEFAULT__MAIN": {
-                "padLeft": 0,
-                "padRight": 0,
-                "padTop": 0,
-                "padBottom": 0,
-                "bgColor": "#202b47ff",
-                "radius": 10
-              }
-            }
-          },
-          "events": [],
-          "flags": {
-            "clickable": true,
-            "scrollable": false
-          },
-          "state": {},
-          "scrolling": {
-            "scrollbar_mode": "AUTO",
-            "scroll_dir": "ALL",
-            "scroll_snap_x": "NONE",
-            "scroll_snap_y": "NONE"
-          },
-          "align": "TOP_LEFT"
-        },
-        {
-          "id": "launcher_Tile3_L",
-          "parentId": "launcher_Tile3",
-          "type": "lv_label",
-          "name": "Tile3_L",
-          "x": 0,
-          "y": 15,
-          "width": 48,
-          "height": 20,
-          "text": "音乐",
-          "style": {
-            "styles": {
-              "DEFAULT__MAIN": {
-                "textFont": "ui_heiti.ttf",
-                "textColor": "#c7d0e6ff",
-                "textFontSize": 14,
-                "textAlign": "CENTER"
-              }
-            }
-          },
-          "events": [],
-          "flags": {
-            "clickable": false,
-            "scrollable": false
-          },
-          "state": {},
-          "scrolling": {
-            "scrollbar_mode": "AUTO",
-            "scroll_dir": "ALL",
-            "scroll_snap_x": "NONE",
-            "scroll_snap_y": "NONE"
-          },
-          "align": "TOP_LEFT"
-        },
-        {
-          "id": "launcher_Tile4",
-          "parentId": "launcher_Desk",
-          "type": "lv_obj",
-          "name": "Tile4",
-          "x": 180,
-          "y": 202,
-          "width": 48,
-          "height": 48,
-          "style": {
-            "styles": {
-              "DEFAULT__MAIN": {
-                "padLeft": 0,
-                "padRight": 0,
-                "padTop": 0,
-                "padBottom": 0,
-                "bgColor": "#202b47ff",
-                "radius": 10
-              }
-            }
-          },
-          "events": [],
-          "flags": {
-            "clickable": true,
-            "scrollable": false
-          },
-          "state": {},
-          "scrolling": {
-            "scrollbar_mode": "AUTO",
-            "scroll_dir": "ALL",
-            "scroll_snap_x": "NONE",
-            "scroll_snap_y": "NONE"
-          },
-          "align": "TOP_LEFT"
-        },
-        {
-          "id": "launcher_Tile4_L",
-          "parentId": "launcher_Tile4",
-          "type": "lv_label",
-          "name": "Tile4_L",
-          "x": 0,
-          "y": 15,
-          "width": 48,
-          "height": 20,
-          "text": "相册",
-          "style": {
-            "styles": {
-              "DEFAULT__MAIN": {
-                "textFont": "ui_heiti.ttf",
-                "textColor": "#c7d0e6ff",
-                "textFontSize": 14,
-                "textAlign": "CENTER"
-              }
-            }
-          },
-          "events": [],
-          "flags": {
-            "clickable": false,
-            "scrollable": false
-          },
-          "state": {},
-          "scrolling": {
-            "scrollbar_mode": "AUTO",
-            "scroll_dir": "ALL",
-            "scroll_snap_x": "NONE",
-            "scroll_snap_y": "NONE"
-          },
-          "align": "TOP_LEFT"
-        },
-        {
-          "id": "launcher_Dot1",
-          "parentId": "launcher_Desk",
-          "type": "lv_obj",
-          "name": "Dot1",
-          "x": 109,
-          "y": 258,
-          "width": 6,
-          "height": 6,
-          "style": {
-            "styles": {
-              "DEFAULT__MAIN": {
-                "padLeft": 0,
-                "padRight": 0,
-                "padTop": 0,
-                "padBottom": 0,
-                "bgColor": "#6ea0ffff",
-                "radius": 3
-              }
-            }
-          },
-          "events": [],
-          "flags": {
-            "clickable": false,
-            "scrollable": false
-          },
-          "state": {},
-          "scrolling": {
-            "scrollbar_mode": "AUTO",
-            "scroll_dir": "ALL",
-            "scroll_snap_x": "NONE",
-            "scroll_snap_y": "NONE"
-          },
-          "align": "TOP_LEFT"
-        },
-        {
-          "id": "launcher_Dot2",
-          "parentId": "launcher_Desk",
-          "type": "lv_obj",
-          "name": "Dot2",
-          "x": 117,
-          "y": 258,
-          "width": 6,
-          "height": 6,
-          "style": {
-            "styles": {
-              "DEFAULT__MAIN": {
-                "padLeft": 0,
-                "padRight": 0,
-                "padTop": 0,
-                "padBottom": 0,
-                "bgColor": "#2a3550ff",
-                "radius": 3
-              }
-            }
-          },
-          "events": [],
-          "flags": {
-            "clickable": false,
-            "scrollable": false
-          },
-          "state": {},
-          "scrolling": {
-            "scrollbar_mode": "AUTO",
-            "scroll_dir": "ALL",
-            "scroll_snap_x": "NONE",
-            "scroll_snap_y": "NONE"
-          },
-          "align": "TOP_LEFT"
-        },
-        {
-          "id": "launcher_Dot3",
-          "parentId": "launcher_Desk",
-          "type": "lv_obj",
-          "name": "Dot3",
-          "x": 125,
-          "y": 258,
-          "width": 6,
-          "height": 6,
-          "style": {
-            "styles": {
-              "DEFAULT__MAIN": {
-                "padLeft": 0,
-                "padRight": 0,
-                "padTop": 0,
-                "padBottom": 0,
-                "bgColor": "#2a3550ff",
-                "radius": 3
-              }
-            }
-          },
-          "events": [],
-          "flags": {
-            "clickable": false,
-            "scrollable": false
-          },
-          "state": {},
-          "scrolling": {
-            "scrollbar_mode": "AUTO",
-            "scroll_dir": "ALL",
-            "scroll_snap_x": "NONE",
-            "scroll_snap_y": "NONE"
-          },
-          "align": "TOP_LEFT"
-        },
-        {
           "id": "launcher_L_Hint",
           "parentId": "launcher_Desk",
           "type": "lv_label",
@@ -825,7 +498,7 @@
           "y": 278,
           "width": 212,
           "height": 18,
-          "text": "点按图标进入，上滑返回",
+          "text": "左右滑动翻页，上滑返回",
           "style": {
             "styles": {
               "DEFAULT__MAIN": {
@@ -3144,6 +2817,544 @@
         }
       ],
       "animations": []
+    },
+    {
+      "id": "music",
+      "name": "music",
+      "isDefault": false,
+      "style": {},
+      "widgets": [
+        {
+          "id": "music_Desk",
+          "parentId": "music",
+          "type": "lv_obj",
+          "name": "Desk",
+          "x": 0,
+          "y": 0,
+          "width": 240,
+          "height": 320,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#0b1020ff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 0
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "music_Btn_Back",
+          "parentId": "music_Desk",
+          "type": "lv_obj",
+          "name": "Btn_Back",
+          "x": 8,
+          "y": 4,
+          "width": 64,
+          "height": 28,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 8
+              },
+              "PRESSED__MAIN": {
+                "bgColor": "#2a3550ff"
+              }
+            }
+          },
+          "events": [
+            {
+              "id": "event_music_back_clicked",
+              "eventType": "CLICKED",
+              "actionType": "CALL_FUNCTION",
+              "actionParams": {
+                "functionName": "embark_ui_open_launcher"
+              },
+              "enabled": true
+            }
+          ],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "music_Btn_Back_L",
+          "parentId": "music_Btn_Back",
+          "type": "lv_label",
+          "name": "Btn_Back_L",
+          "x": 0,
+          "y": 5,
+          "width": 64,
+          "height": 18,
+          "text": "返回",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "music_L_Title",
+          "parentId": "music_Desk",
+          "type": "lv_label",
+          "name": "L_Title",
+          "x": 84,
+          "y": 8,
+          "width": 72,
+          "height": 20,
+          "text": "音乐",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "music_Card_Placeholder",
+          "parentId": "music_Desk",
+          "type": "lv_obj",
+          "name": "Card_Placeholder",
+          "x": 14,
+          "y": 84,
+          "width": 212,
+          "height": 120,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 12
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "music_L_Placeholder",
+          "parentId": "music_Card_Placeholder",
+          "type": "lv_label",
+          "name": "L_Placeholder",
+          "x": 12,
+          "y": 28,
+          "width": 188,
+          "height": 36,
+          "text": "占位屏",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 22,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "music_L_PlaceholderHint",
+          "parentId": "music_Card_Placeholder",
+          "type": "lv_label",
+          "name": "L_PlaceholderHint",
+          "x": 12,
+          "y": 76,
+          "width": 188,
+          "height": 18,
+          "text": "界面还没做",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#55617fff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        }
+      ],
+      "animations": []
+    },
+    {
+      "id": "album",
+      "name": "album",
+      "isDefault": false,
+      "style": {},
+      "widgets": [
+        {
+          "id": "album_Desk",
+          "parentId": "album",
+          "type": "lv_obj",
+          "name": "Desk",
+          "x": 0,
+          "y": 0,
+          "width": 240,
+          "height": 320,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#0b1020ff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 0
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "album_Btn_Back",
+          "parentId": "album_Desk",
+          "type": "lv_obj",
+          "name": "Btn_Back",
+          "x": 8,
+          "y": 4,
+          "width": 64,
+          "height": 28,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 8
+              },
+              "PRESSED__MAIN": {
+                "bgColor": "#2a3550ff"
+              }
+            }
+          },
+          "events": [
+            {
+              "id": "event_album_back_clicked",
+              "eventType": "CLICKED",
+              "actionType": "CALL_FUNCTION",
+              "actionParams": {
+                "functionName": "embark_ui_open_launcher"
+              },
+              "enabled": true
+            }
+          ],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "album_Btn_Back_L",
+          "parentId": "album_Btn_Back",
+          "type": "lv_label",
+          "name": "Btn_Back_L",
+          "x": 0,
+          "y": 5,
+          "width": 64,
+          "height": 18,
+          "text": "返回",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "album_L_Title",
+          "parentId": "album_Desk",
+          "type": "lv_label",
+          "name": "L_Title",
+          "x": 84,
+          "y": 8,
+          "width": 72,
+          "height": 20,
+          "text": "相册",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "album_Card_Placeholder",
+          "parentId": "album_Desk",
+          "type": "lv_obj",
+          "name": "Card_Placeholder",
+          "x": 14,
+          "y": 84,
+          "width": 212,
+          "height": 120,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 12
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "album_L_Placeholder",
+          "parentId": "album_Card_Placeholder",
+          "type": "lv_label",
+          "name": "L_Placeholder",
+          "x": 12,
+          "y": 28,
+          "width": 188,
+          "height": 36,
+          "text": "占位屏",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 22,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "album_L_PlaceholderHint",
+          "parentId": "album_Card_Placeholder",
+          "type": "lv_label",
+          "name": "L_PlaceholderHint",
+          "x": 12,
+          "y": 76,
+          "width": 188,
+          "height": 18,
+          "text": "界面还没做",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#55617fff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        }
+      ],
+      "animations": []
     }
   ],
   "stylePresets": [],
@@ -3161,7 +3372,7 @@
       {
         "fontName": "ui_heiti.ttf",
         "fontSize": 12,
-        "symbols": "一三上二五入六剩周四回图天年按日星月期末标滑点秒第距返进，今°云",
+        "symbols": "一三上二五入六剩周四回图天年按日星月期末标滑点秒第距返进，今°云左右动翻页界面还没做",
         "range": "0x20-0x7F"
       },
       {
@@ -3173,7 +3384,7 @@
       {
         "fontName": "ui_heiti.ttf",
         "fontSize": 22,
-        "symbols": "晴云阴雨雷小中大多",
+        "symbols": "晴云阴雨雷小中大多占位屏",
         "range": "0x20-0x7F"
       },
       {

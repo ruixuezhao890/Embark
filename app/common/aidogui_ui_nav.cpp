@@ -27,9 +27,15 @@ const char* g_last_screen = nullptr;  // 观测：最近一次屏名（指向屏
 // 表满时 bind 返回 false，不静默丢。
 constexpr int kMaxClickBindings = 8;
 
+// --- 上滑返回 -----------------------------------------------------------------
+// 主屏 = 注册表第 0 个 App 的屏（App 0 就是启动器）。非主屏的屏根挂 LV_EVENT_GESTURE，
+// LV_DIR_TOP → framework.request_home()。挂在屏根上而不是逐个控件上：屏是每次装载新建的，
+// 观察者一定在"新屏刚建好"时被调用，挂一次就覆盖整屏。
+int g_swipe_back_hits = 0;  // 观测：命中次数
+
 struct ClickBinding {
   const char* screen;  // AiDoGUI 屏名（== App 名，约定同 EEZ）
-  const char* widget;  // 控件名（设计器里的 name，如 Tile1 / Btn_Back）
+  const char* widget;  // 控件名（设计器里的 name，如 Btn_Back / Card_Clock；主屏磁贴是运行时建的，不走这张表）
   const char* app;     // 目标 App 名
 };
 
@@ -65,13 +71,69 @@ void bind_clicks_for(const char* screen_name) {
   }
 }
 
+/// 手势要能冒泡到屏根：LVGL 把 LV_EVENT_GESTURE 发给指针下的对象，然后沿父链往上冒，
+/// 但只在带 LV_OBJ_FLAG_GESTURE_BUBBLE 的对象之间传（lv_indev.c 的 indev_gesture）。
+/// 生成代码建的控件不带这个标志，所以子树补一遍。**屏根除外**：见 attach_swipe_back。
+void add_gesture_bubble(lv_obj_t* obj) {
+  if (obj == nullptr) {
+    return;
+  }
+  lv_obj_add_flag(obj, LV_OBJ_FLAG_GESTURE_BUBBLE);
+  const std::uint32_t children = lv_obj_get_child_cnt(obj);
+  for (std::uint32_t i = 0; i < children; ++i) {
+    add_gesture_bubble(lv_obj_get_child(obj, static_cast<int32_t>(i)));
+  }
+}
+
+/// 屏根上的手势回调：上滑 = 回主屏。非上滑方向（左右滑翻页、下滑）一概不管。
+void on_screen_gesture(lv_event_t* event) {
+  auto* framework = static_cast<Framework*>(lv_event_get_user_data(event));
+  lv_indev_t* indev = lv_indev_get_act();
+  if (framework == nullptr || indev == nullptr) {
+    return;
+  }
+  if (lv_indev_get_gesture_dir(indev) != LV_DIR_TOP) {
+    return;
+  }
+  ++g_swipe_back_hits;
+  ELOG_INFO("AiDoGUI 屏上滑：回主屏（第 {} 次）", g_swipe_back_hits);
+  (void)framework->request_home();
+}
+
+/// 屏装载后给屏根挂手势（主屏跳过）。重复挂同一屏根不会发生：桥装载新屏时会先销毁旧屏，
+/// 每次观察到的都是新对象；同屏重复装载被桥的 g_current == entry 挡掉。
+void attach_swipe_back(const char* screen_name, Framework& framework) {
+  const App* home = framework.apps().at(0);
+  if (home != nullptr && home->name() != nullptr && std::strcmp(home->name(), screen_name) == 0) {
+    return;  // 主屏：上滑不响应（回主屏 = 已经在主屏）
+  }
+  lv_obj_t* root = lv_scr_act();
+  if (root == nullptr) {
+    return;
+  }
+  // 屏根要能成为"指针下的对象"才谈得上派发：LVGL 的 lv_indev_search_obj() 只认
+  // lv_obj_hit_test() 通过的控件，而它第一句就要求 CLICKABLE（lv_obj_pos.c:955）。
+  // 生成代码给容器清了 CLICKABLE（屏根的 CLICKABLE 是 LVGL 默认，lv_obj.c:436），这里
+  // 再显式加一次：将来设计器把屏根也清了，上滑不至于在空白处失灵。
+  lv_obj_add_flag(root, LV_OBJ_FLAG_CLICKABLE);
+  // 冒泡标志**只给子树，屏根自己不带**：indev_gesture() 是从指针下的对象沿父链
+  // "跳过带标志的对象"、落到第一个**没有**标志的对象上派发（lv_indev.c:1126-1133）；
+  // 屏根也带标志时这条链一路走到 NULL，事件直接不发（手就在屏上滑，什么都没发生）。
+  const std::uint32_t child_count = lv_obj_get_child_cnt(root);
+  for (std::uint32_t i = 0; i < child_count; ++i) {
+    add_gesture_bubble(lv_obj_get_child(root, static_cast<int32_t>(i)));
+  }
+  lv_obj_add_event_cb(root, &on_screen_gesture, LV_EVENT_GESTURE, &framework);
+}
+
 void on_aidogui_screen_changed(const char* screen_name, void* user) {
   auto* framework = static_cast<Framework*>(user);
   if (framework == nullptr || screen_name == nullptr) {
     return;
   }
   g_last_screen = screen_name;
-  bind_clicks_for(screen_name);  // 控件刚建好：把点击绑定挂回去
+  bind_clicks_for(screen_name);                 // 控件刚建好：把点击绑定挂回去
+  attach_swipe_back(screen_name, *framework);    // 同上：手势也挂在新屏上
 
   char app_name[eez_app_name_max];
   const char* app = eez_ui_app_name_for_screen(screen_name, app_name, sizeof(app_name));
@@ -93,6 +155,8 @@ void on_aidogui_screen_changed(const char* screen_name, void* user) {
 }
 
 }  // namespace
+
+int aidogui_ui_nav_swipe_back_hits() { return g_swipe_back_hits; }
 
 void aidogui_ui_nav_attach(Framework& framework) {
   if (g_framework == &framework) {

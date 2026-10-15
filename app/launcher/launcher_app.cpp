@@ -5,6 +5,9 @@
  * 界面调用，只把界面生成代码里同名屏（"launcher"）挂上显示器，并把界面工具的切屏事件
  * 反向接到框架的 App 切换上（屏名约定 == App 名，解析在 eez_ui_screen_names.h）。
  *
+ * 唯一的例外是主屏磁贴：它画不进设计稿（画进去就等于把 App 数写死），改为屏每次装载后
+ * 按 App 注册表运行时生成 —— 见 rebuild_tiles() 与 app/launcher/launcher_tiles.cpp。
+ *
  * 除导航外，启动器还负责刷屏上那两个时间控件（L_Time / L_Clock0）：宿主上墙钟就是 PC
  * 时间（platform/host/host_time.cpp 直接读 system_clock），所以这里看到的 HH:MM 与电脑
  * 一致。刷在 onBackgroundTick 里而不是 onForegroundTick：时间一分钟只变一次，没必要每帧算。
@@ -43,11 +46,10 @@ void LauncherApp::onCreate(Framework& fw) {
   // 切到某屏 = 框架切到那个屏对应的 App（屏名约定 == App 名，见 ui_backend.h）。
   ui_backend_attach_nav(fw);
 
-  // 磁贴 → App 的导航不在这里声明，也不在设计器里挂 CHANGE_SCREEN 动作（后者不经过桥，
-  // 会绕过"切走即 destroy / 回来即 init"的纪律）：Tile1/Tile2 挂的是设计器的
-  // 「调用函数」动作（embark_ui_open_clock / embark_ui_open_settings），生成代码里的裸调用
-  // 落到 app/common/aidogui_ui_hooks.h 的 C 入口 → aidogui_ui_nav_request_app()。
-  // Tile3（音乐）/ Tile4（相册）还没有对应 App：先不挂事件，点了没反应，好过切到空白屏。
+  // 磁贴 → App 的导航不在设计器里声明：磁贴是**运行时**按注册表建的（rebuild_tiles →
+  // launcher_tiles.cpp），点击直接调 aidogui_ui_nav_request_app()。设计器里那个
+  // 「调用函数」动作（embark_ui_open_<App 名>）留给屏上画死的按钮（如各子屏的"返回"）。
+  // 磁贴也不挂 CHANGE_SCREEN 动作：那个不经过桥，会绕过"切走即 destroy / 回来即 init"的纪律。
 #if defined(EMBARK_AIDOGUI_UI)
   // 时钟卡（Card_Clock）→ clock 走 C++ 备用路径 bind_click：这张卡不挂设计器事件，
   // 而是把点击绑定声明在桥的绑定表里，屏每次重建后由观察者自动重挂回调 —— 设计器里
@@ -63,6 +65,7 @@ void LauncherApp::onEnter() {
 #if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
   ui_backend_load_for_app(name());
 #endif
+  rebuild_tiles();  // 屏刚建：磁贴带/页码点是新的空容器，按注册表重新长一遍
   // 屏刚装载：控件是设计器里的初值（"11:31" 写死的文案），立刻刷一次真时间。
   // 后台策略是 tick（见本文件末尾 settings()），下一次刷新由 onBackgroundTick 接手。
   refresh_clock();
@@ -80,6 +83,7 @@ void LauncherApp::onResume() {
 #if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
   ui_backend_load_for_app(name());
 #endif
+  rebuild_tiles();  // 从别的 App 回来 = 屏重建过，磁贴也是新的空容器
   refresh_clock();  // 同 onEnter：屏重建过，控件回到初值
   shown_city_ = 0xFFU;
   refresh_weather();
@@ -102,6 +106,31 @@ void LauncherApp::onBackgroundTick(std::uint32_t now_ms) {
 
 void LauncherApp::onExit() {
   ELOG_INFO("App {} onExit", name());
+}
+
+void LauncherApp::rebuild_tiles() {
+#if defined(EMBARK_AIDOGUI_UI)
+  if (fw_ == nullptr) {
+    return;
+  }
+  // 磁贴 = 注册表里除第 0 项（主屏自己）以外的每个 App，顺序就是注册顺序。
+  // 文案取 App::title()（中文名，如"时钟"）：与设计稿里的手写磁贴字一致。
+  const AppRegistry& apps = fw_->apps();
+  tile_count_ = 0;
+  for (std::size_t i = 1; i < apps.size() && tile_count_ < launcher::max_tiles; ++i) {
+    const App* app = apps.at(i);
+    if (app == nullptr) {
+      continue;
+    }
+    tiles_[tile_count_].app_name = app->name();
+    tiles_[tile_count_].label = app->title() != nullptr ? app->title() : app->name();
+    ++tile_count_;
+  }
+
+  const std::size_t built = launcher_tiles_rebuild(name(), tiles_, tile_count_);
+  ELOG_INFO("主屏磁贴：注册表 {} 个 App → {} 个磁贴 → 建出 {} 个 / {} 页", apps.size(),
+            tile_count_, built, launcher_tiles_page_count());
+#endif
 }
 
 void LauncherApp::refresh_clock() {

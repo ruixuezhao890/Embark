@@ -20,12 +20,16 @@
 #ifndef EMBARK_APP_LAUNCHER_APP_H
 #define EMBARK_APP_LAUNCHER_APP_H
 
+#include <cstddef>
 #include <cstdint>
 
 #include <lvgl.h>
 
 #include <embark/app.h>
 #include <embark/framework.h>
+
+#include "launcher_pages.h"
+#include "launcher_tiles.h"
 
 namespace embark::demo {
 
@@ -56,6 +60,10 @@ class LauncherApp final : public App {
   [[nodiscard]] unsigned ticks() const { return ticks_; }
 
  private:
+  /// 按注册表重建主屏磁贴：磁贴数/文案/顺序都从 fw_->apps() 来（跳过第 0 项 = 主屏自己），
+  /// 屏每次装载后都要调（控件是新的对象，磁贴得重新长出来）。
+  void rebuild_tiles();
+
   /// 把本地墙钟写进屏上的 L_Time（大表）/ L_Clock0（右上角小表）。
   /// 只在值变化时写；控件不存在（屏未装载）时静默跳过。
   void refresh_clock();
@@ -64,6 +72,8 @@ class LauncherApp final : public App {
   /// 数据桩与天气屏同源（weather/weather_data.h）：天气卡只是同一份数据的另一种画法。
   void refresh_weather();
 
+  LauncherTile tiles_[launcher::max_tiles] = {};  // 磁贴元数据（字符串是静态字面量）
+  std::size_t tile_count_ = 0;                   // 本次重建写进 tiles_ 的条数（= 屏上磁贴数）
   unsigned enters_ = 0;
   unsigned resumes_ = 0;
   unsigned foreground_ticks_ = 0;

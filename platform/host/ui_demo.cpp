@@ -53,7 +53,9 @@
 #include <embark/log.h>
 #include <embark_limits.h>
 
+#include "album/album_app.h"
 #include "clock/clock_app.h"
+#include "music/music_app.h"
 #include "settings/settings_app.h"
 #include "weather/weather_app.h"
 #include "eez_ui_bridge.h"
@@ -70,6 +72,7 @@
 #include "host_input.h"
 #include "host_lvgl_mem.h"
 #include "launcher/launcher_app.h"
+#include "launcher/launcher_tiles.h"  // --ui-launcher-pages：运行时磁贴的观测点
 #include "lvgl_port.h"
 #include "lvgl_ui_port.h"
 #include "own_task_spawner.h"
@@ -168,7 +171,7 @@ constexpr int uiweather_back_fallback_y = 18;
 constexpr int uiweather_next_fallback_x = 210;
 constexpr int uiweather_next_fallback_y = 50;
 // 兜底坐标（读不到控件几何时才用；正常路径是读真实几何，设计器里挪位置也点得中）：
-//   launcher 磁贴 Tile1 = 12,202 48×48 → 中心 36,226；launcher 时钟卡 Card_Clock = 14,30
+//   launcher 第 1 个磁贴（运行时按注册表建）= 12,202 48×48 → 中心 36,226；launcher 时钟卡 Card_Clock = 14,30
 //   212×96 → 中心 120,78；clock 返回键 Btn_Back = 8,4 64×28 → 中心 40,18；月历翻月键
 //   「<」「>」= Card_Cal(12,192 系) 内 24×20 → 中心 36,214 / 204,214。
 constexpr int uinav_tile_fallback_x = 36;
@@ -181,6 +184,51 @@ constexpr int uinav_prev_fallback_x = 36;
 constexpr int uinav_prev_fallback_y = 214;
 constexpr int uinav_next_fallback_x = 204;
 constexpr int uinav_next_fallback_y = 214;
+
+// --ui-launcher-pages（主屏分页验收）的时间轴与落点。
+// 主屏磁贴是按 App 注册表运行时生成的（app/launcher/launcher_tiles.cpp），本模式就是
+// "后面加了 App，还划得到、点得进吗" 的机器断言。时序：
+//   帧 10   磁贴/页/页码点/字形与注册表自检
+//   帧 14..34 在磁贴带上横向拖（一帧一个插值点，跟 --drag 同理）
+//   帧 44   断言吸附到第 2 页
+//   帧 54   点第 5 个磁贴（「相册」，只在第 2 页上）→ 帧 64 断言进了相册屏
+//   帧 70..82 在相册屏上滑 → 帧 92 断言回到主屏
+//   帧 98..110 在主屏再上滑 → 帧 118 断言主屏不响应（上滑返回只对非主屏生效）
+//   帧 126  关窗
+constexpr int ulp_check_frame = 10;
+constexpr int ulp_drag_press_frame = 14;
+constexpr int ulp_drag_release_frame = 34;
+constexpr int ulp_page_check_frame = 44;
+constexpr int ulp_tile_click_frame = 54;
+constexpr int ulp_album_check_frame = 64;
+constexpr int ulp_swipe_press_frame = 70;
+constexpr int ulp_swipe_release_frame = 82;
+constexpr int ulp_back_check_frame = 92;
+constexpr int ulp_home_swipe_press_frame = 98;
+constexpr int ulp_home_swipe_release_frame = 110;
+constexpr int ulp_home_check_frame = 118;
+constexpr int ulp_quit_frame = 126;
+constexpr int ulp_frames = 132;
+
+// 磁贴带（Band_Apps）在屏上是 0,202 240×56：横向拖动走带子下沿 y=254（避开磁贴本身，
+// 免得"拖完"被当成"点磁贴"）；上滑返回的落点走屏中间 x=120。
+constexpr int ulp_band_y = 254;
+constexpr int ulp_drag_x_from = 200;
+constexpr int ulp_drag_x_to = 40;
+// 上滑的横坐标刻意放在 x=10：两张卡片都从 x=14 起，屏根是唯一命中的对象。
+// 为什么较真：LVGL 抬起时会把 CLICKED 发给"抬起点下的对象"（lv_indev.c 的
+// indev_proc_release），落点压在卡片上就会顺手把卡片点开 —— 上滑验收会莫名多一跳。
+constexpr int ulp_swipe_x = 10;
+constexpr int ulp_swipe_y_from = 250;   // 相册屏：空白处（屏根被点击命中）
+constexpr int ulp_swipe_y_to = 60;
+// 主屏再上滑时**不能**从 y=250 起手：那里压在 Band_Apps 上，而它是可横滚对象 ——
+// LVGL 一旦判定为滚动（scroll_obj != NULL）就不再派发手势（lv_indev.c:1123），
+// 那样"主屏不响应"会被通过，但通过的原因不对。y=196 落在天气卡(134..190)与磁贴带(202..)之间。
+constexpr int ulp_home_swipe_y_from = 200;  // 主屏：磁贴带从 y=202 起，这里在带外
+// 第 2 页吸附后第 1 格磁贴的中心（lv_obj_get_coords 给的是含滚动的屏坐标，第 5 格此时
+// 落在屏上 36,226 —— 和设计稿第 1 页第 1 格同位）。
+constexpr int ulp_tile_fallback_x = 36;
+constexpr int ulp_tile_fallback_y = 226;
 
 #if defined(EMBARK_AIDOGUI_UI)
 // App 层唯一的界面接缝（app/common/ui_backend.h）在定义本宏时选 AiDoGUI：EEZ 的 nav
@@ -216,23 +264,27 @@ struct Options {
   bool ui = false;
   bool ui_nav = false;
   bool ui_weather = false;
+  bool ui_launcher_pages = false;
 };
 
 void print_usage() {
   std::printf(
       "用法：embark_host_ui [选项]\n"
-      "  --frames N         跑 N 帧后退出（默认按模式：launch 200 / click 90 / drag 80 / eez 110 / ui 40 / ui-nav 56 / 否则 0 = 一直跑到关窗）\n"
+      "  --frames N         跑 N 帧后退出（默认按模式：launch 200 / click 90 / drag 80 / eez 110 / ui 40 / ui-nav 110 / ui-launcher-pages 132 / 否则 0 = 一直跑到关窗）\n"
 "  --click [X,Y]      点 launcher 屏「闹钟」行切 clock（帧 20，自动滚进视口）→ 帧 70 在 clock 屏点 (X,Y)（默认按钮中心 %d,%d = 回启动器）\n"
       "  --drag X1,Y1,X2,Y2 合成拖动冒烟（帧 15 按下 → 每帧一个插值点 → 帧 40 抬起；默认 40,60 → 100,140）\n"
 "  --launch            完整验收故事（request_switch('clock')→点屏按钮往返→bump_level 消息）\n"
       "  --ui                AiDoGUI 验收（ADR 0011）：字体 6/6 + 屏表/控件表 + 切走即释放/回来即重建\n"
       "  --ui-nav            双向导航 + 月历翻月验收：点磁贴进 clock → 点返回回 launcher → 点时钟卡再进 clock → 点「>」「<」翻月并校验显示月与标题\n"
       "  --ui-weather        天气验收（ADR 0012）：点主屏天气卡进天气屏 → 天气屏 5 天逐字段对桩 → 点「>」切城市 → 点返回 → 主屏天气卡跟着换\n"
+      "  --ui-launcher-pages 主屏分页验收：磁贴/页/页码点按注册表生成 → 横向拖到第 2 页 → 点「相册」磁贴进相册屏 → 相册屏上滑回主屏 → 主屏上滑不响应\n"
       "  --eez               EEZ 老代码回归（issue 19）：屏表/变量表自检 + 变量读写往返 + EEZ 屏点按钮切 App\n"
       "  --screenshot FILE  最后一帧存 BMP\n"
       "  --shot-frame N FILE 第 N 帧存 BMP（配 --eez 等故事线抓中途屏）\n"
       "  --scale S           窗口放大倍数（默认 1 = 240×320 1:1）\n"
-      "  --delay MS          每帧间隔（默认 5）\n"
+      "  --delay MS          每帧间隔（默认 5）。合成点击/手势的验收模式请给 ≥40：LVGL 约每\n"
+      "                      30 ms 读一次输入，帧跑得比它快就会把几次按下/抬起采样进同一帧，\n"
+      "                      时序飘（拖动看着没吸附、点击晚十几帧才生效），见 ui_demo.cpp 顶部注\n"
       "  --quit-at N         第 N 帧推关窗事件\n"
       "  --help              打印用法\n",
       clock_button_fallback_x, clock_button_fallback_y);
@@ -262,6 +314,9 @@ void scroll_into_view(lv_obj_t* obj) {
 }
 
 // --- 合成输入（SDL_PushEvent → 真事件队列 → 输入后端）-------------------------
+// ⚠️ 帧间隔必须给够（验收模式用 --delay 40）：LVGL 约每 30 ms 读一次输入，帧跑得比它快时
+// 一帧里推的"按下 → 移动 → 抬起"会被采样进同一次读取，时序随机器负载飘（同一份验收脚本
+// 一趟过、一趟不过）。--delay 40 让每帧都落到一次输入读取里，点击/拖动才可复现。
 void push_motion_and_press(int scale, int panel_x, int panel_y) {
   SDL_Event motion{};
   motion.type = SDL_MOUSEMOTION;
@@ -318,10 +373,14 @@ bool save_screenshot(embark::platform::host::HostDisplay& display, const char* p
 namespace embark::platform::host {
 
 // 整个可执行文件只出现一次的 App 注册表：LauncherApp（启动器）首位 = 默认前台，
-// 之后是 ClockApp/SettingsApp。启动器与 clock/settings 屏的界面都来自 EEZ Studio
-// （app/eez_ui/），启动器仍必须第一位（默认前台）。2026-10-06 精简：只留这三个。
+// 之后依次是 ClockApp/SettingsApp/WeatherApp/MusicApp/AlbumApp。界面都来自
+// AiDoGUI 设计工程（app/aidogui_ui/，屏名 == App 名）；启动器必须第一位。
+// 主屏磁贴就是按**这张表**运行时生成的（app/launcher/launcher_tiles.cpp）：
+// 加 App = 在这里加一项 + 在 AiDoGUI 里加同名屏，主屏的页数与页码点自己跟着变。
+// MusicApp/AlbumApp 是占位 App（屏上写着"界面还没做"）：磁贴数 5 → 主屏 2 页，
+// 正好用来验收"后面的 App 划得到"（--ui-launcher-pages）。
 EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp,
-                 embark::demo::WeatherApp)
+                 embark::demo::WeatherApp, embark::demo::MusicApp, embark::demo::AlbumApp)
 
 }  // namespace embark::platform::host
 
@@ -371,6 +430,7 @@ Options parse_options(int argc, char** argv) {
     else if (std::strcmp(arg, "--ui") == 0) { options.ui = true; }
     else if (std::strcmp(arg, "--ui-nav") == 0) { options.ui_nav = true; }
     else if (std::strcmp(arg, "--ui-weather") == 0) { options.ui_weather = true; }
+    else if (std::strcmp(arg, "--ui-launcher-pages") == 0) { options.ui_launcher_pages = true; }
     else if (std::strcmp(arg, "--help") == 0) { print_usage(); std::exit(0); }
     else {
       // 严格解析：不认识的选项/缺参数直接报错退出（旧版静默忽略会让 --drag
@@ -487,7 +547,7 @@ bool aidogui_clock_check() {
     ok = false;
   }
   if (progress <= 0 || progress > 365) { ok = false; }
-  // 导航命中：这一跳来自设计器「调用函数」事件（launcher Tile1 → embark_ui_open_clock）。
+  // 导航命中：这一跳来自主屏运行时磁贴（launcher_tiles 的点击 → aidogui_ui_nav_request_app）。
   // C++ 侧 bind_click 还有一条备用绑定（launcher/Card_Clock → clock），本跳不经过它。
   const int hits = embark::demo::aidogui_ui_nav_click_hits();
   const int bindings = embark::demo::aidogui_ui_nav_click_bindings();
@@ -575,15 +635,11 @@ bool aidogui_prev_check(int base_y, int base_m) {
             shown_ok ? y : -1, shown_ok ? m : -1, base_y, base_m, title_ok ? "同步" : "不同步");
   return shown_ok && y == base_y && m == base_m && title_ok;
 }
-/// 字形覆盖检查：把控件当前文本逐字符喂给 LVGL 字体表，任何一个字形缺失都算失败。
+/// 字形覆盖检查：把一段文本逐字符喂给 LVGL 字体表，任何一个字形缺失都算失败。
 /// 为什么必须有这条：字体是按 (ttf, 字号) 子集化的（字符表在 screen.aid 的
 /// i18n.customCharsetRows 里显式维护），漏一个字符**不会**编译或运行报错 —— 屏幕上只是
-/// 一个方框，验收却会"通过"。这里把"方框"变成可断言的失败。
-bool aidogui_font_covers(const char* screen, const char* widget) {
-  lv_obj_t* obj = embark::demo::aidogui_ui_bridge_widget(screen, widget);
-  if (obj == nullptr) { return false; }
-  const lv_font_t* font = lv_obj_get_style_text_font(obj, LV_PART_MAIN);
-  const char* text = lv_label_get_text(obj);
+/// 一个方框，验收却会"通过"。这里把"方框"变成可断言的失败。where 只进日志。
+bool font_covers_text(const lv_font_t* font, const char* text, const char* where) {
   if (font == nullptr || text == nullptr) { return false; }
   bool ok = true;
   for (const unsigned char* p = reinterpret_cast<const unsigned char*>(text); *p != 0U;) {
@@ -597,12 +653,131 @@ bool aidogui_font_covers(const char* screen, const char* widget) {
     p += len;
     lv_font_glyph_dsc_t dsc{};
     if (!lv_font_get_glyph_dsc(font, &dsc, cp, 0)) {
-      ELOG_INFO("ui-weather 字形缺失：{}/{} 的字 U+{:04X} 不在该字号字体子集里（screen.aid 的 customCharsetRows 要补）",
-                screen, widget, cp);
+      ELOG_INFO("字形缺失：{} 的字 U+{:04X} 不在该字号字体子集里（screen.aid 的 customCharsetRows 要补）",
+                where, cp);
       ok = false;
     }
   }
   return ok;
+}
+
+/// 按名取控件后查它当前文本的字形覆盖（--ui-weather / --ui-launcher-pages 共用）。
+bool aidogui_font_covers(const char* screen, const char* widget) {
+  lv_obj_t* obj = embark::demo::aidogui_ui_bridge_widget(screen, widget);
+  if (obj == nullptr) { return false; }
+  char where[64];
+  std::snprintf(where, sizeof where, "%s/%s", screen, widget);
+  return font_covers_text(lv_obj_get_style_text_font(obj, LV_PART_MAIN), lv_label_get_text(obj),
+                          where);
+}
+
+/// --ui-launcher-pages：第 index 个运行时磁贴的几何中心（屏坐标，已含滚动偏移）。
+/// 磁贴没有名字（不是设计器画死的控件，塞不进 aidogui_ui_bridge_widget 那张表），
+/// 只能按对象取几何；取不到就用兜底坐标（验收不瞎点）。
+PanelPoint aidogui_tile_center(std::size_t index, int fallback_x, int fallback_y) {
+  lv_obj_t* tile = embark::demo::launcher_tiles_tile(index);
+  if (tile == nullptr) { return PanelPoint{fallback_x, fallback_y, false}; }
+  lv_area_t area{};
+  lv_obj_get_coords(tile, &area);
+  return PanelPoint{(area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2, true};
+}
+
+/// --ui-launcher-pages 帧 10：主屏磁贴/页/页码点与 App 注册表是否一致。
+/// 本可执行文件的注册表是 6 个 App（launcher + clock/settings/weather/music/album）
+/// → 磁贴 5 个、2 页、2 个页码点；第 5 个磁贴是「相册」；几何照设计稿（页内 12/68/…，
+/// 第 2 页整体 +240），2 个点整行居中 = 113/121。顺带把"方框字"断掉。
+bool aidogui_launcher_pages_check() {
+  const std::size_t tiles = embark::demo::launcher_tiles_count();
+  const std::size_t pages = embark::demo::launcher_tiles_page_count();
+  const std::size_t dots = embark::demo::launcher_tiles_dot_count();
+  const char* const expect_apps[] = {"clock", "settings", "weather", "music", "album"};
+  bool order_ok = tiles == 5;
+  for (std::size_t i = 0; order_ok && i < tiles; ++i) {
+    const char* got = embark::demo::launcher_tiles_app(i);
+    if (got == nullptr || (i < 5 && std::strcmp(got, expect_apps[i]) != 0)) { order_ok = false; }
+  }
+  lv_obj_t* label4 = embark::demo::launcher_tiles_tile_label(4);
+  const char* text4 = label4 != nullptr ? lv_label_get_text(label4) : nullptr;
+  const bool album_ok = text4 != nullptr && std::strcmp(text4, "相册") == 0;
+  bool fonts_ok = true;
+  for (std::size_t i = 0; i < tiles; ++i) {
+    lv_obj_t* label = embark::demo::launcher_tiles_tile_label(i);
+    if (label == nullptr) { fonts_ok = false; continue; }
+    char where[48];
+    std::snprintf(where, sizeof where, "主屏磁贴 %u", static_cast<unsigned>(i));
+    if (!font_covers_text(lv_obj_get_style_text_font(label, LV_PART_MAIN), lv_label_get_text(label),
+                          where)) {
+      fonts_ok = false;
+    }
+  }
+  // 磁贴 x 是相对页容器的（页内 12/68/…）；页容器 x 才是翻页偏移（第 2 页 = 240）。
+  lv_obj_t* t0 = embark::demo::launcher_tiles_tile(0);
+  lv_obj_t* t1 = embark::demo::launcher_tiles_tile(1);
+  lv_obj_t* p1 = embark::demo::launcher_tiles_page(1);
+  lv_obj_t* d0 = embark::demo::launcher_tiles_dot(0);
+  lv_obj_t* d1 = embark::demo::launcher_tiles_dot(1);
+  const int x_t0 = t0 != nullptr ? lv_obj_get_x(t0) : -1;
+  const int x_t1 = t1 != nullptr ? lv_obj_get_x(t1) : -1;
+  const int x_p1 = p1 != nullptr ? lv_obj_get_x(p1) : -1;
+  const int x_d0 = d0 != nullptr ? lv_obj_get_x(d0) : -1;
+  const int x_d1 = d1 != nullptr ? lv_obj_get_x(d1) : -1;
+  const bool geo_ok = x_t0 == 12 && x_t1 == 68 && x_p1 == 240 && x_d0 == 113 && x_d1 == 121;
+  lv_obj_t* hint = embark::demo::aidogui_ui_bridge_widget("launcher", "L_Hint");
+  const char* hint_text = hint != nullptr ? lv_label_get_text(hint) : nullptr;
+  const bool hint_ok = hint_text != nullptr && std::strcmp(hint_text, "左右滑动翻页，上滑返回") == 0 &&
+                       aidogui_font_covers("launcher", "L_Hint");
+  ELOG_INFO("主屏分页自检：磁贴 {}（期望 5）/ 页 {}（期望 2）/ 点 {}（期望 2）；顺序 {}；第 5 格 {}；"
+            "几何 {}（磁贴 x {}/{}，第 2 页 x {}，点 x {}/{}）；字形 {}；提示行 {}（\"{}\"）",
+            tiles, pages, dots, order_ok ? "对" : "错", album_ok ? "「相册」" : "<不是相册>",
+            geo_ok ? "对" : "错", x_t0, x_t1, x_p1, x_d0, x_d1, fonts_ok ? "全在" : "有缺字",
+            hint_ok ? "对" : "错", hint_text != nullptr ? hint_text : "<取不到>");
+  return tiles == 5 && pages == 2 && dots == 2 && order_ok && album_ok && geo_ok && fonts_ok &&
+         hint_ok;
+}
+
+/// --ui-launcher-pages 帧 44：横向拖完应停在第 2 页（吸附式：松手吸附最近页）。
+bool aidogui_launcher_page_check() {
+  const std::size_t page = embark::demo::launcher_tiles_current_page();
+  lv_obj_t* band = embark::demo::launcher_tiles_band();
+  const int scroll_x = band != nullptr ? lv_obj_get_scroll_x(band) : 0;
+  const int offset = scroll_x < 0 ? -scroll_x : scroll_x;
+  ELOG_INFO("主屏横向拖动后：停在第 {} 页（scroll_x={}，期望吸附到第 1 页 = 240px）", page, scroll_x);
+  return page == 1 && offset == 240;
+}
+
+/// --ui-launcher-pages 帧 64：点第 2 页上的「相册」磁贴应进相册屏（launcher 屏随切走释放）。
+bool aidogui_launcher_album_check() {
+  const char* current = embark::demo::aidogui_ui_bridge_current_screen();
+  const bool album_created = embark::demo::aidogui_ui_bridge_screen_created("album");
+  const bool launcher_gone = !embark::demo::aidogui_ui_bridge_screen_created("launcher");
+  ELOG_INFO("点第 2 页的「相册」磁贴后：当前屏 {}（album 已创建 {}，launcher 已释放 {}）",
+            current != nullptr ? current : "<null>", album_created ? "是" : "否",
+            launcher_gone ? "是" : "否");
+  return current != nullptr && std::strcmp(current, "album") == 0 && album_created && launcher_gone;
+}
+
+/// --ui-launcher-pages 帧 92：相册屏上滑应回主屏（且主屏磁贴重建出来 = 回来真的重画了）。
+bool aidogui_launcher_swipe_back_check() {
+  const char* current = embark::demo::aidogui_ui_bridge_current_screen();
+  const bool launcher_created = embark::demo::aidogui_ui_bridge_screen_created("launcher");
+  const bool album_gone = !embark::demo::aidogui_ui_bridge_screen_created("album");
+  const int hits = embark::demo::aidogui_ui_nav_swipe_back_hits();
+  const std::size_t tiles = embark::demo::launcher_tiles_count();
+  ELOG_INFO("相册屏上滑后：当前屏 {}（launcher 已重建 {}，album 已释放 {}）；上滑返回命中 {} 次；"
+            "磁贴重新建出 {} 个",
+            current != nullptr ? current : "<null>", launcher_created ? "是" : "否",
+            album_gone ? "是" : "否", hits, tiles);
+  return current != nullptr && std::strcmp(current, "launcher") == 0 && launcher_created &&
+         album_gone && hits == 1 && tiles == 5;
+}
+
+/// --ui-launcher-pages 帧 118：主屏上滑**不**应响应（上滑返回只对非主屏生效）。
+bool aidogui_launcher_home_swipe_check() {
+  const char* current = embark::demo::aidogui_ui_bridge_current_screen();
+  const int hits = embark::demo::aidogui_ui_nav_swipe_back_hits();
+  ELOG_INFO("主屏上滑后：当前屏 {}（应仍停在 launcher）；上滑返回命中 {} 次（应仍为 1：主屏不响应）",
+            current != nullptr ? current : "<null>", hits);
+  return current != nullptr && std::strcmp(current, "launcher") == 0 && hits == 1;
 }
 
 /// --ui-weather：天气屏是否与数据桩逐字段一致（城市名 / 现在区 / 5 天逐行）。
@@ -718,6 +893,7 @@ void ui_main(void* argument) noexcept {
     else if (options->ui) { frames_limit = aidogui_frames; }
     else if (options->ui_nav) { frames_limit = uinav_frames; }
     else if (options->ui_weather) { frames_limit = uiweather_frames; }
+    else if (options->ui_launcher_pages) { frames_limit = ulp_frames; }
   }
 
   int frames_run = 0;
@@ -732,6 +908,13 @@ void ui_main(void* argument) noexcept {
   bool uiweather_in_ok = false;    // --ui-weather：进天气屏后 5 天与数据桩一致（帧 22）
   bool uiweather_next_ok = false;  // --ui-weather：点「>」换城市后屏上数据跟着换（帧 40）
   bool uiweather_card_ok = false;  // --ui-weather：回主屏后天气卡换成同一个城市（帧 58）
+  bool ulp_tiles_ok = false;   // --ui-launcher-pages：磁贴/页/点/几何/字形自检（帧 10）
+  bool ulp_page_ok = false;    // --ui-launcher-pages：拖到第 2 页并吸附住（帧 44）
+  bool ulp_album_ok = false;   // --ui-launcher-pages：点第 2 页的相册磁贴进相册屏（帧 64）
+  bool ulp_back_ok = false;    // --ui-launcher-pages：相册屏上滑回主屏（帧 92）
+  bool ulp_home_ok = false;    // --ui-launcher-pages：主屏上滑不响应（帧 118）
+  int ulp_tile_x = 0;          // --ui-launcher-pages：相册磁贴落点（按下/抬起同一个点）
+  int ulp_tile_y = 0;
   for (;;) {
     framework.step();
     ++frames_run;
@@ -807,12 +990,11 @@ void ui_main(void* argument) noexcept {
 #endif
       if (frames_run == aidogui_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
     } else if (options->ui_nav) {
-      // AiDoGUI 双向导航 + 月历翻月：磁贴（设计器事件）→ clock → 返回（设计器事件）→
-      // launcher → 时钟卡（C++ bind_click）→ clock → 翻月键（C++ 回调）。动作全来自
-      // 控件上的事件，这里只负责合成点击。落点每帧现读（屏会换）。
+      // AiDoGUI 双向导航 + 月历翻月：主屏运行时磁贴（第 0 个 = 时钟）→ clock → 返回
+      // （设计器事件）→ launcher → 时钟卡（C++ bind_click）→ clock → 翻月键（C++ 回调）。
+      // 磁贴不在设计稿里（按注册表运行时建），落点走 launcher_tiles 的观测点 + 兜底坐标。
 #if defined(EMBARK_AIDOGUI_UI)
-      const PanelPoint tile =
-          aidogui_widget_center("launcher", "Tile1", uinav_tile_fallback_x, uinav_tile_fallback_y);
+      const PanelPoint tile = aidogui_tile_center(0, uinav_tile_fallback_x, uinav_tile_fallback_y);
       const PanelPoint back =
           aidogui_widget_center("clock", "Btn_Back", uinav_back_fallback_x, uinav_back_fallback_y);
       const PanelPoint card =
@@ -864,6 +1046,63 @@ void ui_main(void* argument) noexcept {
       }
 #endif
       if (frames_run == uiweather_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
+    } else if (options->ui_launcher_pages) {
+      // 主屏分页验收：磁贴/页/页码点都是运行时按注册表建的 → 横向划到第 2 页 → 点只存在于
+      // 第 2 页的「相册」→ 在相册屏上滑回主屏 → 在主屏再上滑（应不响应）。
+      // 落点走"读真实几何 + 兜底"，以后挪设计稿也不会瞎点。
+#if defined(EMBARK_AIDOGUI_UI)
+      if (frames_run == ulp_check_frame) { ulp_tiles_ok = aidogui_launcher_pages_check(); }
+      if (frames_run == ulp_drag_press_frame) {
+        push_motion_and_press(options->scale, ulp_drag_x_from, ulp_band_y);
+      }
+      if (frames_run > ulp_drag_press_frame && frames_run < ulp_drag_release_frame) {
+        const int steps = ulp_drag_release_frame - ulp_drag_press_frame;
+        const int t = frames_run - ulp_drag_press_frame;
+        push_motion(options->scale,
+                    ulp_drag_x_from + (ulp_drag_x_to - ulp_drag_x_from) * t / steps, ulp_band_y);
+      }
+      if (frames_run == ulp_drag_release_frame) {
+        push_release(options->scale, ulp_drag_x_to, ulp_band_y);
+      }
+      if (frames_run == ulp_page_check_frame) { ulp_page_ok = aidogui_launcher_page_check(); }
+      if (frames_run == ulp_tile_click_frame) {
+        const PanelPoint album_tile = aidogui_tile_center(4, ulp_tile_fallback_x, ulp_tile_fallback_y);
+        ulp_tile_x = album_tile.x;
+        ulp_tile_y = album_tile.y;
+        push_motion_and_press(options->scale, ulp_tile_x, ulp_tile_y);
+      }
+      if (frames_run == ulp_tile_click_frame + click_release_delta) {
+        push_release(options->scale, ulp_tile_x, ulp_tile_y);
+      }
+      if (frames_run == ulp_album_check_frame) { ulp_album_ok = aidogui_launcher_album_check(); }
+      if (frames_run == ulp_swipe_press_frame) {
+        push_motion_and_press(options->scale, ulp_swipe_x, ulp_swipe_y_from);
+      }
+      if (frames_run > ulp_swipe_press_frame && frames_run < ulp_swipe_release_frame) {
+        const int steps = ulp_swipe_release_frame - ulp_swipe_press_frame;
+        const int t = frames_run - ulp_swipe_press_frame;
+        push_motion(options->scale, ulp_swipe_x,
+                    ulp_swipe_y_from + (ulp_swipe_y_to - ulp_swipe_y_from) * t / steps);
+      }
+      if (frames_run == ulp_swipe_release_frame) {
+        push_release(options->scale, ulp_swipe_x, ulp_swipe_y_to);
+      }
+      if (frames_run == ulp_back_check_frame) { ulp_back_ok = aidogui_launcher_swipe_back_check(); }
+      if (frames_run == ulp_home_swipe_press_frame) {
+        push_motion_and_press(options->scale, ulp_swipe_x, ulp_home_swipe_y_from);
+      }
+      if (frames_run > ulp_home_swipe_press_frame && frames_run < ulp_home_swipe_release_frame) {
+        const int steps = ulp_home_swipe_release_frame - ulp_home_swipe_press_frame;
+        const int t = frames_run - ulp_home_swipe_press_frame;
+        push_motion(options->scale, ulp_swipe_x,
+                    ulp_home_swipe_y_from + (ulp_swipe_y_to - ulp_home_swipe_y_from) * t / steps);
+      }
+      if (frames_run == ulp_home_swipe_release_frame) {
+        push_release(options->scale, ulp_swipe_x, ulp_swipe_y_to);
+      }
+      if (frames_run == ulp_home_check_frame) { ulp_home_ok = aidogui_launcher_home_swipe_check(); }
+#endif
+      if (frames_run == ulp_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
     }
     if (options->shot_path != nullptr && frames_run == options->shot_frame) {
       if (!save_screenshot(display, options->shot_path)) { hp::exit_process(1); }
@@ -958,6 +1197,18 @@ void ui_main(void* argument) noexcept {
               weather->city_switches(), embark::demo::aidogui_ui_nav_click_hits(),
               weather->city_name());
     if (!uiweather_ok) { exit_code = 2; }
+  }
+  if (options->ui_launcher_pages) {
+    // 五段检查在帧 10/44/64/92/118 就断完了（各自打了证据行），这里只落结论：
+    // 前台必须回主屏（app 0），switches 恰好 2（进相册 + 上滑回主屏各一跳）。
+    const bool ulp_ok = ulp_tiles_ok && ulp_page_ok && ulp_album_ok && ulp_back_ok && ulp_home_ok &&
+                        framework.foreground() == 0 && framework.switches() == 2;
+    ELOG_INFO("〔主屏分页验收{}〕（磁贴 {} / 页 {} / 点 {}；上滑返回命中 {} 次；前台 {}，switches={}）",
+              ulp_ok ? "通过" : "失败", embark::demo::launcher_tiles_count(),
+              embark::demo::launcher_tiles_page_count(), embark::demo::launcher_tiles_dot_count(),
+              embark::demo::aidogui_ui_nav_swipe_back_hits(),
+              framework.apps().at(framework.foreground())->name(), framework.switches());
+    if (!ulp_ok) { exit_code = 2; }
   }
   if (options->eez) {
     // 故事线：点 launcher 屏按钮 → Flow SetPage 到 clock 屏 → 桥的屏观察者 →
