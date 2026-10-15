@@ -62,6 +62,26 @@ fw.post(embark::CrossTaskMessage(id_of(*this), ++seq_));
 
 `onCreate(Framework& fw)` 里保存 `fw_ = &fw;` 之后用（demo 里叫 `fw_`）。
 
+### 状态机怎么和消息接上
+
+消息只改一个"值"时，直接存成员就够了（`app/clock/` 收 `BrightnessMessage` 就是这样）。
+要"**收消息即切状态**"，用 `etl::fsm`：状态机是 App 的成员，`onMessage` 里转投一行
+（框架的 `Bus` 只以 `const&` 暴露，App 不能自己 subscribe）：
+
+```cpp
+class LampApp final : public embark::App {
+  void onCreate(Framework& fw) override { (void)fw; fsm_.start(); }     // 初始状态 = id 0
+  void onMessage(const Message& msg) override { fsm_.receive(msg); }    // 不认识的消息 id 走 on_event_unknown
+  void onBackgroundTick(std::uint32_t) override { fsm_.receive(TickMessage{}); }
+
+ private:
+  LampFsm fsm_;  // 继承 etl::fsm，同时是 etl::imessage_router
+};
+```
+
+完整例子、运行语义（`start()` 的链式跳转、`on_exit`/`on_enter` 顺序、`Self_Transition`）与常见坑见
+[guides/state-machine-and-messages.md](../guides/state-machine-and-messages.md)。
+
 ## 后台策略：三种，每 App 声明一次
 
 `App::settings()` 返回 `AppSettings{策略, 周期, 栈深, 优先级, 武装时机}`（最后一项有默认值，4 字段写法照旧可用）。
@@ -227,7 +247,7 @@ const embark::Error err = fw.spawn_own_task(fw.id_of(*this));
 开机即武装共四个用例）。
 
 ## 演示对照
-`app/launcher/`（主屏 + 导航接线）、`app/clock/`（tick 100ms + 状态机 + 收 `BrightnessMessage`）、`app/settings/`
+`app/launcher/`（主屏 + 导航接线）、`app/clock/`（tick 100ms 推进显示变量 + 收 `BrightnessMessage`）、`app/settings/`
 （suspend + `publish` 亮度消息 + `bump_level` 逻辑入口）就是最小可读范本；`app/common/app_messages.h` 定义了
 `BrightnessMessage`。**这三个 App 都没声明 `own_task`**：后台演示只有 `clock` 的 `tick`，`own_task` 的
 完整系统用例在 `tests/kernel/test_own_task_lifecycle.cpp`（宿主演示 `ui_demo` 仍按这 3 个 App 注册）。

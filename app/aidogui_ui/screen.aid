@@ -1,0 +1,1891 @@
+{
+  "formatVersion": 2,
+  "projectId": "8f0e2b6a-2c11-4a5e-9d3a-5b7c1e4f0a92",
+  "name": "embark",
+  "version": "1.0.0",
+  "description": "Embark 240x320 UI (AiDoGUI Designer)",
+  "lvglVersion": "8.4.0",
+  "imageOutputFormat": "BIN",
+  "fontOutputFormat": "BIN",
+  "exportSettings": {
+    "uiOutputPath": "E:\\01_Workspace\\00_Active_projects\\00_code\\0_embedded_project\\0_esp32_project\\simulation_project_development\\app\\aidogui_ui\\export",
+    "flatExport": false,
+    "imageByteArrayAttributePrefix": "",
+    "imageBinRootPath": "S:/images",
+    "fontBinRootPath": "S:/fonts"
+  },
+  "settings": {
+    "width": 240,
+    "height": 320,
+    "colorDepth": 16,
+    "defaultBackgroundColor": "#ffffff",
+    "theme": "default",
+    "rotation": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "shape": "rectangle",
+    "cornerRadius": 5
+  },
+  "screens": [
+    {
+      "id": "launcher",
+      "name": "launcher",
+      "isDefault": true,
+      "style": {},
+      "widgets": [
+        {
+          "id": "launcher_Desk",
+          "parentId": "launcher",
+          "type": "lv_obj",
+          "name": "Desk",
+          "x": 0,
+          "y": 0,
+          "width": 240,
+          "height": 320,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "bgColor": "#0b1020ff",
+                "radius": 0
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_L_Title",
+          "parentId": "launcher_Desk",
+          "type": "lv_label",
+          "name": "L_Title",
+          "x": 14,
+          "y": 5,
+          "width": 100,
+          "height": 20,
+          "text": "启动器",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#7f8aa6ff",
+                "textFontSize": 14
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_L_Clock0",
+          "parentId": "launcher_Desk",
+          "type": "lv_label",
+          "name": "L_Clock0",
+          "x": 120,
+          "y": 5,
+          "width": 106,
+          "height": 20,
+          "text": "11:31",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#7f8aa6ff",
+                "textFontSize": 14,
+                "textAlign": "RIGHT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_Card_Clock",
+          "parentId": "launcher_Desk",
+          "type": "lv_obj",
+          "name": "Card_Clock",
+          "x": 14,
+          "y": 30,
+          "width": 212,
+          "height": 96,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "bgColor": "#18213aff",
+                "radius": 12
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_L_Time",
+          "parentId": "launcher_Card_Clock",
+          "type": "lv_label",
+          "name": "L_Time",
+          "x": 12,
+          "y": 10,
+          "width": 188,
+          "height": 64,
+          "text": "11:31",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#e8eefcff",
+                "textFontSize": 56,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_L_Date",
+          "parentId": "launcher_Card_Clock",
+          "type": "lv_label",
+          "name": "L_Date",
+          "x": 14,
+          "y": 77,
+          "width": 184,
+          "height": 18,
+          "text": "2026年10月12日 星期一",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#8b95b3ff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_Card_Weather",
+          "parentId": "launcher_Desk",
+          "type": "lv_obj",
+          "name": "Card_Weather",
+          "x": 14,
+          "y": 134,
+          "width": 212,
+          "height": 56,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "bgColor": "#18213aff",
+                "radius": 12
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_L_WIcon",
+          "parentId": "launcher_Card_Weather",
+          "type": "lv_label",
+          "name": "L_WIcon",
+          "x": 12,
+          "y": 12,
+          "width": 30,
+          "height": 30,
+          "text": "晴",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#ffd166ff",
+                "textFontSize": 22
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_L_WTemp",
+          "parentId": "launcher_Card_Weather",
+          "type": "lv_label",
+          "name": "L_WTemp",
+          "x": 52,
+          "y": 8,
+          "width": 76,
+          "height": 36,
+          "text": "26°",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#e8eefcff",
+                "textFontSize": 28
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_L_WCity",
+          "parentId": "launcher_Card_Weather",
+          "type": "lv_label",
+          "name": "L_WCity",
+          "x": 134,
+          "y": 10,
+          "width": 66,
+          "height": 20,
+          "text": "北京",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#a9b6d3ff",
+                "textFontSize": 14
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_L_WDesc",
+          "parentId": "launcher_Card_Weather",
+          "type": "lv_label",
+          "name": "L_WDesc",
+          "x": 134,
+          "y": 30,
+          "width": 66,
+          "height": 18,
+          "text": "空气优",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#6d7a99ff",
+                "textFontSize": 11
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_Tile1",
+          "parentId": "launcher_Desk",
+          "type": "lv_obj",
+          "name": "Tile1",
+          "x": 12,
+          "y": 202,
+          "width": 48,
+          "height": 48,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "bgColor": "#202b47ff",
+                "radius": 10
+              }
+            }
+          },
+          "events": [
+            {
+              "id": "event_embark_ui_open_clock_clicked",
+              "eventType": "CLICKED",
+              "actionType": "CALL_FUNCTION",
+              "actionParams": {
+                "functionName": "embark_ui_open_clock"
+              },
+              "enabled": true
+            }
+          ],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_Tile1_L",
+          "parentId": "launcher_Tile1",
+          "type": "lv_label",
+          "name": "Tile1_L",
+          "x": 0,
+          "y": 15,
+          "width": 48,
+          "height": 20,
+          "text": "时钟",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_Tile2",
+          "parentId": "launcher_Desk",
+          "type": "lv_obj",
+          "name": "Tile2",
+          "x": 68,
+          "y": 202,
+          "width": 48,
+          "height": 48,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "bgColor": "#202b47ff",
+                "radius": 10
+              }
+            }
+          },
+          "events": [
+            {
+              "id": "event_embark_ui_open_settings_clicked",
+              "eventType": "CLICKED",
+              "actionType": "CALL_FUNCTION",
+              "actionParams": {
+                "functionName": "embark_ui_open_settings"
+              },
+              "enabled": true
+            }
+          ],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_Tile2_L",
+          "parentId": "launcher_Tile2",
+          "type": "lv_label",
+          "name": "Tile2_L",
+          "x": 0,
+          "y": 15,
+          "width": 48,
+          "height": 20,
+          "text": "设置",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_Tile3",
+          "parentId": "launcher_Desk",
+          "type": "lv_obj",
+          "name": "Tile3",
+          "x": 124,
+          "y": 202,
+          "width": 48,
+          "height": 48,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "bgColor": "#202b47ff",
+                "radius": 10
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_Tile3_L",
+          "parentId": "launcher_Tile3",
+          "type": "lv_label",
+          "name": "Tile3_L",
+          "x": 0,
+          "y": 15,
+          "width": 48,
+          "height": 20,
+          "text": "音乐",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_Tile4",
+          "parentId": "launcher_Desk",
+          "type": "lv_obj",
+          "name": "Tile4",
+          "x": 180,
+          "y": 202,
+          "width": 48,
+          "height": 48,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "bgColor": "#202b47ff",
+                "radius": 10
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_Tile4_L",
+          "parentId": "launcher_Tile4",
+          "type": "lv_label",
+          "name": "Tile4_L",
+          "x": 0,
+          "y": 15,
+          "width": 48,
+          "height": 20,
+          "text": "相册",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_Dot1",
+          "parentId": "launcher_Desk",
+          "type": "lv_obj",
+          "name": "Dot1",
+          "x": 109,
+          "y": 258,
+          "width": 6,
+          "height": 6,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "bgColor": "#6ea0ffff",
+                "radius": 3
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_Dot2",
+          "parentId": "launcher_Desk",
+          "type": "lv_obj",
+          "name": "Dot2",
+          "x": 117,
+          "y": 258,
+          "width": 6,
+          "height": 6,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "bgColor": "#2a3550ff",
+                "radius": 3
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_Dot3",
+          "parentId": "launcher_Desk",
+          "type": "lv_obj",
+          "name": "Dot3",
+          "x": 125,
+          "y": 258,
+          "width": 6,
+          "height": 6,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "bgColor": "#2a3550ff",
+                "radius": 3
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "launcher_L_Hint",
+          "parentId": "launcher_Desk",
+          "type": "lv_label",
+          "name": "L_Hint",
+          "x": 14,
+          "y": 278,
+          "width": 212,
+          "height": 18,
+          "text": "点按图标进入，上滑返回",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#55617fff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        }
+      ],
+      "animations": []
+    },
+    {
+      "id": "clock",
+      "name": "clock",
+      "isDefault": false,
+      "style": {},
+      "widgets": [
+        {
+          "id": "clock_Desk",
+          "parentId": "clock",
+          "type": "lv_obj",
+          "name": "Desk",
+          "x": 0,
+          "y": 0,
+          "width": 240,
+          "height": 320,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#0b1020ff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 0
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_Btn_Back",
+          "parentId": "clock_Desk",
+          "type": "lv_obj",
+          "name": "Btn_Back",
+          "x": 8,
+          "y": 4,
+          "width": 64,
+          "height": 28,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 8
+              },
+              "PRESSED__MAIN": {
+                "bgColor": "#2a3550ff"
+              }
+            }
+          },
+          "events": [
+            {
+              "id": "event_embark_ui_open_launcher_clicked",
+              "eventType": "CLICKED",
+              "actionType": "CALL_FUNCTION",
+              "actionParams": {
+                "functionName": "embark_ui_open_launcher"
+              },
+              "enabled": true
+            }
+          ],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_Btn_Back_L",
+          "parentId": "clock_Btn_Back",
+          "type": "lv_label",
+          "name": "Btn_Back_L",
+          "x": 0,
+          "y": 5,
+          "width": 64,
+          "height": 18,
+          "text": "返回",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_L_Title",
+          "parentId": "clock_Desk",
+          "type": "lv_label",
+          "name": "L_Title",
+          "x": 84,
+          "y": 8,
+          "width": 72,
+          "height": 20,
+          "text": "时钟",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_Feed",
+          "parentId": "clock_Desk",
+          "type": "lv_obj",
+          "name": "Feed",
+          "x": 0,
+          "y": 36,
+          "width": 240,
+          "height": 284,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#0b1020ff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 0
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": true
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "OFF",
+            "scroll_dir": "VER",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_Card_Time",
+          "parentId": "clock_Feed",
+          "type": "lv_obj",
+          "name": "Card_Time",
+          "x": 12,
+          "y": 8,
+          "width": 216,
+          "height": 92,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 12
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_L_Time",
+          "parentId": "clock_Card_Time",
+          "type": "lv_label",
+          "name": "L_Time",
+          "x": 12,
+          "y": 6,
+          "width": 192,
+          "height": 62,
+          "text": "11:31",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#e8eefcff",
+                "textFontSize": 48,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_L_SW",
+          "parentId": "clock_Card_Time",
+          "type": "lv_label",
+          "name": "L_SW",
+          "x": 12,
+          "y": 68,
+          "width": 192,
+          "height": 18,
+          "text": "秒 07，第 42 周",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#6ea0ffff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_Card_Date",
+          "parentId": "clock_Feed",
+          "type": "lv_obj",
+          "name": "Card_Date",
+          "x": 12,
+          "y": 108,
+          "width": 216,
+          "height": 40,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 12
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_L_Date",
+          "parentId": "clock_Card_Date",
+          "type": "lv_label",
+          "name": "L_Date",
+          "x": 12,
+          "y": 10,
+          "width": 192,
+          "height": 20,
+          "text": "2026年10月12日 周一",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_Card_Cal",
+          "parentId": "clock_Feed",
+          "type": "lv_obj",
+          "name": "Card_Cal",
+          "x": 12,
+          "y": 156,
+          "width": 216,
+          "height": 184,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 12
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_L_MH",
+          "parentId": "clock_Card_Cal",
+          "type": "lv_label",
+          "name": "L_MH",
+          "x": 40,
+          "y": 12,
+          "width": 136,
+          "height": 20,
+          "text": "2026年10月",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_Card_Year",
+          "parentId": "clock_Feed",
+          "type": "lv_obj",
+          "name": "Card_Year",
+          "x": 12,
+          "y": 348,
+          "width": 216,
+          "height": 84,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 12
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_L_Doy",
+          "parentId": "clock_Card_Year",
+          "type": "lv_label",
+          "name": "L_Doy",
+          "x": 12,
+          "y": 8,
+          "width": 192,
+          "height": 18,
+          "text": "第 285 天",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#8b95b3ff",
+                "textFontSize": 12
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_Bar_Prog",
+          "parentId": "clock_Card_Year",
+          "type": "lv_bar",
+          "name": "Bar_Prog",
+          "x": 12,
+          "y": 30,
+          "width": 192,
+          "height": 10,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#232c45ff",
+                "radius": 5
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_L_P1",
+          "parentId": "clock_Card_Year",
+          "type": "lv_label",
+          "name": "L_P1",
+          "x": 12,
+          "y": 46,
+          "width": 192,
+          "height": 18,
+          "text": "剩 80 / 365 天",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_L_P2",
+          "parentId": "clock_Card_Year",
+          "type": "lv_label",
+          "name": "L_P2",
+          "x": 12,
+          "y": 64,
+          "width": 192,
+          "height": 16,
+          "text": "距年末 80 天",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#6d7a99ff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_Card_Tom",
+          "parentId": "clock_Feed",
+          "type": "lv_obj",
+          "name": "Card_Tom",
+          "x": 12,
+          "y": 440,
+          "width": 216,
+          "height": 44,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 12
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_L_Tm",
+          "parentId": "clock_Card_Tom",
+          "type": "lv_label",
+          "name": "L_Tm",
+          "x": 12,
+          "y": 12,
+          "width": 110,
+          "height": 20,
+          "text": "10月13日",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_L_Tw",
+          "parentId": "clock_Card_Tom",
+          "type": "lv_label",
+          "name": "L_Tw",
+          "x": 130,
+          "y": 12,
+          "width": 74,
+          "height": 20,
+          "text": "周二",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#6ea0ffff",
+                "textFontSize": 14,
+                "textAlign": "RIGHT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_Card_Month",
+          "parentId": "clock_Feed",
+          "type": "lv_obj",
+          "name": "Card_Month",
+          "x": 12,
+          "y": 492,
+          "width": 216,
+          "height": 44,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 12
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_L_Dim",
+          "parentId": "clock_Card_Month",
+          "type": "lv_label",
+          "name": "L_Dim",
+          "x": 12,
+          "y": 12,
+          "width": 60,
+          "height": 20,
+          "text": "31 天",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_L_Fd",
+          "parentId": "clock_Card_Month",
+          "type": "lv_label",
+          "name": "L_Fd",
+          "x": 78,
+          "y": 14,
+          "width": 76,
+          "height": 18,
+          "text": "首日 周四",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#8b95b3ff",
+                "textFontSize": 11
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_L_Fw",
+          "parentId": "clock_Card_Month",
+          "type": "lv_label",
+          "name": "L_Fw",
+          "x": 158,
+          "y": 14,
+          "width": 46,
+          "height": 18,
+          "text": "第 42 周",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#8b95b3ff",
+                "textFontSize": 11,
+                "textAlign": "RIGHT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "clock_Cal",
+          "parentId": "clock_Card_Cal",
+          "type": "lv_calendar",
+          "name": "Cal",
+          "x": 12,
+          "y": 32,
+          "width": 192,
+          "height": 144,
+          "align": "TOP_LEFT",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 0,
+                "borderWidth": 0,
+                "textColor": "#c7d0e6ff",
+                "textFont": "ui_heiti.ttf",
+                "textFontSize": 12
+              }
+            }
+          },
+          "events": []
+        },
+        {
+          "id": "clock_Btn_Prev",
+          "parentId": "clock_Card_Cal",
+          "type": "lv_label",
+          "name": "Btn_Prev",
+          "x": 12,
+          "y": 12,
+          "width": 24,
+          "height": 20,
+          "align": "TOP_LEFT",
+          "text": "<",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#202b47ff",
+                "radius": 6,
+                "textColor": "#c7d0e6ff",
+                "textFont": "ui_heiti.ttf",
+                "textFontSize": 14,
+                "textAlign": "CENTER",
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          }
+        },
+        {
+          "id": "clock_Btn_Next",
+          "parentId": "clock_Card_Cal",
+          "type": "lv_label",
+          "name": "Btn_Next",
+          "x": 180,
+          "y": 12,
+          "width": 24,
+          "height": 20,
+          "align": "TOP_LEFT",
+          "text": ">",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#202b47ff",
+                "radius": 6,
+                "textColor": "#c7d0e6ff",
+                "textFont": "ui_heiti.ttf",
+                "textFontSize": 14,
+                "textAlign": "CENTER",
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          }
+        }
+      ],
+      "animations": []
+    }
+  ],
+  "stylePresets": [],
+  "i18n": {
+    "languages": [],
+    "defaultLanguage": "",
+    "textResources": [],
+    "customCharsetRows": [
+      {
+        "fontName": "ui_heiti.ttf",
+        "fontSize": 11,
+        "symbols": "五优六周四日气空第首",
+        "range": "0x20-0x7F"
+      },
+      {
+        "fontName": "ui_heiti.ttf",
+        "fontSize": 12,
+        "symbols": "一三上二五入六剩周四回图天年按日星月期末标滑点秒第距返进，",
+        "range": "0x20-0x7F"
+      },
+      {
+        "fontName": "ui_heiti.ttf",
+        "fontSize": 14,
+        "symbols": "一三乐二京六册动北启周器四回天年日时月相置设返钟音",
+        "range": "0x20-0x7F"
+      },
+      {
+        "fontName": "ui_heiti.ttf",
+        "fontSize": 22,
+        "symbols": "晴",
+        "range": "0x20-0x7F"
+      },
+      {
+        "fontName": "ui_heiti.ttf",
+        "fontSize": 28,
+        "symbols": "°",
+        "range": "0x20-0x7F"
+      },
+      {
+        "fontName": "ui_heiti.ttf",
+        "fontSize": 48,
+        "symbols": "0123456789:#abcdef "
+      },
+      {
+        "fontName": "ui_heiti.ttf",
+        "fontSize": 56,
+        "symbols": "0123456789:#abcdef "
+      }
+    ],
+    "enabled": false,
+    "customCharsetEnabled": true
+  },
+  "variables": {
+    "globalVariables": [],
+    "structures": []
+  },
+  "lvglAnimations": [],
+  "initialActions": [],
+  "bitmaps": [],
+  "fonts": [
+    {
+      "id": "font_1791803628717_g753br",
+      "name": "ui_heiti.ttf",
+      "family": "ui_heiti.ttf",
+      "size": 16,
+      "style": "normal",
+      "bpp": 4,
+      "sourcePath": "assets/font/ui_heiti.ttf",
+      "className": "Font"
+    }
+  ],
+  "groups": [],
+  "createdAt": "2026-10-12T14:32:04.194Z",
+  "updatedAt": "2026-10-14T15:25:32.226Z",
+  "preview": {
+    "path": "previews/8f0e2b6a-2c11-4a5e-9d3a-5b7c1e4f0a92.png",
+    "updatedAt": 1791823374296
+  },
+  "userWidgets": []
+}

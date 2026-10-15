@@ -2,8 +2,9 @@
  * Embark · 设置 App 实现：见 settings_app.h 头注释。
  *
  * 薄壳纪律与 launcher_app.cpp / clock_app.cpp 完全一致：onCreate 只记账 + 持有框架句柄
- * （本 App 要 publish BrightnessMessage）；onEnter/onResume 只按屏名挂自己的 EEZ 屏；
- * onForegroundTick 泵一帧。手绘按钮/Back to clock 按钮已退役（回主屏由 EEZ 屏按钮 SetPage
+ * （本 App 要 publish BrightnessMessage）；onEnter/onResume 只按屏名挂自己的屏（后端由
+ * app/common/ui_backend.h 选：AiDoGUI 优先，EEZ 并存）；onForegroundTick 泵一帧。
+ * 手绘按钮/Back to clock 按钮已退役（回主屏由屏按钮切屏
  * 回 launcher 屏承担 —— 导航壳 2026-10-06 退役；切 App 也只经 Framework 的 request_switch）。
  */
 #include <cstdint>
@@ -14,8 +15,8 @@
 #include "app_messages.h"
 #include "settings_app.h"
 
-#if defined(EMBARK_EEZ_UI_BRIDGE)
-#include "eez_ui_bridge.h"
+#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#include "ui_backend.h"
 #endif
 
 namespace embark::demo {
@@ -29,8 +30,8 @@ void SettingsApp::onEnter() {
   ++enters_;
   ELOG_INFO("App {} 进入前台（enter {}, resume {}, 累计 {} 次）", name(), enters_, resumes_,
             enters_ + resumes_);
-#if defined(EMBARK_EEZ_UI_BRIDGE)
-  eez_ui_bridge_enter_app_screen(name());
+#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+  ui_backend_load_for_app(name());
 #endif
 }
 
@@ -41,8 +42,8 @@ void SettingsApp::onPause() {
 void SettingsApp::onResume() {
   ++resumes_;
   ELOG_INFO("App {} 回到前台（enter {}, resume {}）", name(), enters_, resumes_);
-#if defined(EMBARK_EEZ_UI_BRIDGE)
-  eez_ui_bridge_enter_app_screen(name());
+#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+  ui_backend_load_for_app(name());
 #endif
 }
 
@@ -52,8 +53,8 @@ void SettingsApp::onExit() {
 
 void SettingsApp::onForegroundTick(std::uint32_t now_ms) {
   (void)now_ms;
-#if defined(EMBARK_EEZ_UI_BRIDGE)
-  eez_ui_bridge_tick();
+#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+  ui_backend_tick();
 #endif
 }
 

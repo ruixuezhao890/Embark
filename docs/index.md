@@ -5,7 +5,7 @@
 | 层 | 回答的问题 | 什么时候读 |
 | --- | --- | --- |
 | [**concepts**](concepts/index.md) | **为什么这么设计** —— 执行模型、一帧的时序、后台策略、消息怎么走 | 想理解框架、要判断"这么写对不对"、准备改框架 |
-| [**guides**](guides/quickstart.md) | **怎么用** —— 从零跑起来、加一个 App、画 EEZ 屏、写 HAL 后端 | 要动手做事 |
+| [**guides**](guides/quickstart.md) | **怎么用** —— 从零跑起来、加一个 App、画界面屏、写 HAL 后端 | 要动手做事 |
 | [**reference**](reference/hooks-and-api.md) | **具体是多少 / 叫什么** —— 8 个钩子的契约、API 全集、容量上限、踩坑清单 | 写代码时查表 |
 
 另外两处不在三层里：
@@ -47,8 +47,11 @@ ctest --test-dir build --output-on-failure
 | --- | --- |
 | [guides/quickstart.md](guides/quickstart.md) | **从零跑起来**：装工具 → clone → 构建 → 跑 → 最短验收 → 加一个 App 的入口 |
 | [guides/new-app-guide.md](guides/new-app-guide.md) | **新手指南**：30 分钟加一个带界面的 App（建壳 → 画同名屏 → 绑变量 → 构建验收，端到端） |
-| [guides/eez-ui-manual.md](guides/eez-ui-manual.md) | EEZ UI 用户手册：界面交给 EEZ、App 只调几个接口（薄桥 API 全集 + 命名约定 + 模板） |
-| [guides/eez-studio-guide.md](guides/eez-studio-guide.md) | EEZ Studio 一条龙：装 Studio、建工程、导出代码入库（源工程随库入库） |
+| [guides/state-machine-and-messages.md](guides/state-machine-and-messages.md) | 状态机与消息：`etl::fsm` 怎么接进 App 契约（收消息即切状态、事件从 `onBackgroundTick` 喂、运行语义与坑） |
+| [../app/aidogui_ui/README.md](../app/aidogui_ui/README.md) | **界面怎么改（当前）**：AiDoGUI 设计工程 → 一条命令重生成 → 编译；目录、字体与真机资源约定 |
+| [adr/0011-aidogui-ui-source.md](adr/0011-aidogui-ui-source.md) | **界面来源决策（当前）**：BIN 资源走 S 盘、薄桥按需建屏、空屏不变量、三步迁移 |
+| [guides/eez-ui-manual.md](guides/eez-ui-manual.md) | **历史（EEZ 时代）**：EEZ UI 用户手册 —— 迁移第二步随 `app/eez_ui/` 一起归档 |
+| [guides/eez-studio-guide.md](guides/eez-studio-guide.md) | **历史（EEZ 时代）**：EEZ Studio 一条龙（装 Studio、导出代码入库） |
 | [guides/hal-backend-guide.md](guides/hal-backend-guide.md) | 怎么写一个 HAL 后端：宿主骨架（照 `platform/host/`）、共享层（`platform/common/`）与真机实现（`platform/esp32/`，含 IDF 坑清单） |
 | [guides/scaffold-and-tools.md](guides/scaffold-and-tools.md) | 脚本与工具：`tools/scaffold_app.py` 生成 App 薄壳、字体子集生成、验收开关与退出码 |
 

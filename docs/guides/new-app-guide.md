@@ -19,7 +19,7 @@
 
 ## 1. 建 App 壳（C++ 侧，10 分钟）
 
-仓库里已有三个薄壳样例：`app/launcher/`（主屏 + 导航接线）、`app/clock/`（tick + 状态机 + 收 `BrightnessMessage`）、`app/settings/`（suspend + 逻辑入口）。
+仓库里已有三个薄壳样例：`app/launcher/`（主屏 + 导航接线）、`app/clock/`（tick 100ms 推进显示变量 + 收 `BrightnessMessage`）、`app/settings/`（suspend + 逻辑入口）。
 
 ### 1.1 一键生成（推荐，30 秒）
 

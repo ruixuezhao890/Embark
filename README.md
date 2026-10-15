@@ -9,7 +9,7 @@
 - 前台 App 拿输入焦点、渲染权与事件循环权；后台 App 按各自策略挂起，或按周期跑轻量逻辑
 - **同一份源码**同时构建 **宿主（PC 仿真）** 与 **ESP32-S3** 两个目标，App 层一行不改
 - 内核**零堆分配**、`-fno-exceptions -fno-rtti`、容器只用 ETL 定容版 —— 「内存够不够」是链接期问题，不是运行期问题
-- 界面交给 **EEZ Studio** 导出，App 只调几个接口；改个坐标不用碰 C++
+- 界面交给 **AiDoGUI Designer** 导出，App 只调几个接口；改个坐标不用碰 C++
 
 ---
 
@@ -29,8 +29,8 @@ Embark 的三条回答：
    重的、真并行的活走 `own_task` 逃生舱（静态池里的任务，跨任务只走消息）。
 2. **HAL 的能力粒度是「芯片功能」**，不是寄存器也不是设备驱动 —— App 通过 `fw.hal()` 拿总线自己写驱动，
    于是同一份 App 在宿主机（SDL2）和真机（ST7789 + CST328）上都跑得起来。
-3. **界面是资源，不是代码** —— EEZ Studio 里画屏、导出的 C 代码入库，App 只负责
-   `挂屏` / `写变量` / `收切屏请求`。
+3. **界面是资源，不是代码** —— AiDoGUI Designer 里画屏、导出的 C 代码入库，App 只负责
+   `挂屏` / `按名取控件` / `收切屏请求`。
 
 ---
 
@@ -57,7 +57,7 @@ class ClockApp final : public App {
 };
 ```
 
-完整可运行的最小例子在 [`examples/minimal/`](examples/minimal/)（不依赖 EEZ、不依赖 demo App，
+完整可运行的最小例子在 [`examples/minimal/`](examples/minimal/)（不依赖界面生成器、不依赖 demo App，
 一个 App + 一个 `main.cpp`，约 250 行含注释）：
 
 ```sh
@@ -88,7 +88,7 @@ ctest --test-dir build --output-on-failure
 > 工具安装的逐步说明（含 Windows 上的踩坑）在
 > [docs/guides/quickstart.md](docs/guides/quickstart.md)。
 
-**下一步**：[加一个自己的 App](docs/guides/new-app-guide.md)（30 分钟端到端，含画 EEZ 屏）。
+**下一步**：[加一个自己的 App](docs/guides/new-app-guide.md)（30 分钟端到端，含画界面屏）。
 
 ---
 
@@ -101,8 +101,8 @@ ctest --test-dir build --output-on-failure
 | `platform/host/` | 宿主后端：SDL2 显示/输入、LVGL 端口、文件存储、FreeRTOS、UI 任务、三个入口 |
 | `platform/esp32/` | ESP32-S3 后端（ESP-IDF 组件形式接入） |
 | `platform/common/` | 两端共享的端口层（LVGL 端口、静态池、任务池） |
-| `app/` | 自带示例 App（launcher / clock / settings）+ EEZ 生成代码 + 薄桥 |
-| `examples/minimal/` | 不依赖 EEZ 的最小可运行 App —— **从这读起** |
+| `app/` | 自带示例 App（launcher / clock / settings）+ AiDoGUI 生成代码 + 薄桥 |
+| `examples/minimal/` | 不依赖界面生成器的最小可运行 App —— **从这读起** |
 | `tests/` | doctest 用例：`hal/` 按能力分、`kernel/` 是内核契约、`fakes/` 是 HAL 假后端 |
 | `config/` | 编译期宏、`lv_conf.h` 与**全部容量上限**（单一事实来源） |
 | `tools/` | 脚手架（`scaffold_app.py`）、字库生成、真机尺寸检查 |
@@ -133,7 +133,7 @@ ctest --test-dir build --output-on-failure
 | 目标 | 用途 |
 | --- | --- |
 | `embark_host` | 无窗口，走一遍 HAL 自检（时间 / 持久化 / 总线 / 系统） |
-| `embark_host_ui` | **演示 + 自动验收**二合一：`--click` / `--launch` / `--drag` / `--eez` 各是一段脚本化故事 |
+| `embark_host_ui` | **演示 + 自动验收**二合一：`--click` / `--launch` / `--drag` / `--ui`（AiDoGUI 界面冒烟验收）/ `--eez`（历史，迁移中）各是一段脚本化故事 |
 | `embark_host_tour` | 一条用例看完整系统：按 ①→⑨ 走完进程入口到关窗，17 项自检清单全过退出码 0 |
 | `embark_host_user` | **你自己的程序**：干净入口 [platform/host/user_main.cpp](platform/host/user_main.cpp)，改 `EMBARK_APP_TABLE` 即得 |
 
@@ -163,7 +163,7 @@ idf.py -C platform/esp32/project -B build-esp32 -p COM5 flash monitor
 **v0.1.0，可以用了，但还不是 1.0。** 诚实的边界：
 
 - ✅ 内核（App 契约、编译期注册表、唯一 UI 任务、前后台切换）、消息总线、三种后台策略、own task 运行期生命周期
-- ✅ 宿主与 ESP32-S3 两个后端、LVGL 8.3.11、EEZ Studio 适配（含屏生命周期回收）
+- ✅ 宿主与 ESP32-S3 两个后端、LVGL 8.3.11、AiDoGUI Designer 适配（含屏生命周期回收；EEZ 适配在迁移第二步退役）
 - ✅ 零堆审计、CI 三个 job（宿主构建测试 / 真机构建 / clang-format）
 - ⚠️ **真机上的界面观感还没确认**（屏幕方向/颜色、触摸方向）—— 需要板子到手
 - ⚠️ RTC 对时（`epoch_ms` 目前返回 `unsupported`）与 SD 卡总线还没做

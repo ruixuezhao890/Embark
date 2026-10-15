@@ -88,14 +88,23 @@
  *========================================================================*/
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_FONT_DEFAULT &lv_font_montserrat_14
-/* EEZ Studio 导出页面（app/eez_ui/screens.c）引用的 Montserrat 字号：18/20/24/32/48。
- * 不开它们，EEZ 页面的文字全落到默认 14 号（不是报错，只是字号不对）。
- * 缺字审计（issue 17）相应扩展到 app/eez_ui/；Montserrat 覆盖完整 ASCII，
- * EEZ 页面文字保持 ASCII 即可，CJK 页面文字需要另行评估（v1 不在 EEZ 页面用 CJK）。 */
+/* EEZ Studio 导出页面（app/eez_ui/screens.c）引用的 Montserrat 字号：
+ * 12/18/20/24/32/44/48。不开它们，EEZ 页面的文字全落到默认 14 号
+ * （不是报错，只是字号不对）。12 与 44 是 2026-10-12 画 clock 屏时补的
+ * （星期小字 + 46px 大时间）。加字号后构建期不会报错，只会静默变小 ——
+ * 改屏后拿 screens.c 里的 lv_font_montserrat_N 对一遍本清单。
+ *
+ * 缺字审计（issue 17）相应扩展到 app/eez_ui/。注意 EEZ 页面**可以用 CJK**：
+ * 工程自带字体资源 sim（ui_font_sim.c，源字体 simhei.ttf），字号 16、
+ * 覆盖 0x20-0x7F + 0xB0 + 工程里 lvglSymbols 列出的全部汉字；clock 屏的
+ * 中文文案走的就是它。加中文 = 往该字体资源的字符集里加字再重生成
+ * （流程见 docs/guides/eez-studio-guide.md「字体文件 ui_font_sim.c」）。 */
+#define LV_FONT_MONTSERRAT_12 1
 #define LV_FONT_MONTSERRAT_18 1
 #define LV_FONT_MONTSERRAT_20 1
 #define LV_FONT_MONTSERRAT_24 1
 #define LV_FONT_MONTSERRAT_32 1
+#define LV_FONT_MONTSERRAT_44 1
 #define LV_FONT_MONTSERRAT_48 1
 /* 其余 LV_FONT_* 由 lv_conf_internal.h 兜为 0（已核实，例如 :994-998 MONTSERRAT_8）。
 

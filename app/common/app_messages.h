@@ -13,7 +13,8 @@
 
 namespace embark::demo {
 
-/// 亮度档消息：SettingsApp 广播，ClockApp 的 onMessage 接收（消息驱动，不进状态机）。
+/// 亮度档消息：SettingsApp 广播，ClockApp 的 onMessage 接收（收到即更新数据；需要
+/// “收消息即切状态”的 App 见 docs/guides/state-machine-and-messages.md）。
 struct BrightnessMessage : public MessageT<0x21> {
   constexpr BrightnessMessage(std::uint8_t level_value = 0) noexcept : level(level_value) {}
   std::uint8_t level = 0;  // 0..3 共四档

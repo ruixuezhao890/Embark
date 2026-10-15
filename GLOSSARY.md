@@ -138,24 +138,28 @@ _Avoid_: 运行时描述符、注册文件
 命名化视觉常量（底色/面板/文字/强调色、圆角、间距、线宽），手写 LVGL 的唯一取色来源；框架壳与手写界面共用（启动器界面改由 EEZ 提供），风格为深色科技风。
 _Avoid_: 魔法颜色、主题对象
 
-**EEZ App（EEZ 应用）**：
-页面由 EEZ Studio 工程导出（生成代码入库）、交互与外观由 EEZ Flow 描述、业务逻辑由 C++ 实现的 App；它是薄壳——onCreate 调 eez_ui_bridge_ensure_init()（幂等），onEnter/onResume 调 eez_ui_bridge_enter_app_screen(name())，onForegroundTick 先 set_var_* 再调 eez_ui_bridge_tick()，不手写任何 LVGL。跨 App 切换由 EEZ 切屏经 eez_ui_nav 翻成 request_switch。制作界面的唯一方式（手绘已退役）。
-_Avoid_: Studio 页面、生成式 App、Flow 应用
+**AiDoGUI App（AiDoGUI 应用）**：
+页面由 AiDoGUI Designer 工程 `app/aidogui_ui/screen.aid` 导出（生成代码入库，见 ADR 0011）、业务逻辑由 C++ 实现的 App；它是薄壳——onCreate/onEnter 调 `aidogui_ui_bridge_load_screen_for_app(name())` 挂自己的屏，界面数据靠 `aidogui_ui_bridge_widget(屏, 控件名)` 拿到 `lv_obj_t*` 后直接写，不手写任何 LVGL 布局、也不 include 生成代码头。跨 App 切换在**设计器里给控件挂「调用函数」动作**声明（函数名约定 `embark_ui_open_<App 名>`，生成代码的裸调用落到 `app/common/aidogui_ui_hooks.h` 的 C 入口 → `aidogui_ui_nav_request_app()`）；**不要**用 CHANGE_SCREEN 动作（`_ui_screen_change()` 会绕过桥的按需 init/destroy）。备用路径 `aidogui_ui_nav_bind_click(屏名, 控件名, App 名)` 仍在：App 里声明一次，控件随屏销毁消失、由桥在每次装载后重挂回调。制作界面的唯一方式（手绘已退役）。
+_Avoid_: Studio 页面、生成式 App、Flow 应用（EEZ 时代的叫法是「EEZ App」，随 ADR 0008 归档）
 
 **Screen name convention（屏名约定）**：
-EEZ 里 screen 名 == 同名 App 的名字（子页 `<app名>_<编号>_sub`）；桥据此把 EEZ 的切屏翻成框架的 `request_switch`，也据此为 App 找同名屏。屏表在构建期从生成代码解析（cmake/embark_eez_screens.cmake），加屏不用改 C++。
+AiDoGUI 里 screen 名 == 同名 App 的名字（子页 `<app名>_<编号>_sub`）；桥据此把 AiDoGUI 的切屏翻成框架的 `request_switch`，也据此为 App 找同名屏。屏表由 `cmake/embark_aidogui_tables.cmake` 在 CMake 配置期从 `app/aidogui_ui/export/` 解析、写到构建目录的 `include/embark_aidogui_ui_tables.h`，加屏不用改 C++（重建屏要按目标 id 建：改名必须同步改所有子控件的 `parentId`，漏改的控件会被静默丢弃）。
 _Avoid_: 编号映射表、手工维护的屏清单
 
-**EEZ bridge（EEZ 动作桥）**：
-`app/eez_ui_bridge.h` 的双向接线：Embark → EEZ 是 `load_screen_for_app` / `enter_app_screen`（按屏名约定载屏）与 `set_var_*` / `get_var_*`（Flow 全局变量 = UI 显示数据接口，按名读写）；EEZ → Embark 是屏观察者（生成代码的切页统一收敛到 `replacePageHook`，桥保存原指针再换成自己的，先转发再回调）。App 只调桥，不 include 生成代码头。
+**UI bridge（界面桥）**：
+`app/common/aidogui_ui_bridge.h` 的双向接线：Embark → 界面是 `load_screen` / `load_screen_for_app`（按屏名约定载屏，**切走即释放**）、`unload_current`（显示器交给桥的空屏兜底）与 `widget(屏, 控件名)`（**控件表 = 界面数据接口**，按名拿 `lv_obj_t*`）；界面 → Embark 是屏观察者：**每次装载屏都回调**（桥自己发起的 `load_screen*` 也通知——观察者靠这条把点击绑定重挂到新控件上，备用路径；主路径是设计器里挂的「调用函数」事件；请求切到「已是前台」的 App 时框架直接 return，不会成环）。字体也由桥加载（BIN 走 'S' 盘），失败只降级告警。App 只调桥，不 include 生成代码头。
 _Avoid_: 生成代码直连、App 里 include ui.h
 
 **Style scope（样式域）**：
-样式定义的归属边界：手写 C++ 只用 design tokens；EEZ 页面只在 Studio 工程里集中定义样式（导出为 styles.c，随工程入库）。同一视觉常量不得跨域散落。
+样式定义的归属边界：手写 C++ 只用 design tokens；AiDoGUI 页面只在设计工程（`screen.aid`，随生成代码入库）里定义样式。同一视觉常量不得跨域散落。
 _Avoid_: 魔法颜色、主题对象
 
+**Font charset table（字体字符表）**：
+设计工程里 `i18n.customCharsetEnabled + i18n.customCharsetRows`（GUI：「语言 / 自定义字符」页）显式列出每个 (字体, 字号) 要打进 BIN 的字符。默认的自动子集只收**设计期文字**，动态数字（时间、日期、天数）会缺字形变方框；开了这张表就完全以表为准——每行必须是「设计期文字 ∪ 运行期字符」的超集，且每个用到的 (字体, 字号) 都得有一行。
+_Avoid_: 靠设计稿文字凑字符、运行时才发现方框
+
 **Foreground tick（前台节拍）**：
-App 契约的可选钩子 onForegroundTick(now_ms)：框架在 UI 任务每跳调用前台 App 的它（在 lv_timer_handler 之后）；EEZ App 用它驱动 eez_flow_tick。默认空实现，手写 App 可忽略。
+App 契约的可选钩子 onForegroundTick(now_ms)：框架在 UI 任务每跳调用前台 App 的它（在 lv_timer_handler 之后）。AiDoGUI 生成代码没有「每帧把变量刷进控件」的变量层，所以界面 App 通常不需要它（`aidogui_ui_bridge_tick()` 是保留契约形状的空实现）。默认空实现，手写 App 可忽略。
 _Avoid_: UI tick、渲染回调
 
 **Static subset font（静态子集字库）**：

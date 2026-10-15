@@ -63,7 +63,7 @@ ctest --test-dir build --output-on-failure
   ```
 
   不参与格式检查的文件：`third_party/**`、`.scratch/embark-v1/spikes/**`、
-  `config/lv_conf.h`、`platform/host/freertos/FreeRTOSConfig.h`、`app/eez_ui/**`（Studio 生成，重导出即覆盖）。
+  `config/lv_conf.h`、`platform/host/freertos/FreeRTOSConfig.h`、`app/aidogui_ui/**`（AiDoGUI 生成，重导出即覆盖；EEZ 时代的 `app/eez_ui/**` 在迁移中）。
 
 - 命名：类型 `UpperCamelCase`、函数与变量 `snake_case`、成员变量带尾部下划线（`foreground_`）。
 - 注释写**为什么**，不写**是什么** —— 代码已经说了是什么。复杂取舍在注释里带 issue/ADR 编号

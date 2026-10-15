@@ -36,7 +36,7 @@ namespace embark::platform::esp32 {
 
 // 整个固件只出现一次的 App 注册表（与宿主演示同一套 App，2026-10-06 精简为三个）：
 // LauncherApp 首位 = 默认前台（界面来自 EEZ 屏，真机接入 EEZ 后由屏承担导航）；
-// ClockApp 后台 tick 100ms（状态机 + 消息驱动亮度档）；SettingsApp suspend（bump_level
+// ClockApp 后台 tick 100ms（节拍推进计数 + 消息驱动亮度档）；SettingsApp suspend（bump_level
 // 逻辑入口）。桥调用在真机上编译成 no-op（EMBARK_EEZ_UI_BRIDGE 未定义），逻辑照常跑。
 EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp)
 

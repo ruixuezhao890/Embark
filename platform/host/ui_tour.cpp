@@ -9,9 +9,9 @@
  *   ③ 框架 boot：3 个 App 注册（launcher/clock/settings）→ 打印每个 App 的后台策略 → 默认前台 LauncherApp
  *      （后台武装时机 = issue 23 / ADR 0009：boot 只武装默认前台；其余 App 等第一次被切进前台，
  *       所以 clock 在 ⑤ 之前后台不跑 —— ⑨ 的清单里有两项专门盯这件事）
- *   ④ 启动器主屏：EEZ Studio 的 launcher 屏 —— 点屏上按钮（Flow SetPage → clock 屏）
+ *   ④ 启动器主屏：EEZ Studio 的 launcher 屏 —— 点屏上「闹钟」行（Flow SetPage → clock 屏）
  *   ⑤ 前台切换 #1：EEZ 屏按钮驱动 → clock 进场（onEnter；同帧武装它的后台策略 → tick 起跑）
- *   ⑥ EEZ 屏往返 + App 间消息：点 clock 屏按钮回启动器（SetPage 回 launcher 屏，
+ *   ⑥ EEZ 屏往返 + App 间消息：点 clock 屏「← 返回」按钮回启动器（SetPage 回 launcher 屏，
  *       屏名约定驱动切回归）；settings->bump_level() 广播亮度消息 → clock 收到（手绘
  *       Level +1 按钮退役后的逻辑入口，界面提交给 EEZ 屏）
  *   ⑦ 回程交给 EEZ 屏按钮：无导航壳 —— 用例在 clock 收尾（SetPage 回程由 EEZ 屏承担）
@@ -56,6 +56,7 @@
 #include "launcher/launcher_app.h"
 #include "lvgl_port.h"
 #include "lvgl_ui_port.h"
+#include "screens.h"  // EEZ 生成的对象表：合成点击按真实控件几何算（见 widget_center）
 #include "own_task_spawner.h"
 #include "ui_task.h"
 
@@ -64,14 +65,17 @@ namespace {
 
 // --- 用例时间线（帧号）-------------------------------------------------------
 // 每帧 = HAL 的一跳（默认 5 ms），帧号是确定性的，所以这条用例每次跑法完全一样。
-// 启动器主屏来自 EEZ Studio（app/eez_ui/src/ui/screens.c 的 launcher 屏）：屏上按钮
-// 中心 (121,224)，Flow SetPage 动作切到 clock 屏，桥的屏观察者把切屏翻成
-// request_switch("clock")（屏名约定 == App 名，见 eez_ui_nav.h）；clock 屏按钮
-// 中心 (120,160)，Flow SetPage 回 launcher 屏。手绘 demo App 按钮已全部退役。
-constexpr int launcher_button_x = 121;  ///< ④ EEZ launcher 屏的按钮中心（SetPage → clock 屏）
-constexpr int launcher_button_y = 224;
-constexpr int clock_button_x = 120;     ///< ⑥ EEZ clock 屏的按钮中心（SetPage → launcher 屏）
-constexpr int clock_button_y = 160;
+// 启动器主屏来自 EEZ Studio（app/eez_ui/src/ui/screens.c 的 launcher 屏）：屏上只有
+// 「闹钟」行 app_row_alarm 接了 Flow（SetPage → clock 屏），桥的屏观察者把切屏翻成
+// request_switch("clock")（屏名约定 == App 名，见 eez_ui_nav.h）；clock 屏的
+// 「← 返回」按钮 SetPage 回 launcher 屏。手绘 demo App 按钮已全部退役。
+//
+// 坐标不硬编码：widget_center() 每帧从生成代码的 objects 表读真实几何
+// （lv_obj_get_coords），改屏后自动跟着走。下面两个常量只是屏还没建好时的兜底。
+constexpr int launcher_button_fallback_x = 163;  ///< ④ launcher 屏「闹钟」行中心
+constexpr int launcher_button_fallback_y = 215;
+constexpr int clock_button_fallback_x = 188;     ///< ⑥ clock 屏「← 返回」按钮中心
+constexpr int clock_button_fallback_y = 295;
 constexpr int click_release_delta = 2;  ///< 按下后隔两帧抬起（LVGL 分两个读周期）
 
 // EEZ Flow SetPage 切页动画 200ms≈40 帧，动画窗口内 LVGL 屏蔽输入
@@ -79,12 +83,12 @@ constexpr int click_release_delta = 2;  ///< 按下后隔两帧抬起（LVGL 分
 // 122→162。
 
 constexpr int arm_probe_frame = 12;         ///< ③b 还没点进 clock：确认它尚未武装、ticks 恒 0
-constexpr int eez_click_frame = 14;         ///< ④ 点 launcher 屏按钮：按下（→ clock）
+constexpr int eez_click_frame = 14;         ///< ④ 点 launcher 屏「闹钟」行：按下（→ clock）
 constexpr int tick_checkpoint_first = 28;   ///< 第一次看 clock 的后台节拍
-constexpr int clock_back_frame = 70;        ///< ⑥ 点 clock 屏按钮：回 launcher 屏（→ 启动器）；16–56 动画结束后
+constexpr int clock_back_frame = 70;        ///< ⑥ 点 clock 屏「← 返回」：回 launcher 屏（→ 启动器）；16–56 动画结束后
 constexpr int tick_checkpoint_second = 82;  ///< 第二次看后台节拍（对比增长）
 constexpr int bump_level_frame = 80;        ///< ⑥ settings->bump_level()：广播亮度消息
-constexpr int launcher_reenter_frame = 120; ///< ⑦ 再点 launcher 屏按钮：进 clock（回程交给 EEZ 屏按钮）；72–112 后
+constexpr int launcher_reenter_frame = 120; ///< ⑦ 再点 launcher 屏「闹钟」行：进 clock（回程交给 EEZ 屏按钮）；72–112 后
 constexpr int screen_life_check_frame = 115; ///< ⑧ 屏生命周期检查：第二段动画（72–112）结束后、⑦ 点击（120）前
 constexpr int quit_frame = 170;            ///< ⑩ 推关窗事件（122–162 动画结束后）
 constexpr int tour_end_frame = 180;        ///< 默认帧数上限
@@ -115,6 +119,28 @@ const char* policy_text(embark::BackgroundPolicy policy) {
     case embark::BackgroundPolicy::own_task: return "own_task（独立任务，period_ms 如上）";
   }
   return "?";
+}
+
+// --- 真实控件几何（从 EEZ 生成代码的 objects 表读）-----------------------------
+// 合成点击必须落在控件真正的中心：屏幕随 EEZ 工程重画而移动，硬编码坐标每改一次屏
+// 就失效一次。这里只读、不建控件不改样式。
+struct PanelPoint { int x; int y; bool ok; };
+
+PanelPoint widget_center(const lv_obj_t* obj, int fallback_x, int fallback_y) {
+  if (obj == nullptr) {
+    return PanelPoint{fallback_x, fallback_y, false};
+  }
+  lv_area_t coords{};
+  lv_obj_get_coords(obj, &coords);
+  return PanelPoint{(coords.x1 + coords.x2) / 2, (coords.y1 + coords.y2) / 2, true};
+}
+
+/// launcher 的 apps_list 内容 387 高、视口只有 195：「闹钟」行初始在屏外，
+/// 不先滚进视口，合成点击永远打不中。
+void scroll_into_view(lv_obj_t* obj) {
+  if (obj != nullptr) {
+    lv_obj_scroll_to_view(obj, LV_ANIM_OFF);
+  }
 }
 
 // --- 合成输入（SDL_PushEvent → 真事件队列 → 输入后端）-------------------------
@@ -268,13 +294,25 @@ void ui_main(void* argument) noexcept {
     if (framework.exit_requested()) { break; }
 
     // --- 合成输入（帧号驱动，确定性）-----------------------------------------
-    if (frames_run == eez_click_frame) { push_motion_and_press(options->scale, launcher_button_x, launcher_button_y); }
-    if (frames_run == eez_click_frame + click_release_delta) { push_release(options->scale, launcher_button_x, launcher_button_y); }
-    if (frames_run == clock_back_frame) { push_motion_and_press(options->scale, clock_button_x, clock_button_y); }
-    if (frames_run == clock_back_frame + click_release_delta) { push_release(options->scale, clock_button_x, clock_button_y); }
+    // 每帧重新读真实几何：屏会随前台切换换掉，坐标必须跟着走。
+    const PanelPoint clock_btn =
+        widget_center(objects.obj0, clock_button_fallback_x, clock_button_fallback_y);
+    const PanelPoint alarm_row =
+        widget_center(objects.app_row_alarm, launcher_button_fallback_x, launcher_button_fallback_y);
+
+    if (frames_run == eez_click_frame || frames_run == launcher_reenter_frame) {
+      scroll_into_view(objects.app_row_alarm);  // 闹钟行在屏外：先滚进视口再点
+      const PanelPoint row =
+          widget_center(objects.app_row_alarm, launcher_button_fallback_x, launcher_button_fallback_y);
+      push_motion_and_press(options->scale, row.x, row.y);
+    }
+    if (frames_run == eez_click_frame + click_release_delta ||
+        frames_run == launcher_reenter_frame + click_release_delta) {
+      push_release(options->scale, alarm_row.x, alarm_row.y);
+    }
+    if (frames_run == clock_back_frame) { push_motion_and_press(options->scale, clock_btn.x, clock_btn.y); }
+    if (frames_run == clock_back_frame + click_release_delta) { push_release(options->scale, clock_btn.x, clock_btn.y); }
     if (frames_run == bump_level_frame) { settings->bump_level(); }
-    if (frames_run == launcher_reenter_frame) { push_motion_and_press(options->scale, launcher_button_x, launcher_button_y); }
-    if (frames_run == launcher_reenter_frame + click_release_delta) { push_release(options->scale, launcher_button_x, launcher_button_y); }
     if (frames_run == quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
     if (frames_run == arm_probe_frame) {
       ticks_before_first_enter = clock->ticks();

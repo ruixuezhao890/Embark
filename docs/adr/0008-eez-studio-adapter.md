@@ -1,5 +1,9 @@
 # EEZ Studio + EEZ Flow 适配：EEZ 管外观与交互流，C++ 管业务
 
+> **已废弃（2026-10-12）**：界面代码来源改为 AiDoGUI Designer，见
+> [0011-aidogui-ui-source.md](0011-aidogui-ui-source.md)。本文保留为历史决策记录
+> （迁移第二步删 `app/eez_ui/` 时一并归档）。
+
 用户提出手写 LVGL 页面太繁琐（2026-10-05），经选型横评后拍板采用 EEZ Studio + EEZ Flow；
 spike 18（issue 18，resolved）用官方样例的生成代码在本仓库 LVGL 8.3.11 上零 API 改动
 编译运行，实测 Flow 运行时在 LVGL 堆常驻约 7 KB / 峰值约 15 KB（256 KB 预算的 5.7%）。

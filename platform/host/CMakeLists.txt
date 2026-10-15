@@ -67,9 +67,24 @@ if(EMBARK_HOST_SDL2_FOUND)
   # （--frames / --click / --drag / --launch / --eez / --screenshot / --shot-frame /
   #   --scale / --delay / --quit-at，全集见 ui_demo.cpp 的 print_usage()）。
   # demo App 本体在 app/（embark::demo_apps），issues/08 起宿主侧不再自带。
+  #
+  # 两个验收程序额外链 embark::eez_ui 并拿到生成代码的 include 根：合成点击必须落在
+  # **真实控件几何**上（屏幕会随 EEZ 工程重画而移动，硬编码坐标每改一次屏就失效一次；
+  # 2026-10-12 的 clock 屏落地就踩过这个坑）。它们只读 objects 表 + 调
+  # lv_obj_get_coords / lv_obj_scroll_to_view，不建控件、不改样式。
   add_executable(embark_host_ui ui_demo.cpp)
 
-  target_link_libraries(embark_host_ui PRIVATE embark::platform_host_ui embark::demo_apps)
+  # ui_demo.cpp 本体要用 AiDoGUI 的桥与资源盘（--ui 验收、S: 盘根路径日志），而这些
+  # 头文件不在 App 层的编译面里，所以这里显式带上目标与宏（宏 = 「App 层界面走 AiDoGUI」，
+  # 与 app/CMakeLists.txt 给 embark_demo_apps 的定义是同一个开关）。
+  target_link_libraries(embark_host_ui PRIVATE embark::platform_host_ui embark::demo_apps
+          embark::eez_ui embark::aidogui_res)
+
+  target_compile_definitions(embark_host_ui PRIVATE EMBARK_AIDOGUI_UI=1)
+
+  target_include_directories(embark_host_ui SYSTEM PRIVATE
+          "${PROJECT_SOURCE_DIR}/app/eez_ui/src/ui"
+          "${PROJECT_SOURCE_DIR}/third_party")
 
   embark_copy_sdl2_runtime(embark_host_ui)
 
@@ -79,7 +94,11 @@ if(EMBARK_HOST_SDL2_FOUND)
   # 它不是单元测试（不进 ctest），而是给人从启动看到任务切换的可运行说明。
   add_executable(embark_host_tour ui_tour.cpp)
 
-  target_link_libraries(embark_host_tour PRIVATE embark::platform_host_ui embark::demo_apps)
+  target_link_libraries(embark_host_tour PRIVATE embark::platform_host_ui embark::demo_apps embark::eez_ui)
+
+  target_include_directories(embark_host_tour SYSTEM PRIVATE
+          "${PROJECT_SOURCE_DIR}/app/eez_ui/src/ui"
+          "${PROJECT_SOURCE_DIR}/third_party")
 
   embark_copy_sdl2_runtime(embark_host_tour)
 

@@ -29,6 +29,11 @@ target_include_directories(embark_apps INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}" "
 # EEZ Studio 生成代码（issue 19 / ADR 0008）：app/eez_ui/，编译口径见该目录 CMakeLists.txt。
 add_subdirectory(eez_ui)
 
+# AiDoGUI Designer 生成代码（ADR 0011，接替 EEZ）：app/aidogui_ui/，编译口径见该目录
+# CMakeLists.txt。迁移期两个生成代码目录并存，第二步（三屏画完）EEZ 整套退役，
+# 那时把上面那行 add_subdirectory(eez_ui) 与本分支一起删）。
+add_subdirectory(aidogui_ui)
+
 # 真机（esp32，issues/11）组件清单与此源列表一一对应（components/embark/CMakeLists.txt）。
 
 embark_find_sdl2(EMBARK_APP_SDL2_FOUND)
@@ -43,7 +48,9 @@ if(EMBARK_APP_SDL2_FOUND)
           clock/clock_app.cpp
           settings/settings_app.cpp
           common/eez_ui_bridge.cpp
-          common/eez_ui_nav.cpp)
+          common/eez_ui_nav.cpp
+          common/aidogui_ui_bridge.cpp
+          common/aidogui_ui_nav.cpp)
   add_library(embark::demo_apps ALIAS embark_demo_apps)
 
   # PUBLIC：各 App 头公开 include <embark/app.h> 与 <lvgl.h>，使用方需要
@@ -55,6 +62,10 @@ if(EMBARK_APP_SDL2_FOUND)
   # 只链 embark_eez_ui：生成 eez-flow.cpp 是自含混编（commit 10f714f），不再链
   # third_party 的 eez_framework（另一个 pin，同链必重复符号，见 eez_ui/CMakeLists.txt）。
   target_link_libraries(embark_demo_apps PRIVATE embark::eez_ui)
+
+  # AiDoGUI 生成代码 + 资源盘（ADR 0011）：同样 PRIVATE —— include 根不进消费者编译面
+  # （两个生成代码目录都有一份 ui.h，绝不能让它们同时出现在 include 路径上）。
+  target_link_libraries(embark_demo_apps PRIVATE embark::aidogui_ui embark::aidogui_res)
   # 生成代码头写死 <lvgl/lvgl.h>：需要 third_party/ 作为 include 根（spike 18 同款）。
   target_include_directories(embark_demo_apps SYSTEM PRIVATE "${PROJECT_SOURCE_DIR}/third_party")
 
@@ -63,6 +74,11 @@ if(EMBARK_APP_SDL2_FOUND)
   # 编译成 no-op（见 launcher_app.cpp / clock_app.cpp / settings_app.cpp 的
   # #if defined(EMBARK_EEZ_UI_BRIDGE)）。
   target_compile_definitions(embark_demo_apps PRIVATE EMBARK_EEZ_UI_BRIDGE=1)
+
+  # AiDoGUI 后端开关（ADR 0011）：两个宏同时定义时 App 层优先走 AiDoGUI（选后端的地方
+  # 只有 app/common/ui_backend.h 一处）；EEZ 宏留着只是让 --eez 老验收与 EEZ 桥继续编过，
+  # 第二步 EEZ 退役时与上面那行一起删。
+  target_compile_definitions(embark_demo_apps PRIVATE EMBARK_AIDOGUI_UI=1)
 else()
   message(STATUS "  示例 App 库（embark_demo_apps）已跳过：没有 SDL2，LVGL 不可用。")
 endif()

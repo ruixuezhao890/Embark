@@ -1,24 +1,21 @@
 /**
- * Embark · 启动器 App（issue 16、ADR 0006；界面现由 EEZ Studio 提供）
+ * Embark · 启动器 App（issue 16、ADR 0006；界面现由 AiDoGUI Designer 生成代码提供）
  *
- * 主屏不再是手绘的扇形槽位架：EEZ Studio 工程里有一屏就叫 "launcher"
- * （屏名约定 == App 名，子页 = <app名>_<编号>_sub，见 eez_ui_bridge.h / eez_ui_nav.h），
+ * 主屏不再是手绘的扇形槽位架：AiDoGUI 工程里有一屏就叫 "launcher"
+ * （屏名约定 == App 名，子页 = <app名>_<编号>_sub，见 aidogui_ui_nav.h），
  * 本 App 只负责把那一屏挂上显示器，并让屏上的控件驱动框架切 App：
  *
- *   - onCreate        → eez_ui_nav_attach(fw)：确保 EEZ 生成代码已启动（幂等），
- *                       并装上屏切换观察者——EEZ 里 SetPage 到某屏 = 框架切到该屏
- *                       同名的 App（屏名约定）；
- *   - onEnter/onResume → eez_ui_bridge_load_screen_for_app("launcher")：加载 EEZ 里
- *                       同名屏（缺失时回退 Flow 当前页）；
- *   - onForegroundTick → eez_ui_bridge_tick()：每帧驱动 eez_flow_tick()（前台专属，
- *                       issue 19 / ADR 0008）。
+ *   - onCreate        → ui_backend_attach_nav(fw)：确保生成代码宿主已就位（幂等），
+ *                       并装上屏切换观察者——界面里「调用函数」切到某 App = 框架切过去；
+ *   - onEnter/onResume → ui_backend_load_for_app("launcher")：装载同名屏（缺失时只记日志）；
+ *   - onForegroundTick → ui_backend_tick()：给 UI 一帧机会（AiDoGUI 后端是空实现）；
+ *   - onBackgroundTick → 刷屏上两个时间控件（L_Time / L_Clock0，见 launcher_app.cpp）。
  *
  * 历史：issue 16 的扇形槽位架（弧轨 + 拖动 + 弹簧 + 手算命中）已随
  * include/embark/launcher_geometry.h 与 tests/kernel/test_launcher_geometry.cpp 一起
- * 下线；启动能力改由 EEZ 屏上的控件经 Flow SetPage 驱动。启动器仍是 App 0——
-* EEZ 屏按钮 SetPage 回 launcher 屏后，屏观察者 request_switch 把前台送回这里（导航壳已退役）。
+ * 下线；启动能力改由界面屏上的控件经「调用函数」事件驱动。启动器仍是 App 0。
  *
- * 零堆纪律：类内没有堆分配；界面对象都由 EEZ 生成代码持有（见 eez_ui_bridge.cpp）。
+ * 零堆纪律：类内没有堆分配；界面对象都由生成代码持有（见 aidogui_ui_bridge.cpp）。
  */
 #ifndef EMBARK_APP_LAUNCHER_APP_H
 #define EMBARK_APP_LAUNCHER_APP_H
@@ -41,22 +38,34 @@ class LauncherApp final : public App {
   [[nodiscard]] const char* icon() const override { return LV_SYMBOL_HOME; }
   // accent() 默认全局强调色（design_tokens::accent）——启动器不挑色。
 
+  /// 后台策略 = tick 1 s：屏上两个时间控件要跟着墙钟走（见 refresh_clock）。
+  [[nodiscard]] AppSettings settings() const override;
+
   void onCreate(Framework& fw) override;
   void onEnter() override;
   void onPause() override;
   void onResume() override;
   void onForegroundTick(std::uint32_t now_ms) override;
+  void onBackgroundTick(std::uint32_t now_ms) override;
   void onExit() override;
 
   // --- 验收观测点（ui_demo.cpp 的验收模式断言用）----------------------------
   [[nodiscard]] unsigned enters() const { return enters_; }
   [[nodiscard]] unsigned resumes() const { return resumes_; }
   [[nodiscard]] unsigned foreground_ticks() const { return foreground_ticks_; }
+  [[nodiscard]] unsigned ticks() const { return ticks_; }
 
  private:
+  /// 把本地墙钟写进屏上的 L_Time（大表）/ L_Clock0（右上角小表）。
+  /// 只在值变化时写；控件不存在（屏未装载）时静默跳过。
+  void refresh_clock();
+
   unsigned enters_ = 0;
   unsigned resumes_ = 0;
   unsigned foreground_ticks_ = 0;
+  unsigned ticks_ = 0;
+  std::uint32_t last_minute_ = 0xFFFFFFFFU;  // 上次刷新的分钟（同分钟不重写）
+  Framework* fw_ = nullptr;  // onCreate 记下；hal().time 是取墙钟的唯一入口
 };
 
 }  // namespace embark::demo

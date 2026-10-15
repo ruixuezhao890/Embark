@@ -20,9 +20,37 @@ EEZ Flow（生成代码）经 eez-framework（MIT，submodule）驱动 LVGL 8.3.
    Flow 全局变量（命名 `<app名>_<字段>`，如 `launcher_tap_count`）。
 4. **导出代码到 `app/eez_ui/src/ui/`**（15 个生成文件：actions.h / eez-flow.{cpp,h} / 
    fonts.h / images.{c,h} / screens.{c,h} / structs.h / styles.{c,h} / ui.{c,h} / vars.h）。
+   **外加 `ui_font_sim.c`**（第 16 个，见下节「字体文件」）。
 5. 重新 cmake 配置 + 构建：`cmake -S . -B build && cmake --build build`。
    配置日志会打印 `EEZ 屏表：N 个` 与 `EEZ 变量：N 个`（构建期从生成代码解析，
    加屏/加变量不用改 C++、不用动 CMakeLists）。
+
+### 字体文件 `ui_font_sim.c`（2026-10-12 踩坑记录）
+
+`screens.c` 里 `&ui_font_sim` 是**外部符号**，缺了它链接直接失败：
+`undefined reference to 'ui_font_sim'`。这个文件由 Studio 的字体资源（`fonts[0]`，
+name=sim，源字体 simhei.ttf）经 lv_font_conv 生成，**但两种"构建"的行为不同**：
+
+| 入口 | 行为 | 会写 `ui_font_sim.c` 吗 |
+| --- | --- | --- |
+| Studio 里 Export / Build（`buildProject(store, "buildFiles")`） | 走 `copyFontFiles()` | **会** |
+| CLI `EEZ Studio.exe --build-project <工程>` | 只走 `t.build()` → `"buildFiles"` 之外的分支 | **不会**，且会把 manifest 里的 `ui_font_sim.c` 当孤儿删掉 |
+
+而且 `saveManifest/deleteOrphanedFiles` 是成对的：只要 manifest（`.eez-project-build`）
+里出现过 `ui_font_sim.c`，下一次 CLI 构建就会**把它删掉**（日志里的
+"Deleted orphaned file: ui_font_sim.c"）。
+
+**补字流程**（改 `fonts[0].lvglSymbols` 之后必须走这条）：
+```
+① Studio 里改字体资源的字符集（或 eez_update 写 lvglSymbols）
+② 让内存里的字体缓存失效：f._lvglFontDefinition = undefined;
+   await f.buildLvglFontDefinition(f._lvglExtractFontParams);   // 重跑 lv_font_conv
+③ 用 buildFiles 模式落盘：await bb.build(store, "buildFiles");
+   （bb = require("project-editor/build/build.js")）
+④ cmake --build build
+```
+**别用 CLI `--build-project` 代替 ③** —— 它不生成字体，还会顺手删掉已有的那份。
+工程设置 `cacheFonts: false`，所以 ② 每次都会真的重跑 lv_font_conv（无缓存命中）。
 
 ## Studio 侧注意事项
 
@@ -32,6 +60,14 @@ EEZ Flow（生成代码）经 eez-framework（MIT，submodule）驱动 LVGL 8.3.
   把变量值刷进控件（App 侧 `eez_ui_bridge_tick()` 驱动）。
 - 生成文件是**导出产物**：改页面去 Studio 改再导出，不手改生成文件
   （例外：屏尺寸 240×320 需要改 screens.c 两处；文案全 ASCII）。
+- **滚动容器记得关掉 snap**：容器属性 `Scroll snap Y = center` 会让拖动被吸附限制在
+  ±1 个吸附点内，列表滚不到底（launcher 的 apps_list 内容 387 高、视口 195 高，
+  「闹钟」行在屏外——2026-10-12 合成点击打不中就是这个原因）。列表类容器用
+  `none`。
+- **合成点击不要硬编码坐标**：屏幕会随工程重画而移动。宿主的 `embark_host_ui` /
+  `embark_host_tour` 已经链上 `embark::eez_ui` 并 include 生成的 `screens.h`，
+  用 `widget_center(objects.<控件>)`（内部 `lv_obj_get_coords`）取真实中心、
+  用 `lv_obj_scroll_to_view` 先把屏外的行滚进视口再点。加屏/挪控件后验收自动跟着走。
 - CI 格式门禁已排除 `app/eez_ui/`；编译用 `-w`（生成代码警告不归零）。
 - 缺字审计（issue 17）会把 `app/eez_ui/` 的文案纳入扫描范围。
 

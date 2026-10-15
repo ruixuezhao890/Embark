@@ -39,3 +39,13 @@ platform/esp32/project/managed_components/
 .scratch/embark-v1/runtime-model-demo.html
 .scratch/embark-v1/runtime-model-demo*.gif
 .scratch/_recovered_demo.html
+
+# 由 AI 生成的 LVGL 屏幕 UI 演示（不上传 GitHub）
+lvgl_screen_by_ai/
+
+# AiDoGUI Designer 安装目录：本机私有，不入库（tools/aidogui/export.ps1 用它找设计器）
+/tools/aidogui/home.txt
+/.aidogui-home
+
+# AiDoGUI 打开工程时生成的桥会话目录（含本机端口与 token，绝不入库）
+app/aidogui_ui/.ai-workspace/

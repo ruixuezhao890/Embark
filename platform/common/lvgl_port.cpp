@@ -187,7 +187,6 @@ void LvglPort::read_event(lv_indev_data_t& data) noexcept {
       pointer_y_ = event.y;
       break;
   }
-
   data.point.x = pointer_x_;
   data.point.y = pointer_y_;
   data.state = pressed_ ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;

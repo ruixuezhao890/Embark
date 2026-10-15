@@ -13,6 +13,7 @@
     "styles.h",
     "ui.c",
     "ui.h",
+    "ui_font_sim.c",
     "vars.h"
   ]
 }

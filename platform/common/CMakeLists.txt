@@ -46,3 +46,17 @@ target_include_directories(embark_common_ui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}"
 
 # embark::core 提供 IUiPort / hal::Context；embark_lvgl 提供 <lvgl.h>。
 target_link_libraries(embark_common_ui PUBLIC embark::core embark_lvgl)
+
+
+# AiDoGUI 资源盘（ADR 0011）：AiDoGUI 生成代码把字体/图片路径写死成 S:/fonts/*.bin 与
+# S:/images/*.bin（模板行为，与工程设置无关）。本目标注册 LVGL 的 'S' 盘，把它指向一个
+# 真实目录。不用 LVGL 自带的 LV_USE_FS_POSIX：它的根是编译期宏（LV_FS_POSIX_PATH），
+# 而宿主（仓库目录）与真机（SD 卡 / FATFS 挂载点）的根不同，开发期还要能临时换根。
+# 默认根 = 仓库里的 app/aidogui_ui/export，也就是 AiDoGUI 导出目录本身（运行时可用环境变量 EMBARK_AIDOGUI_RES
+# 覆盖；真机 step 3 指到 esp_vfs_fat 的挂载点即可，两边代码同一份）。
+add_library(embark_aidogui_res STATIC aidogui_res_fs.cpp)
+add_library(embark::aidogui_res ALIAS embark_aidogui_res)
+target_include_directories(embark_aidogui_res PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(embark_aidogui_res PUBLIC embark_lvgl)
+target_compile_definitions(embark_aidogui_res PRIVATE
+        "EMBARK_AIDOGUI_RES_ROOT=\"${PROJECT_SOURCE_DIR}/app/aidogui_ui/export\"")

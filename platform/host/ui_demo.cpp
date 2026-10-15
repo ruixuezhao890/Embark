@@ -25,7 +25,10 @@
  *                   → 点 clock 屏按钮回启动器 → 点 launcher 屏按钮再进 clock →
 *                   再点 clock 屏按钮回启动器 → settings->bump_level()（消息广播）；
  *                   断言 switches==4 与各 App 钩子序。
- *   --eez           EEZ 验收（issue 19 / ADR 0008，issue 21 起接屏名约定）：屏表自检
+ *   --ui            AiDoGUI 验收（ADR 0011）：字体报告（期望 6/6）+ 屏表/控件表自检
+ *                   （launcher 屏 23 个控件、按名取 L_Time 文本为 HH:MM 形状）→ 释放当前屏
+ *                   （控件归零）→ 再装载（恢复 23 个控件）；全程同步调用，不需要点击。
+ *   --eez           EEZ 验收（issue 19 / ADR 0008；AiDoGUI 接管 App 层后只作老代码回归）：屏表自检
  *                   + 变量表自检（launcher_tap_count 构建期生成）+ 变量读写往返
  *                   → 点 EEZ 屏按钮驱动切 App（Flow SetPage → 屏名 → request_switch）
  *                   → 点 clock 屏按钮回启动器；断言 switches==2、nav_requests==2、last_screen=="launcher"。
@@ -54,6 +57,12 @@
 #include "settings/settings_app.h"
 #include "eez_ui_bridge.h"
 #include "eez_ui_nav.h"
+#if defined(EMBARK_AIDOGUI_UI)
+#include "aidogui_ui_bridge.h"
+#include "aidogui_ui_nav.h"
+#include "aidogui_res_fs.h"
+#endif
+#include "screens.h"  // EEZ 生成的对象表：合成点击按真实控件几何算（见 widget_center）
 #include "host_context.h"
 #include "host_display.h"
 #include "host_input.h"
@@ -68,13 +77,17 @@ namespace {
 
 // --- 合成输入的帧号与几何 ----------------------------------------------------
 // 每帧 = HAL 一跳（默认 5 ms）。按下后隔两帧抬起，让 LVGL 分两个读周期处理。
-// 两个屏的按钮几何（app/eez_ui/src/ui/screens.c）：
-//   launcher 屏按钮 obj0 pos(70,199) 102×50 → 中心 (121,224)：Flow SetPage → clock 屏；
-//   clock 屏按钮  obj1 pos(70,135) 100×50 → 中心 (120,160)：Flow SetPage → launcher 屏。
-constexpr int launcher_button_x = 121;  // EEZ launcher 屏按钮（Flow SetPage → clock 屏）
-constexpr int launcher_button_y = 224;
-constexpr int clock_button_x = 120;     // EEZ clock 屏按钮（Flow SetPage → launcher 屏）
-constexpr int clock_button_y = 160;
+// 两个目标控件（app/eez_ui/src/ui/screens.c）：
+//   clock 屏「← 返回」按钮 objects.obj0 —— Flow SetPage → launcher 屏；
+//   launcher 屏「闹钟」行 objects.app_row_alarm —— launcher 屏上唯一接了 Flow 的控件
+//     （SetPage → clock 屏）；它在 apps_list 里，视口 195 高而内容 387 高，
+//     初始在屏外 → **必须先滚进视口才点得到**（见 scroll_into_view）。
+// 坐标不硬编码：widget_center() 每帧从生成代码的 objects 表读真实几何
+// （lv_obj_get_coords），改屏后自动跟着走。下面两个常量只是屏还没建好时的兜底。
+constexpr int launcher_button_fallback_x = 163;  // launcher 屏「闹钟」行（app_row_alarm）中心
+constexpr int launcher_button_fallback_y = 215;
+constexpr int clock_button_fallback_x = 188;     // clock 屏「← 返回」按钮中心
+constexpr int clock_button_fallback_y = 295;
 
 // 合成点击：press_frame 按下，隔 click_release_delta 帧抬起（LVGL 分两个读周期）。
 constexpr int press_frame = 20;
@@ -106,10 +119,58 @@ constexpr int eez_switch_frame = press_frame;
 constexpr int eez_home_frame = 70;
 constexpr int eez_quit_frame = 100;
 constexpr int eez_frames = 110;
-// --drag 冒烟：press 15 → 三个插值 move（17/19/21）→ release 23。
+// --ui 故事线（ADR 0011）：帧 10 一次性跑完 Aidogui 验收（同步调用，无合成输入），
+//   帧 30 关窗 —— 中间留几帧把重建出来的屏真渲染出去（配 --shot-frame 10 可抓图）。
+constexpr int aidogui_check_frame = 10;
+constexpr int aidogui_quit_frame = 30;
+constexpr int aidogui_frames = 40;
+// --ui-nav 故事线（ADR 0011 第二步）：真点击驱动的双向往返 + 月历翻月 —— 帧 12 点启动器
+//   磁贴「时钟」（设计器「调用函数」事件）→ 帧 22 校验 clock 屏真数据上屏 → 帧 30 点 clock
+//   「返回」→ 帧 40 校验回 launcher（clock 屏已释放）→ 帧 50 点时钟卡 Card_Clock（C++
+//   bind_click 备用路径）再进 clock → 帧 62 校验 + 记录月历基准显示月 → 帧 70 点「>」翻下月
+//   → 帧 80 校验显示月 +1 且标题同步 → 帧 88 点「<」翻回 → 帧 96 校验显示月回到基准 →
+//   帧 100 关窗。帧距只要盖住"按 2 帧 + 切换在下个 step 边界生效"；AiDoGUI 屏切换没有
+//   EEZ 那种 40 帧的切页动画输入屏蔽窗口。
+constexpr int uinav_tile_frame = 12;
+constexpr int uinav_clock_check_frame = 22;
+constexpr int uinav_back_frame = 30;
+constexpr int uinav_back_check_frame = 40;
+constexpr int uinav_card_frame = 50;
+constexpr int uinav_card_check_frame = 62;
+constexpr int uinav_next_frame = 70;
+constexpr int uinav_next_check_frame = 80;
+constexpr int uinav_prev_frame = 88;
+constexpr int uinav_prev_check_frame = 96;
+constexpr int uinav_quit_frame = 100;
+constexpr int uinav_frames = 110;
+// 兜底坐标（读不到控件几何时才用；正常路径是读真实几何，设计器里挪位置也点得中）：
+//   launcher 磁贴 Tile1 = 12,202 48×48 → 中心 36,226；launcher 时钟卡 Card_Clock = 14,30
+//   212×96 → 中心 120,78；clock 返回键 Btn_Back = 8,4 64×28 → 中心 40,18；月历翻月键
+//   「<」「>」= Card_Cal(12,192 系) 内 24×20 → 中心 36,214 / 204,214。
+constexpr int uinav_tile_fallback_x = 36;
+constexpr int uinav_tile_fallback_y = 226;
+constexpr int uinav_card_fallback_x = 120;
+constexpr int uinav_card_fallback_y = 78;
+constexpr int uinav_back_fallback_x = 40;
+constexpr int uinav_back_fallback_y = 18;
+constexpr int uinav_prev_fallback_x = 36;
+constexpr int uinav_prev_fallback_y = 214;
+constexpr int uinav_next_fallback_x = 204;
+constexpr int uinav_next_fallback_y = 214;
+
+#if defined(EMBARK_AIDOGUI_UI)
+// App 层唯一的界面接缝（app/common/ui_backend.h）在定义本宏时选 AiDoGUI：EEZ 的 nav
+// 不再被 App attach，所以 --eez 的切屏断言在本机构建下必然不成立（EEZ 屏也不再装载）。
+// 它不是回归：EEZ 版界面已由 AiDoGUI 取代（ADR 0011），--eez 只保留做老代码参照。
+constexpr bool kAidoguiOwnsAppLayer = true;
+#else
+constexpr bool kAidoguiOwnsAppLayer = false;
+#endif
+// --drag 冒烟：press 15 → 每帧一个插值 move → release 40。
+// **一帧一个点**是关键：稀疏的几个 move 会被 LVGL 的吸附/回弹吃掉，列表只挪十几
+// 像素就弹回原位；连续 24 个点才滚得动（LVGL 的 scroll_throw 是逐帧低通滤波的）。
 constexpr int drag_press_frame = 15;
-constexpr int drag_move_frame = 17;
-constexpr int drag_release_frame = 23;
+constexpr int drag_release_frame = 40;
 constexpr int drag_frames = 80;
 
 struct Options {
@@ -120,31 +181,58 @@ struct Options {
   int shot_frame = 0;      // --shot-frame N FILE：第 N 帧截图（任意模式）
   const char* shot_path = nullptr;
   bool click = false;
-  int click_x = clock_button_x;   // 默认 = clock 屏按钮中心（回启动器）
-  int click_y = clock_button_y;
+  int click_x = clock_button_fallback_x;  // 默认 = clock 屏按钮中心（回启动器）
+  int click_y = clock_button_fallback_y;
   bool drag = false;
   int drag_x1 = 40;   int drag_y1 = 60;   // 默认落在 EEZ 屏的空白处（不碰按钮）
   int drag_x2 = 100;  int drag_y2 = 140;
   bool launch = false;
   int quit_at = 0;
   bool eez = false;
+  bool ui = false;
+  bool ui_nav = false;
 };
 
 void print_usage() {
   std::printf(
       "用法：embark_host_ui [选项]\n"
-      "  --frames N         跑 N 帧后退出（默认按模式：launch 200 / click 90 / drag 80 / eez 110 / 否则 0 = 一直跑到关窗）\n"
-"  --click [X,Y]      点 launcher 屏按钮切 clock（帧 20）→ 帧 70 在 clock 屏点 (X,Y)（默认按钮中心 %d,%d = 回启动器）\n"
-      "  --drag X1,Y1,X2,Y2 合成拖动冒烟（帧 15 按下 → 帧 23 抬起；默认 40,60 → 100,140，落在空白处不误触按钮）\n"
+      "  --frames N         跑 N 帧后退出（默认按模式：launch 200 / click 90 / drag 80 / eez 110 / ui 40 / ui-nav 56 / 否则 0 = 一直跑到关窗）\n"
+"  --click [X,Y]      点 launcher 屏「闹钟」行切 clock（帧 20，自动滚进视口）→ 帧 70 在 clock 屏点 (X,Y)（默认按钮中心 %d,%d = 回启动器）\n"
+      "  --drag X1,Y1,X2,Y2 合成拖动冒烟（帧 15 按下 → 每帧一个插值点 → 帧 40 抬起；默认 40,60 → 100,140）\n"
 "  --launch            完整验收故事（request_switch('clock')→点屏按钮往返→bump_level 消息）\n"
-      "  --eez               EEZ 验收（issue 19）：屏表/变量表自检 + 变量读写往返 + EEZ 屏点按钮切 App\n"
+      "  --ui                AiDoGUI 验收（ADR 0011）：字体 6/6 + 屏表/控件表 + 切走即释放/回来即重建\n"
+      "  --ui-nav            双向导航 + 月历翻月验收：点磁贴进 clock → 点返回回 launcher → 点时钟卡再进 clock → 点「>」「<」翻月并校验显示月与标题\n"
+      "  --eez               EEZ 老代码回归（issue 19）：屏表/变量表自检 + 变量读写往返 + EEZ 屏点按钮切 App\n"
       "  --screenshot FILE  最后一帧存 BMP\n"
       "  --shot-frame N FILE 第 N 帧存 BMP（配 --eez 等故事线抓中途屏）\n"
       "  --scale S           窗口放大倍数（默认 1 = 240×320 1:1）\n"
       "  --delay MS          每帧间隔（默认 5）\n"
       "  --quit-at N         第 N 帧推关窗事件\n"
       "  --help              打印用法\n",
-      clock_button_x, clock_button_y);
+      clock_button_fallback_x, clock_button_fallback_y);
+}
+
+// --- 真实控件几何（从 EEZ 生成代码的 objects 表读）-----------------------------
+// 合成点击必须落在控件真正的中心：屏幕随 EEZ 工程重画而移动，硬编码坐标每改一次屏
+// 就失效一次。这里只读、不建控件不改样式。
+struct PanelPoint { int x; int y; bool ok; };
+
+/// 控件中心（面板坐标 = 绝对坐标，LVGL 8 的 coords 已是屏坐标）。
+PanelPoint widget_center(const lv_obj_t* obj, int fallback_x, int fallback_y) {
+  if (obj == nullptr) {
+    return PanelPoint{fallback_x, fallback_y, false};
+  }
+  lv_area_t coords{};
+  lv_obj_get_coords(obj, &coords);
+  return PanelPoint{(coords.x1 + coords.x2) / 2, (coords.y1 + coords.y2) / 2, true};
+}
+
+/// 把滚动容器里的控件滚进视口（launcher 的 apps_list 内容 387 高、视口只有 195，
+/// 「闹钟」行初始在屏外 —— 不先滚进去，合成点击永远打不中）。
+void scroll_into_view(lv_obj_t* obj) {
+  if (obj != nullptr) {
+    lv_obj_scroll_to_view(obj, LV_ANIM_OFF);
+  }
 }
 
 // --- 合成输入（SDL_PushEvent → 真事件队列 → 输入后端）-------------------------
@@ -253,6 +341,8 @@ Options parse_options(int argc, char** argv) {
     }
     else if (std::strcmp(arg, "--launch") == 0) { options.launch = true; }
     else if (std::strcmp(arg, "--eez") == 0) { options.eez = true; }
+    else if (std::strcmp(arg, "--ui") == 0) { options.ui = true; }
+    else if (std::strcmp(arg, "--ui-nav") == 0) { options.ui_nav = true; }
     else if (std::strcmp(arg, "--help") == 0) { print_usage(); std::exit(0); }
     else {
       // 严格解析：不认识的选项/缺参数直接报错退出（旧版静默忽略会让 --drag
@@ -265,6 +355,199 @@ Options parse_options(int argc, char** argv) {
   return options;
 }
 
+#if defined(EMBARK_AIDOGUI_UI)
+/// launcher 屏上时间控件的形状检查：必须是 "HH:MM"（两位时 + 冒号 + 两位分）。
+/// LauncherApp::onBackgroundTick 按 PC 墙钟刷这两个 label，所以具体值随时钟变，
+/// 验收只校验「形状对 + 不是设计器写死的初值 "11:31"」——后者说明刷新没生效。
+bool aidogui_time_text_ok(const char* text) {
+  if (text == nullptr) return false;
+  if (std::strlen(text) != 5) return false;
+  if (text[2] != ':') return false;
+  for (int i = 0; i < 5; ++i) {
+    if (i == 2) continue;
+    if (text[i] < '0' || text[i] > '9') return false;
+  }
+  const int hh = (text[0] - '0') * 10 + (text[1] - '0');
+  const int mm = (text[3] - '0') * 10 + (text[4] - '0');
+  return hh < 24 && mm < 60;
+}
+
+/// AiDoGUI 验收（ADR 0011）：字体报告 → 屏表 → 控件表 → 切走即释放 → 回来即重建。
+/// 全是同步调用，必须在 UI 任务（唯一允许碰 LVGL 的线程）里跑。返回 true = 全部通过。
+bool aidogui_acceptance() {
+  bool ok = true;
+
+  // 1) 字体：工程里 6 个 BIN 每个 (字体,字号) 一个文件，全从 'S' 盘 lv_font_load 进来。
+  //    加载失败桥只记警告并降级（退回内置字体）——屏不空但字不对，所以这里必须全绿。
+  const embark::demo::AidoguiFontReport fonts = embark::demo::aidogui_ui_bridge_font_report();
+  const char* res_root = embark::platform::aidogui_res_fs_root();
+  ELOG_INFO("aidogui 字体：{}/{} 个 BIN 加载成功（S: 盘 = {}）", fonts.loaded, fonts.total,
+            res_root != nullptr ? res_root : "<未挂载>");
+  if (fonts.total <= 0 || fonts.loaded != fonts.total) { ok = false; }
+
+  // 2) 屏表：表来自生成代码（构建期解析），至少一屏且每项都能按名反查回来。
+  const int screens = embark::demo::aidogui_ui_bridge_screen_count();
+  ELOG_INFO("aidogui 屏表：{} 屏", screens);
+  for (int i = 0; i < screens; ++i) {
+    const char* name = embark::demo::aidogui_ui_bridge_screen_name(i);
+    ELOG_INFO("  aidogui 屏[{}]：{}", i, name != nullptr ? name : "<null>");
+    if (name == nullptr || !embark::demo::aidogui_ui_bridge_has_screen(name)) { ok = false; }
+  }
+
+  // 3) 前台 App 的屏已装载（LauncherApp::onEnter → ui_backend_load_for_app("launcher")），
+  //    注意：走的不是生成的 aidogui_init()，是桥自己按需建屏。
+  const char* current = embark::demo::aidogui_ui_bridge_current_screen();
+  const bool created_before = embark::demo::aidogui_ui_bridge_screen_created("launcher");
+  const int widgets = embark::demo::aidogui_ui_bridge_widget_count("launcher");
+  ELOG_INFO("aidogui 当前屏：{}（已创建 {}）；控件 {} 个", current != nullptr ? current : "<null>",
+            created_before ? "是" : "否", widgets);
+  if (current == nullptr || std::strcmp(current, "launcher") != 0 || !created_before || widgets <= 0) {
+    ok = false;
+  }
+
+  // 4) 按名取控件：这是 App 读写界面数据的入口（替代 EEZ 的 Flow 全局变量）。
+  //    文本必须是"HH:MM"形状（launcher 的时间由 LauncherApp::onBackgroundTick 按 PC 墙钟刷，
+  //    不再固定是设计器初值 "11:31"）—— 形状不对说明刷新链路断了。
+  lv_obj_t* time_label = embark::demo::aidogui_ui_bridge_widget("launcher", "L_Time");
+  const char* text = time_label != nullptr ? lv_label_get_text(time_label) : nullptr;
+  ELOG_INFO("aidogui 控件按名：launcher/L_Time = \"{}\"", text != nullptr ? text : "<取不到>");
+  if (!aidogui_time_text_ok(text)) { ok = false; }
+
+  // 5) 切走即释放：释放后根控件与每个控件指针都归零（LV_EVENT_DELETE 回调干的）。
+  embark::demo::aidogui_ui_bridge_unload_current();
+  const bool created_after = embark::demo::aidogui_ui_bridge_screen_created("launcher");
+  lv_obj_t* after_unload = embark::demo::aidogui_ui_bridge_widget("launcher", "L_Time");
+  ELOG_INFO("aidogui 释放后：已创建 {}；L_Time {}", created_after ? "是" : "否",
+            after_unload != nullptr ? "还在" : "已释放");
+  if (created_after || after_unload != nullptr) { ok = false; }
+
+  // 6) 回来即重建：再装载一次，控件重新建出来（LauncherApp 会在下一拍把时间刷成真值）。
+  const bool reloaded = embark::demo::aidogui_ui_bridge_load_screen("launcher");
+  lv_obj_t* time_label2 = embark::demo::aidogui_ui_bridge_widget("launcher", "L_Time");
+  const char* text2 = time_label2 != nullptr ? lv_label_get_text(time_label2) : nullptr;
+  ELOG_INFO("aidogui 重新装载：{}；控件 {} 个；L_Time = \"{}\"", reloaded ? "成功" : "失败",
+            embark::demo::aidogui_ui_bridge_widget_count("launcher"), text2 != nullptr ? text2 : "<取不到>");
+  if (!reloaded || !aidogui_time_text_ok(text2)) { ok = false; }
+
+  return ok;
+}
+
+/// --ui-nav：合成点击的落点 —— 读 AiDoGUI 控件的真实几何（geo 变了也点得中），读不到才用兜底。
+PanelPoint aidogui_widget_center(const char* screen, const char* widget, int fallback_x,
+                                 int fallback_y) {
+  return widget_center(embark::demo::aidogui_ui_bridge_widget(screen, widget), fallback_x,
+                       fallback_y);
+}
+
+/// --ui-nav 帧 22：点完磁贴应该停在 clock 屏，而且 App 已经把真数据推上去了。
+bool aidogui_clock_check() {
+  const char* current = embark::demo::aidogui_ui_bridge_current_screen();
+  const bool created = embark::demo::aidogui_ui_bridge_screen_created("clock");
+  const int widgets = embark::demo::aidogui_ui_bridge_widget_count("clock");
+  lv_obj_t* time_label = embark::demo::aidogui_ui_bridge_widget("clock", "L_Time");
+  const char* time_text = time_label != nullptr ? lv_label_get_text(time_label) : nullptr;
+  lv_obj_t* bar = embark::demo::aidogui_ui_bridge_widget("clock", "Bar_Prog");
+  const int progress = bar != nullptr ? static_cast<int>(lv_bar_get_value(bar)) : -1;
+  ELOG_INFO("ui-nav 点磁贴后：当前屏 {}（clock 已创建 {}，控件 {} 个）；L_Time = \"{}\"; Bar_Prog = {}",
+            current != nullptr ? current : "<null>", created ? "是" : "否", widgets,
+            time_text != nullptr ? time_text : "<取不到>", progress);
+  bool ok = current != nullptr && std::strcmp(current, "clock") == 0 && created && widgets > 0;
+  // 数据真上屏了吗：时间是 App 写的真时间（含 ":"、没有占位的 "--"），进度条在 1..365
+  // （设计器初值 value=0、占位文案是 "--##6ea0ff :#..."，都对不上）。
+  if (time_text == nullptr || std::strstr(time_text, ":") == nullptr ||
+      std::strstr(time_text, "--") != nullptr) {
+    ok = false;
+  }
+  if (progress <= 0 || progress > 365) { ok = false; }
+  // 导航命中：这一跳来自设计器「调用函数」事件（launcher Tile1 → embark_ui_open_clock）。
+  // C++ 侧 bind_click 还有一条备用绑定（launcher/Card_Clock → clock），本跳不经过它。
+  const int hits = embark::demo::aidogui_ui_nav_click_hits();
+  const int bindings = embark::demo::aidogui_ui_nav_click_bindings();
+  ELOG_INFO("ui-nav 导航命中 {} 次（C++ 侧点击绑定 {} 条；本跳由设计器事件驱动）", hits, bindings);
+  if (hits != 1) { ok = false; }
+  return ok;
+}
+
+/// --ui-nav 帧 40：点完「返回」应该回到 launcher，而且 clock 屏已经被释放（切走即销毁）。
+bool aidogui_back_check() {
+  const char* current = embark::demo::aidogui_ui_bridge_current_screen();
+  const bool launcher_created = embark::demo::aidogui_ui_bridge_screen_created("launcher");
+  const bool clock_alive = embark::demo::aidogui_ui_bridge_screen_created("clock");
+  lv_obj_t* time_label = embark::demo::aidogui_ui_bridge_widget("launcher", "L_Time");
+  const char* time_text = time_label != nullptr ? lv_label_get_text(time_label) : nullptr;
+  const int hits = embark::demo::aidogui_ui_nav_click_hits();
+  ELOG_INFO("ui-nav 点返回后：当前屏 {}（launcher 已创建 {}，clock 已释放 {}）；launcher/L_Time = \"{}\"; 导航命中 {} 次",
+            current != nullptr ? current : "<null>", launcher_created ? "是" : "否",
+            clock_alive ? "否" : "是", time_text != nullptr ? time_text : "<取不到>", hits);
+  return current != nullptr && std::strcmp(current, "launcher") == 0 && launcher_created &&
+         !clock_alive && aidogui_time_text_ok(time_text) && hits == 2;
+}
+
+/// 读 clock 屏月历控件（真 lv_calendar）当前的「显示月」；控件不在 / 读不到返回 false。
+bool aidogui_calendar_shown(int& y, int& m) {
+  lv_obj_t* cal = embark::demo::aidogui_ui_bridge_widget("clock", "Cal");
+  if (cal == nullptr) return false;
+  const lv_calendar_date_t* shown = lv_calendar_get_showed_date(cal);
+  if (shown == nullptr) return false;
+  y = static_cast<int>(shown->year);
+  m = static_cast<int>(shown->month);
+  return true;
+}
+
+/// 卡 2 标题 L_MH 应等于「<显示月>年<显示月>月」（标题跟着视图月走，翻月时同拍切换）。
+bool aidogui_month_title_ok(int y, int m) {
+  lv_obj_t* label = embark::demo::aidogui_ui_bridge_widget("clock", "L_MH");
+  if (label == nullptr) return false;
+  const char* text = lv_label_get_text(label);
+  if (text == nullptr) return false;
+  char expect[24];
+  std::snprintf(expect, sizeof expect, "%d年%d月", y, m);
+  return std::strcmp(text, expect) == 0;
+}
+
+/// --ui-nav 帧 62：点时钟卡 Card_Clock（C++ bind_click 备用路径）应再次停在 clock 屏；
+/// 同时记下月历基准显示月（= 今天所在月，刚进屏时 set_showed_date 落到它），供翻月对比。
+bool aidogui_card_check(int& base_y, int& base_m) {
+  const char* current = embark::demo::aidogui_ui_bridge_current_screen();
+  const bool created = embark::demo::aidogui_ui_bridge_screen_created("clock");
+  const int hits = embark::demo::aidogui_ui_nav_click_hits();
+  ELOG_INFO("ui-nav 点时钟卡后：当前屏 {}（clock 已创建 {}）；导航命中 {} 次",
+            current != nullptr ? current : "<null>", created ? "是" : "否", hits);
+  bool ok = current != nullptr && std::strcmp(current, "clock") == 0 && created && hits == 3;
+  if (!aidogui_calendar_shown(base_y, base_m)) {
+    ELOG_INFO("ui-nav 月历基准显示月：<读不到>");
+    ok = false;
+  } else {
+    ELOG_INFO("ui-nav 月历基准显示月：{}-{}", base_y, base_m);
+  }
+  return ok;
+}
+
+/// --ui-nav 帧 80：点「>」后显示月应 +1（带年进位），卡 2 标题同步跟着走。
+bool aidogui_next_check(int base_y, int base_m) {
+  int y = 0;
+  int m = 0;
+  const bool shown_ok = aidogui_calendar_shown(y, m);
+  const bool title_ok = aidogui_month_title_ok(y, m);
+  int expect_y = base_y;
+  int expect_m = base_m + 1;
+  if (expect_m > 12) { expect_m = 1; ++expect_y; }
+  ELOG_INFO("ui-nav 点「>」后：显示月 {}-{}（期望 {}-{}）；标题{}",
+            shown_ok ? y : -1, shown_ok ? m : -1, expect_y, expect_m, title_ok ? "同步" : "不同步");
+  return shown_ok && y == expect_y && m == expect_m && title_ok;
+}
+
+/// --ui-nav 帧 96：点「<」后显示月应回到基准月（= 今天所在月）。
+bool aidogui_prev_check(int base_y, int base_m) {
+  int y = 0;
+  int m = 0;
+  const bool shown_ok = aidogui_calendar_shown(y, m);
+  const bool title_ok = aidogui_month_title_ok(y, m);
+  ELOG_INFO("ui-nav 点「<」后：显示月 {}-{}（期望 {}-{}）；标题{}",
+            shown_ok ? y : -1, shown_ok ? m : -1, base_y, base_m, title_ok ? "同步" : "不同步");
+  return shown_ok && y == base_y && m == base_m && title_ok;
+}
+#endif /* EMBARK_AIDOGUI_UI */
 }  // namespace
 
 /// 唯一 UI 任务（spec §6：唯一能碰 LVGL 的线程，窗口事件也在它上面泵）。
@@ -302,52 +585,125 @@ void ui_main(void* argument) noexcept {
     else if (options->click) { frames_limit = click_frames; }
     else if (options->drag) { frames_limit = drag_frames; }
     else if (options->eez) { frames_limit = eez_frames; }
+    else if (options->ui) { frames_limit = aidogui_frames; }
+    else if (options->ui_nav) { frames_limit = uinav_frames; }
   }
 
   int frames_run = 0;
+  bool aidogui_ok = false;  // --ui：aidogui_acceptance() 的结论（帧 10 才写）
+  bool uinav_clock_ok = false;  // --ui-nav：点磁贴后停在 clock 屏且数据上屏（帧 22）
+  bool uinav_back_ok = false;   // --ui-nav：点返回后回 launcher 且 clock 屏已释放（帧 40）
+  bool uinav_card_ok = false;   // --ui-nav：点时钟卡再进 clock + 记月历基准月（帧 62）
+  bool uinav_next_ok = false;   // --ui-nav：点「>」显示月 +1、标题同步（帧 80）
+  bool uinav_prev_ok = false;   // --ui-nav：点「<」显示月回到基准（帧 96）
+  int uinav_base_y = 0;         // --ui-nav：月历基准显示月（帧 62 记录）
+  int uinav_base_m = 0;
   for (;;) {
     framework.step();
     ++frames_run;
     if (framework.exit_requested()) { break; }
 
     // --- 合成输入（帧号驱动，确定性）-----------------------------------------
+    // 每帧重新读一次真实几何：屏会随前台切换换掉，坐标必须跟着走。
+    const PanelPoint clock_btn = widget_center(objects.obj0, clock_button_fallback_x, clock_button_fallback_y);
+    const PanelPoint alarm_row =
+        widget_center(objects.app_row_alarm, launcher_button_fallback_x, launcher_button_fallback_y);
+
     if (options->launch) {
       // 启动器已无手绘界面：先程序化请求切到 clock；随后的往返全是真点击 ——
       // 点 EEZ 屏按钮（屏名约定 → 切同名 App），回程同由 EEZ 屏按钮承担。
       if (frames_run == launch_switch_frame) { (void)framework.request_switch("clock"); }
-      if (frames_run == launch_clock_back_frame) { push_motion_and_press(options->scale, clock_button_x, clock_button_y); }
-      if (frames_run == launch_clock_back_frame + click_release_delta) { push_release(options->scale, clock_button_x, clock_button_y); }
-      if (frames_run == launch_launcher_btn_frame) { push_motion_and_press(options->scale, launcher_button_x, launcher_button_y); }
-      if (frames_run == launch_launcher_btn_frame + click_release_delta) { push_release(options->scale, launcher_button_x, launcher_button_y); }
-      if (frames_run == launch_home_frame) { push_motion_and_press(options->scale, clock_button_x, clock_button_y); }
-      if (frames_run == launch_home_frame + click_release_delta) { push_release(options->scale, clock_button_x, clock_button_y); }
+      if (frames_run == launch_clock_back_frame) { push_motion_and_press(options->scale, clock_btn.x, clock_btn.y); }
+      if (frames_run == launch_clock_back_frame + click_release_delta) { push_release(options->scale, clock_btn.x, clock_btn.y); }
+      if (frames_run == launch_launcher_btn_frame) {
+        scroll_into_view(objects.app_row_alarm);  // 闹钟行在屏外：先滚进视口再点
+        const PanelPoint row =
+            widget_center(objects.app_row_alarm, launcher_button_fallback_x, launcher_button_fallback_y);
+        push_motion_and_press(options->scale, row.x, row.y);
+      }
+      if (frames_run == launch_launcher_btn_frame + click_release_delta) { push_release(options->scale, alarm_row.x, alarm_row.y); }
+      if (frames_run == launch_home_frame) { push_motion_and_press(options->scale, clock_btn.x, clock_btn.y); }
+      if (frames_run == launch_home_frame + click_release_delta) { push_release(options->scale, clock_btn.x, clock_btn.y); }
       if (frames_run == launch_bump_frame) { static_cast<embark::demo::SettingsApp*>(framework.app(2))->bump_level(); }
       if (frames_run == launch_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
     } else if (options->eez) {
-      // 点 launcher 屏按钮：Flow SetPage 到 clock 屏 → 桥的屏观察者把这次切屏翻成
+      // 点 launcher 屏「闹钟」行：Flow SetPage 到 clock 屏 → 桥的屏观察者把这次切屏翻成
       // request_switch("clock")（帧 20 按下 → 帧 21/22 抬起 → 下次 tick 生效）。
-      if (frames_run == eez_switch_frame) { push_motion_and_press(options->scale, launcher_button_x, launcher_button_y); }
-      if (frames_run == eez_switch_frame + click_release_delta) { push_release(options->scale, launcher_button_x, launcher_button_y); }
+      if (frames_run == eez_switch_frame) {
+        scroll_into_view(objects.app_row_alarm);  // 同上：先滚进视口
+        const PanelPoint row =
+            widget_center(objects.app_row_alarm, launcher_button_fallback_x, launcher_button_fallback_y);
+        push_motion_and_press(options->scale, row.x, row.y);
+      }
+      if (frames_run == eez_switch_frame + click_release_delta) { push_release(options->scale, alarm_row.x, alarm_row.y); }
       // 回程：点 clock 屏按钮 → Flow SetPage 回 launcher 屏 →
       // 观察者 request_switch 回启动器（EEZ 屏内按钮承担返回，无导航壳）。
       // 回程点击放帧 70：首次切页动画 22–62 期间 LVGL 屏蔽输入（prev_scr）。
-      if (frames_run == eez_home_frame) { push_motion_and_press(options->scale, clock_button_x, clock_button_y); }
-      if (frames_run == eez_home_frame + click_release_delta) { push_release(options->scale, clock_button_x, clock_button_y); }
+      if (frames_run == eez_home_frame) { push_motion_and_press(options->scale, clock_btn.x, clock_btn.y); }
+      if (frames_run == eez_home_frame + click_release_delta) { push_release(options->scale, clock_btn.x, clock_btn.y); }
       if (frames_run == eez_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
     } else if (options->click) {
-      if (frames_run == press_frame) { push_motion_and_press(options->scale, launcher_button_x, launcher_button_y); }
-      // 帧 20：点 launcher 屏按钮（切到 clock）；帧 70：在 clock 屏点 (X,Y)
+      if (frames_run == press_frame) {
+        scroll_into_view(objects.app_row_alarm);
+        const PanelPoint row =
+            widget_center(objects.app_row_alarm, launcher_button_fallback_x, launcher_button_fallback_y);
+        push_motion_and_press(options->scale, row.x, row.y);
+      }
+      // 帧 20：点 launcher 屏「闹钟」行（切到 clock）；帧 70：在 clock 屏点 (X,Y)
       // （默认 = clock 屏按钮中心 → Flow SetPage 回 launcher 屏 → 回启动器；帧 70
       // 落在首次切页动画 22–62 之后，避开输入屏蔽）。
-      if (frames_run == press_frame + click_release_delta) { push_release(options->scale, launcher_button_x, launcher_button_y); }
+      if (frames_run == press_frame + click_release_delta) { push_release(options->scale, alarm_row.x, alarm_row.y); }
       if (frames_run == click_second_frame) { push_motion_and_press(options->scale, options->click_x, options->click_y); }
       if (frames_run == click_second_frame + click_release_delta) { push_release(options->scale, options->click_x, options->click_y); }
     } else if (options->drag) {
+      // 按下 → 每帧推进一个插值点 → 抬起：模拟真手指的连续轨迹。
       if (frames_run == drag_press_frame) { push_motion_and_press(options->scale, options->drag_x1, options->drag_y1); }
-      if (frames_run == drag_move_frame) { push_motion(options->scale, options->drag_x1 + (options->drag_x2 - options->drag_x1) / 3, options->drag_y1 + (options->drag_y2 - options->drag_y1) / 3); }
-      if (frames_run == drag_move_frame + 2) { push_motion(options->scale, options->drag_x1 + (options->drag_x2 - options->drag_x1) * 2 / 3, options->drag_y1 + (options->drag_y2 - options->drag_y1) * 2 / 3); }
-      if (frames_run == drag_move_frame + 4) { push_motion(options->scale, options->drag_x2, options->drag_y2); }
+      if (frames_run > drag_press_frame && frames_run < drag_release_frame) {
+        const int steps = drag_release_frame - drag_press_frame;
+        const int t = frames_run - drag_press_frame;
+        push_motion(options->scale,
+                    options->drag_x1 + (options->drag_x2 - options->drag_x1) * t / steps,
+                    options->drag_y1 + (options->drag_y2 - options->drag_y1) * t / steps);
+      }
       if (frames_run == drag_release_frame) { push_release(options->scale, options->drag_x2, options->drag_y2); }
+    } else if (options->ui) {
+      // AiDoGUI 验收：帧 10 同步跑完全部检查（无合成输入），帧 30 关窗。
+#if defined(EMBARK_AIDOGUI_UI)
+      if (frames_run == aidogui_check_frame) { aidogui_ok = aidogui_acceptance(); }
+#endif
+      if (frames_run == aidogui_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
+    } else if (options->ui_nav) {
+      // AiDoGUI 双向导航 + 月历翻月：磁贴（设计器事件）→ clock → 返回（设计器事件）→
+      // launcher → 时钟卡（C++ bind_click）→ clock → 翻月键（C++ 回调）。动作全来自
+      // 控件上的事件，这里只负责合成点击。落点每帧现读（屏会换）。
+#if defined(EMBARK_AIDOGUI_UI)
+      const PanelPoint tile =
+          aidogui_widget_center("launcher", "Tile1", uinav_tile_fallback_x, uinav_tile_fallback_y);
+      const PanelPoint back =
+          aidogui_widget_center("clock", "Btn_Back", uinav_back_fallback_x, uinav_back_fallback_y);
+      const PanelPoint card =
+          aidogui_widget_center("launcher", "Card_Clock", uinav_card_fallback_x, uinav_card_fallback_y);
+      const PanelPoint next_btn =
+          aidogui_widget_center("clock", "Btn_Next", uinav_next_fallback_x, uinav_next_fallback_y);
+      const PanelPoint prev_btn =
+          aidogui_widget_center("clock", "Btn_Prev", uinav_prev_fallback_x, uinav_prev_fallback_y);
+      if (frames_run == uinav_tile_frame) { push_motion_and_press(options->scale, tile.x, tile.y); }
+      if (frames_run == uinav_tile_frame + click_release_delta) { push_release(options->scale, tile.x, tile.y); }
+      if (frames_run == uinav_clock_check_frame) { uinav_clock_ok = aidogui_clock_check(); }
+      if (frames_run == uinav_back_frame) { push_motion_and_press(options->scale, back.x, back.y); }
+      if (frames_run == uinav_back_frame + click_release_delta) { push_release(options->scale, back.x, back.y); }
+      if (frames_run == uinav_back_check_frame) { uinav_back_ok = aidogui_back_check(); }
+      if (frames_run == uinav_card_frame) { push_motion_and_press(options->scale, card.x, card.y); }
+      if (frames_run == uinav_card_frame + click_release_delta) { push_release(options->scale, card.x, card.y); }
+      if (frames_run == uinav_card_check_frame) { uinav_card_ok = aidogui_card_check(uinav_base_y, uinav_base_m); }
+      if (frames_run == uinav_next_frame) { push_motion_and_press(options->scale, next_btn.x, next_btn.y); }
+      if (frames_run == uinav_next_frame + click_release_delta) { push_release(options->scale, next_btn.x, next_btn.y); }
+      if (frames_run == uinav_next_check_frame) { uinav_next_ok = aidogui_next_check(uinav_base_y, uinav_base_m); }
+      if (frames_run == uinav_prev_frame) { push_motion_and_press(options->scale, prev_btn.x, prev_btn.y); }
+      if (frames_run == uinav_prev_frame + click_release_delta) { push_release(options->scale, prev_btn.x, prev_btn.y); }
+      if (frames_run == uinav_prev_check_frame) { uinav_prev_ok = aidogui_prev_check(uinav_base_y, uinav_base_m); }
+#endif
+      if (frames_run == uinav_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
     }
     if (options->shot_path != nullptr && frames_run == options->shot_frame) {
       if (!save_screenshot(display, options->shot_path)) { hp::exit_process(1); }
@@ -372,9 +728,9 @@ void ui_main(void* argument) noexcept {
 
   ELOG_INFO("显示与前台：{} 帧；前台 {}；switches={}",
             frames_run, framework.apps().at(framework.foreground())->name(), framework.switches());
-  ELOG_INFO("启动器（界面来自 EEZ 屏 \"launcher\"）：enters={} resumes={} 前台帧={}",
+  ELOG_INFO("启动器（屏名 launcher，界面来源见启动日志）：enters={} resumes={} 前台帧={}",
             launcher->enters(), launcher->resumes(), launcher->foreground_ticks());
-  ELOG_INFO("时钟（界面来自 EEZ 屏 \"clock\"）：ticks={} 亮度={} settings 档={}；LVGL 未回收 {} 字节",
+  ELOG_INFO("时钟（屏名 clock）：ticks={} 亮度={} settings 档={}；LVGL 未回收 {} 字节",
           clock->ticks(), clock->brightness(), settings->level(),
             embark_lvgl_outstanding_bytes());
 
@@ -414,6 +770,21 @@ void ui_main(void* argument) noexcept {
               options->drag_y2 - options->drag_y1, framework.apps().at(framework.foreground())->name(),
               framework.switches());
     if (!dragged_ok) { exit_code = 2; }
+  }
+  if (options->ui) {
+    // --ui 的检查在帧 10 就断完了（aidogui_acceptance 自己打每条证据行），这里只落结论。
+    ELOG_INFO("〔aidogui 验收{}〕", aidogui_ok ? "通过" : "失败");
+    if (!aidogui_ok) { exit_code = 2; }
+  }
+  if (options->ui_nav) {
+    // --ui-nav 的五段检查在帧 22/40/62/80/96 就断完了（各自打了证据行），这里只落结论。
+    const bool uinav_ok =
+        uinav_clock_ok && uinav_back_ok && uinav_card_ok && uinav_next_ok && uinav_prev_ok;
+    ELOG_INFO("〔aidogui 导航验收{}〕（前台 {}，switches={}，导航命中 {} 次，月历基准 {}-{}）",
+              uinav_ok ? "通过" : "失败",
+              framework.apps().at(framework.foreground())->name(), framework.switches(),
+              embark::demo::aidogui_ui_nav_click_hits(), uinav_base_y, uinav_base_m);
+    if (!uinav_ok) { exit_code = 2; }
   }
   if (options->eez) {
     // 故事线：点 launcher 屏按钮 → Flow SetPage 到 clock 屏 → 桥的屏观察者 →
@@ -480,8 +851,16 @@ void ui_main(void* argument) noexcept {
         embark::demo::eez_ui_bridge_current_screen(), screen_count, var_count,
         embark::demo::eez_ui_nav_switch_requests(),
         last_screen != nullptr ? last_screen : "<none>");
-    if (eez_ok) { ELOG_INFO("〔eez 验收通过〕"); } else { ELOG_INFO("〔eez 验收失败〕"); }
-    if (!eez_ok) { exit_code = 2; }
+    if (eez_ok) {
+      ELOG_INFO("〔eez 验收通过〕");
+    } else if (kAidoguiOwnsAppLayer) {
+      // AiDoGUI 已接管 App 层（本构建定义了 EMBARK_AIDOGUI_UI）：App 只会 attach aidogui
+      // 的 nav，EEZ 屏也不再被装载，故切屏断言不成立 —— 这不是回归（ADR 0011）。
+      ELOG_INFO("〔eez 验收跳过〕AiDoGUI 已接管 App 层，EEZ nav 不再被 App attach；老 EEZ 屏未装载。");
+    } else {
+      ELOG_INFO("〔eez 验收失败〕");
+      exit_code = 2;
+    }
   }
 
   framework.shutdown();
