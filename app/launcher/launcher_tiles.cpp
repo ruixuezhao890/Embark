@@ -206,6 +206,18 @@ std::size_t launcher_tiles_rebuild(const char* screen_name, const LauncherTile* 
   return g_tile_count;
 }
 
+void launcher_tiles_show_page(std::size_t page) {
+  if (g_band == nullptr || g_page_count == 0U) {
+    return;  // 屏没装载 / 还没建过：没有可跳的页（记日志只会刷屏，静默返回）
+  }
+  if (page >= g_page_count) {
+    page = g_page_count - 1U;
+  }
+  lv_obj_scroll_to(g_band, static_cast<lv_coord_t>(page * page_width), 0, LV_ANIM_OFF);
+  paint_dots();  // 页码点跟着走（paint_dots 自己会从 scroll_x 反推当前页）
+  ELOG_INFO("主屏磁贴：跳到第 {} 页（共 {} 页）", page + 1U, g_page_count);
+}
+
 std::size_t launcher_tiles_count() { return g_tile_count; }
 std::size_t launcher_tiles_page_count() { return g_page_count; }
 std::size_t launcher_tiles_dot_count() { return g_dot_count; }

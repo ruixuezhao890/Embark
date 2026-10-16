@@ -17,5 +17,5 @@
 
 - issue 24：`include/embark/app.h` 的 `ArmPolicy` / `AppSettings::arm`、`src/embark/framework.cpp` boot 第 9 步的两轮武装、`include/embark/framework.h` 文件头契约与"at_boot 例外"。
 - 内核用例：`tests/kernel/test_framework_messaging.cpp`（`at_boot` 的 tick App 开机即武装且按周期跑 / `at_boot` 的 own_task App 不必进前台就被创建 / 对照：没声明 `at_boot` 的 own_task 仍等第一次进前台）、`tests/kernel/test_own_task_lifecycle.cpp`（`at_boot` 的 App 先占槽位、非 `at_boot` 的等前台；释放回收照旧）、`tests/kernel/test_zero_alloc.cpp`（`at_boot` 轮零分配）、`tests/kernel/test_format_derive.cpp`（派生打印钉住新字段与枚举名）。
-- 宿主验收：`platform/host/ui_tour.cpp` 的 17 项自检 —— 本仓库没有声明 `at_boot` 的 App，所以宿主可观测行为不变（16 通过；唯一红项是 issue 23 记录在案的既有 `clock` 判据，与本 ADR 无关）。
+- 宿主验收：`platform/host/ui_tour.cpp` 的 17 项自检 —— 本仓库没有声明 `at_boot` 的 App，所以宿主可观测行为不变。（**2026-10-16 更正**：tour 是 EEZ 老链路的走查程序，今天 18 项里红 8 项、且合成点击不稳定——同一份二进制两次运行数值不同，见 [ADR 0015](0015-app-retention-and-refresh.md) 与 `.scratch/app-retention/acceptance.md`；当年「16 通过、唯一红项」的说法已不成立。）
 - 交叉阅读：ADR 0009（默认武装时机）、ADR 0004（后台节拍实现）、ADR 0005（静态槽位与任务池）、`docs/concepts/app-lifecycle.md` §4.1 / §4.2、`docs/concepts/messages-and-background.md`「武装时机」、`GLOSSARY.md`（Arm / Background tick）。

@@ -51,7 +51,9 @@ ctest --test-dir build --output-on-failure
 | [../app/aidogui_ui/README.md](../app/aidogui_ui/README.md) | **界面怎么改（当前）**：AiDoGUI 设计工程 → 一条命令重生成 → 编译；目录、字体与真机资源约定 |
 | [adr/0011-aidogui-ui-source.md](adr/0011-aidogui-ui-source.md) | **界面来源决策（当前）**：BIN 资源走 S 盘、薄桥按需建屏、空屏不变量、三步迁移 |
 | [adr/0012-weather-data-source.md](adr/0012-weather-data-source.md) | **天气数据来源（当前）**：框架无网络 ⇒ 编译期桩；一处数据两处画；将来怎么换成真数据 |
-| [adr/0013-launcher-paged-tiles.md](adr/0013-launcher-paged-tiles.md) | **主屏磁贴分页 + 上滑返回（当前）**：磁贴按注册表运行时生成（加 App 自动多一个）、吸附式横向翻页、非主屏上滑回主屏；`max_apps` 8 → 12 |
+| [adr/0013-launcher-paged-tiles.md](adr/0013-launcher-paged-tiles.md) | **主屏磁贴分页（当前）**：磁贴按注册表运行时生成（加 App 自动多一个）、吸附式横向翻页；`max_apps` 8 → 12。**非主屏上滑返回已被 [0014](adr/0014-in-screen-back.md) 撤回**，其余决策仍有效 |
+| [adr/0014-in-screen-back.md](adr/0014-in-screen-back.md) | **屏内返回按钮（当前）**：撤回上滑返回，回程 = 每个 App 屏里的「返回」按钮；新增 `aidogui_ui_nav_bind_action`（控件 → 逻辑动作）与第 6 张屏 `settings` |
+| [adr/0015-app-retention-and-refresh.md](adr/0015-app-retention-and-refresh.md) | **留存与刷新（当前）**：三条正交轴（留存申请 / 视图留存 / 数据新鲜度）+ 五类 App；后台变成显式申请的例外（今天全仓无人声明）、clock 与 launcher 退役 `tick` 走前台节拍、控件值由 `ui_backend_bind_repaint` 在屏装载后重推 |
 | [guides/eez-ui-manual.md](guides/eez-ui-manual.md) | **历史（EEZ 时代）**：EEZ UI 用户手册 —— 迁移第二步随 `app/eez_ui/` 一起归档 |
 | [guides/eez-studio-guide.md](guides/eez-studio-guide.md) | **历史（EEZ 时代）**：EEZ Studio 一条龙（装 Studio、导出代码入库） |
 | [guides/hal-backend-guide.md](guides/hal-backend-guide.md) | 怎么写一个 HAL 后端：宿主骨架（照 `platform/host/`）、共享层（`platform/common/`）与真机实现（`platform/esp32/`，含 IDF 坑清单） |
@@ -73,7 +75,9 @@ ctest --test-dir build --output-on-failure
 | [../GLOSSARY.md](../GLOSSARY.md) | 术语表（Arm / Background tick / Own task / 薄壳……） |
 | [../platform/esp32/README.md](../platform/esp32/README.md) | ESP32-S3 真机端口：板级参数、构建/烧录命令、bring-up 清单、串口日志样例 |
 | [../.scratch/embark-v1/spec.md](../.scratch/embark-v1/spec.md) | v1 规格书（设计与约束的来源）；工单在 `../.scratch/embark-v1/issues/` |
-| [../.scratch/launcher-pages/spec.md](../.scratch/launcher-pages/spec.md) | 主屏分页磁贴与上滑返回的规格 + 裁决表（Q1–Q10）；验收剧本 [acceptance.md](../.scratch/launcher-pages/acceptance.md)、工单在 `../.scratch/launcher-pages/issues/` |
+| [../.scratch/launcher-pages/spec.md](../.scratch/launcher-pages/spec.md) | 主屏分页磁贴的规格 + 裁决表（Q1–Q10；其中上滑返回已按 [0014](adr/0014-in-screen-back.md) 撤回）；验收剧本 [acceptance.md](../.scratch/launcher-pages/acceptance.md)、工单在 `../.scratch/launcher-pages/issues/` |
+| [../.scratch/app-retention/spec.md](../.scratch/app-retention/spec.md) | App 留存与刷新策略的规格 + 裁决表（Q1–Q4：屏自持 view state / 冻结型不申请后台 / 白名单靠自报 + 断言 / 前台节拍驱动）与验收剧本 [acceptance.md](../.scratch/app-retention/acceptance.md) |
+| [../.scratch/launcher-fixes/spec.md](../.scratch/launcher-fixes/spec.md) | launcher 回程与两个界面 bug（时钟缓存、天气两字被裁）与设置屏的规格 + 验收剧本 [acceptance.md](../.scratch/launcher-fixes/acceptance.md) |
 
 ## 交叉参考
 

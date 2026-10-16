@@ -1,5 +1,9 @@
 # 验收：启动器分页磁贴
 
+> **状态（2026-10-16）**：本剧本里「非主屏上滑返回」相关的段落已过期——该手势已删除，回程改为
+> 屏内返回按钮，见 [ADR 0014](../../docs/adr/0014-in-screen-back.md) 与
+> [`../launcher-fixes/acceptance.md`](../launcher-fixes/acceptance.md)。分页、磁贴、字形守卫部分仍然有效。
+
 前置：宿主构建（SDL2 + LVGL），`build/`。
 
 ## 单元测试

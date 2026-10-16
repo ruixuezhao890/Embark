@@ -2,7 +2,7 @@
  * Embark · 天气 App 实现。见 weather_app.h 的类注释。
  *
  * 桥调用的开关在 app/common/ui_backend.h：宿主构建（app/CMakeLists.txt）定义
- * EMBARK_AIDOGUI_UI，三句桥调用生效；没定义该宏的目标（esp32 真机，界面文件系统还没接）
+ * EMBARK_AIDOGUI_UI，桥调用生效；没定义该宏的目标（esp32 真机，界面文件系统还没接）
  * 把桥调用编译成 no-op —— 本 App 的城市切换/持久化逻辑照常可跑。
  */
 #include <cstdio>
@@ -19,6 +19,10 @@
 #endif
 
 namespace embark::demo {
+
+// repaint 回调是裸函数指针（不能捕获 this）：进程内只有这一个天气实例，文件级记下来。
+WeatherApp* WeatherApp::g_for_ui = nullptr;
+
 namespace {
 constexpr const char* kScreen = "weather";
 constexpr const char* kBtnPrev = "Btn_CityPrev";
@@ -28,16 +32,20 @@ constexpr const char* kBtnNext = "Btn_CityNext";
 void WeatherApp::onCreate(Framework& fw) {
   fw_ = &fw;
   city_ = weather_load_city(fw.hal().storage);  // 没有存过 → 0（北京）
-  ELOG_INFO("App {} onCreate（城市 = {}，下标 {}）", name(), weather_city(city_).name, city_);
+  ELOG_INFO("App {} onCreate（城市 = {}，下标 {}；不申请后台）", name(), weather_city(city_).name, city_);
+#if defined(EMBARK_AIDOGUI_UI)
+  // 屏装载后重推控件值（ADR 0015）：屏切走即 destroy、回来即 init（ADR 0011 决策②），新控件
+  // 上是设计器初值 —— repaint_screen() 负责重挂箭头 + 重画 5 天。
+  g_for_ui = this;
+  ui_backend_bind_repaint(kScreen, &WeatherApp::on_screen_reloaded);
+#endif
 }
 
 void WeatherApp::onEnter() {
   ++enters_;
   ELOG_INFO("App {} 进入前台（enter {}, resume {}）", name(), enters_, resumes_);
 #if defined(EMBARK_AIDOGUI_UI)
-  ui_backend_load_for_app(name());
-  bind_city_buttons();
-  refresh_display();
+  ui_backend_load_for_app(name());  // 屏装载后由桥回调 repaint_screen()
 #endif
 }
 
@@ -49,9 +57,7 @@ void WeatherApp::onResume() {
   ++resumes_;
   ELOG_INFO("App {} 回到前台（enter {}, resume {}）", name(), enters_, resumes_);
 #if defined(EMBARK_AIDOGUI_UI)
-  ui_backend_load_for_app(name());
-  bind_city_buttons();
-  refresh_display();  // 屏重建过，控件回到设计器初值
+  ui_backend_load_for_app(name());  // 同 onEnter：屏装载后由桥回调 repaint_screen()
 #endif
 }
 
@@ -64,7 +70,20 @@ void WeatherApp::onForegroundTick(std::uint32_t now_ms) {
 }
 
 void WeatherApp::onExit() {
+  g_for_ui = nullptr;
   ELOG_INFO("App {} onExit", name());
+}
+
+void WeatherApp::on_screen_reloaded() {
+  if (g_for_ui != nullptr) {
+    g_for_ui->repaint_screen();
+  }
+}
+
+void WeatherApp::repaint_screen() {
+  // 屏是新的：箭头回调随控件消失（重挂），文案回到设计器初值（重画）。
+  bind_city_buttons();
+  refresh_display();
 }
 
 void WeatherApp::onMessage(const Message& msg) {

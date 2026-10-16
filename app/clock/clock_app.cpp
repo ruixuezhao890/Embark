@@ -1,9 +1,9 @@
 /**
  * Embark · 时钟 App 实现：见 clock_app.h 头注释。
  *
- * 薄壳纪律与 launcher_app.cpp / settings_app.cpp 完全一致：onCreate 只记下框架句柄；
- * onEnter/onResume 只按屏名挂自己的界面屏；onForegroundTick 泵一帧；onBackgroundTick
- * 读墙钟 → 算日历 → 把变化的文案写进界面控件。
+ * 薄壳纪律与 launcher_app.cpp / settings_app.cpp 完全一致：onCreate 只记下框架句柄 +
+ * 声明"屏装载后重推控件值"；onEnter/onResume 只按屏名挂自己的界面屏；onForegroundTick
+ * 读墙钟 → 算日历 → 把变化的文案写进界面控件，再泵一帧。没有后台节拍（ADR 0015）。
  *
  * AiDoGUI 后端（EMBARK_AIDOGUI_UI）：生成代码没有变量层，App 通过
  * aidogui_ui_bridge_widget(屏, 控件名) 拿 lv_obj_t* 直接写（ADR 0011 决策⑥）。
@@ -45,6 +45,10 @@
 #endif
 
 namespace embark::demo {
+
+// repaint 回调是裸函数指针（不能捕获 this）：进程内只有这一个时钟实例，文件级记下来。
+ClockApp* ClockApp::g_for_ui = nullptr;
+
 namespace {
 
 // --- 星期名（本地时间口径见 local_clock.h：固定东八区 + 一天秒数）--------------
@@ -167,7 +171,7 @@ void civil_from_days(std::int64_t z, int& y, int& m, int& d) noexcept {
 //   · 今天高亮是 lv_calendar 自己画的（draw_part_begin_event_cb 用主题主色描边），
 //     格子底色/文字染色不可定制 —— 见 third_party/lvgl/src/extra/widgets/calendar/lv_calendar.c。
 // 控件随屏重建会回到设计器初值（英文星期名、无高亮），所以 cal_names_ready_ / cal_today_*
-// 由 onEnter/onResume 清零，让下一拍重推一遍。
+// 由 repaint_screen() 清零，让紧接着的那次 refresh_display 重推一遍。
 //
 // 注：lvgl.h 只 include src/widgets/*，lv_calendar 在 src/extra/widgets/ 下，由
 // src/extra/lv_extra.h → widgets/lv_widgets.h 带入（LVGL 8.3.11 已确认存在）。
@@ -175,9 +179,15 @@ void civil_from_days(std::int64_t z, int& y, int& m, int& d) noexcept {
 
 void ClockApp::onCreate(Framework& fw) {
   fw_ = &fw;  // 本 App 不 request_switch、不 publish，但要拿 hal().time 取墙钟
-  ELOG_INFO("App {} onCreate（后台策略 = tick 100 ms；界面 = 生成的 clock 屏卡片流）", name());
+  ELOG_INFO("App {} onCreate（不申请后台；界面 = 生成的 clock 屏卡片流）", name());
   // 「返回」按钮 → 启动器：设计器里 Btn_Back 挂的是「调用函数」动作 embark_ui_open_launcher，
   // 落到 app/common/aidogui_ui_hooks.h 的 C 入口（见 ADR 0011 决策⑦），本 App 不声明导航。
+#if defined(EMBARK_AIDOGUI_UI)
+  // 屏装载后重推控件值（ADR 0015）：屏切走即 destroy、回来即 init（ADR 0011 决策②），新控件
+  // 上是设计器初值 —— repaint_screen() 负责清缓存、重算、重挂翻月按钮。
+  g_for_ui = this;
+  ui_backend_bind_repaint("clock", &ClockApp::on_screen_reloaded);
+#endif
 }
 
 void ClockApp::onEnter() {
@@ -185,31 +195,11 @@ void ClockApp::onEnter() {
   ELOG_INFO("App {} 进入前台（enter {}, resume {}, 累计 {} 次）", name(), enters_, resumes_,
             enters_ + resumes_);
 #if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+  // 装载自己的屏；屏装好后桥回调 repaint_screen()：清缓存（保留视图月）、重算、重挂翻月按钮。
   ui_backend_load_for_app(name());
 #endif
-#if defined(EMBARK_AIDOGUI_UI)
-  // 屏切走即 destroy、回来即 init（ADR 0011 决策②）：控件回到设计器里的初值，而 DisplayCache
-  // 还留着上次的值 —— 不清空的话 push 会认为"值没变"直接跳过，屏上就停在假数据。清空 +
-  // 立刻重算一次（onEnter 在装载之后，控件已经在显示器上了）。
-  // 月历控件同理：lv_calendar 重建后今天高亮和中文星期名都没了，cal_* 缓存一起清零，
-  // 让下面这次 refresh_display 重推一遍。
-  shown_ = DisplayCache{};
-  shown_prog_ = -1;
-  last_second_ = 0xFFFFFFFFU;
-  cal_today_y_ = 0;
-  cal_today_m_ = 0;
-  cal_today_d_ = 0;
-  cal_shown_y_ = 0;
-  cal_shown_m_ = 0;
-  cal_view_y_ = 0;
-  cal_view_m_ = 0;
-  cal_names_ready_ = false;
-  if (fw_ != nullptr) {
-    refresh_display(fw_->hal().time.now_ms());
-  }
-  // 屏是重建的：< / > 翻月按钮的点击回调随控件一起没了，重挂一次。
-  bind_calendar_buttons();
-#endif
+  // 屏没被重载（上一个 App 没有同名屏）时桥不会回调 repaint，但下一个前台帧就会自己重算
+  // （onForegroundTick 逐帧调 refresh_display），所以这里不需要额外兜底。
 }
 
 void ClockApp::onPause() {
@@ -220,10 +210,26 @@ void ClockApp::onResume() {
   ++resumes_;
   ELOG_INFO("App {} 回到前台（enter {}, resume {}）", name(), enters_, resumes_);
 #if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
-  ui_backend_load_for_app(name());
+  ui_backend_load_for_app(name());  // 同 onEnter：屏装载后由桥回调 repaint_screen()
 #endif
-#if defined(EMBARK_AIDOGUI_UI)
-  // 同 onEnter：屏是重建的，缓存必须跟着清，否则新控件上停着旧值（见那里的注释）。
+}
+
+void ClockApp::onExit() {
+  g_for_ui = nullptr;
+  ELOG_INFO("App {} onExit", name());
+}
+
+void ClockApp::on_screen_reloaded() {
+  if (g_for_ui != nullptr) {
+    g_for_ui->repaint_screen();
+  }
+}
+
+void ClockApp::repaint_screen() {
+  // 屏是新的：控件全在设计器初值上，而 DisplayCache 还留着上次的值 —— 不清空的话 push 会
+  // 认为"值没变"直接跳过，屏上就停在假数据。月历同理：lv_calendar 重建后今天高亮和中文
+  // 星期名都没了，cal_* 缓存一起清零，让下面这次 refresh_display 重推一遍。
+  // **cal_view_y_/cal_view_m_ 不清**：那是用户翻到的视图月，属于要留存的视图状态。
   shown_ = DisplayCache{};
   shown_prog_ = -1;
   last_second_ = 0xFFFFFFFFU;
@@ -232,23 +238,19 @@ void ClockApp::onResume() {
   cal_today_d_ = 0;
   cal_shown_y_ = 0;
   cal_shown_m_ = 0;
-  cal_view_y_ = 0;
-  cal_view_m_ = 0;
   cal_names_ready_ = false;
   if (fw_ != nullptr) {
     refresh_display(fw_->hal().time.now_ms());
   }
-  bind_calendar_buttons();  // 同 onEnter：控件重建，回调重挂
-#endif
-}
-
-void ClockApp::onExit() {
-  ELOG_INFO("App {} onExit", name());
+  // 屏是重建的：< / > 翻月按钮的点击回调随控件一起没了，重挂一次。
+  bind_calendar_buttons();
 }
 
 void ClockApp::onForegroundTick(std::uint32_t now_ms) {
-  (void)now_ms;
   ++foreground_ticks_;
+  // 前台逐帧刷新：时间与日历只有人在看时才需要推进（ADR 0015）。refresh_display 自己按秒
+  // 短路，所以每帧成本 = 一次整数比较；真变了才写控件。
+  refresh_display(now_ms);
 #if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
   // 泵一帧。EEZ 后端 = ui_tick()（lv_timer_handler + tick_screen(当前屏)：绑了 Flow
   // 全局变量的控件在那里读到最新值）；AiDoGUI 后端 = 空实现（生成代码没有变量层，
@@ -257,20 +259,10 @@ void ClockApp::onForegroundTick(std::uint32_t now_ms) {
 #endif
 }
 
-void ClockApp::onBackgroundTick(std::uint32_t now_ms) {
-  // 一拍 = 一次业务推进：先取墙钟算数据，再把变化的文案写进界面控件。
-  ++ticks_;
-  refresh_display(now_ms);
-  if (ticks_ % 10 == 0) {
-    ELOG_INFO("clock 后台节拍：第 {} 拍（约 {} s，now={} ms，墙钟={}）", ticks_, ticks_ / 10, now_ms,
-              clock_ready_ ? "已就绪" : "等待对时");
-  }
-}
-
 void ClockApp::onMessage(const Message& msg) {
   if (msg.get_message_id() == BrightnessMessage::ID) {
-    // 消息只是“值”不是“行为”：收到就直接更新数据（界面显示由 onBackgroundTick
-    // 写控件完成）。需要“收消息即切状态”的 App，见
+    // 消息只是“值”不是“行为”：收到就直接更新数据（界面显示由下一帧
+    // onForegroundTick → refresh_display 写控件完成）。需要“收消息即切状态”的 App，见
     // docs/guides/state-machine-and-messages.md。
     const auto& brightness = static_cast<const BrightnessMessage&>(msg);
     level_ = brightness.level;
@@ -291,8 +283,8 @@ void ClockApp::push(const char* var_name, const char* value, char* cache, std::s
     lv_label_set_recolor(widget, true);
     lv_label_set_text(widget, cache);
   }
-  // 屏没装载（还没进前台 / 已切走）时控件是 nullptr：静默跳过，计算照跑（值会留在 cache 里，
-  // 进前台时 onEnter 会清缓存重算，所以不会丢）。
+  // 屏没装载（还没进前台 / 已切走）时控件是 nullptr：静默跳过，值留在 cache 里；屏下次
+  // 装载时 repaint_screen() 会清缓存重算，所以不会丢（也不会读到旧屏的对象）。
 #elif defined(EMBARK_EEZ_UI_BRIDGE)
   eez_ui_bridge_set_var_string(var_name, cache);
 #else

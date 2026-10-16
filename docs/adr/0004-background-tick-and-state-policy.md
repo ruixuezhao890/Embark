@@ -19,3 +19,4 @@ ETL 依赖版本是"先锁后升"：立项定稿时锁 **20.40.0**（spec §16.3
   `own_task` 策略当时已装配但没有 demo App 用它（第一个真实用例是 issue 15 的 WiFi 非阻塞连接）。
 - 交叉阅读：spec §6（执行模型）、§16.3/§16.4（ETL 决策）、`docs/concepts/messages-and-background.md`（用法）、`GLOSSARY.md`（Background tick / Own task 词条）。
 - 后续（2026-10-06，ADR 0009）："后台**从何时开始跑**"收紧为 App 第一次进过前台才武装（issue 23）；本 ADR 定下的实现方式与"武装之后后台与前后台无关"不变。
+- 后续（2026-10-16，[ADR 0015](0015-app-retention-and-refresh.md)）：**"后台 = 随时间跑"不再是默认**——`tick` / `own_task` 都成了显式申请的例外，今天全仓没有 App 声明后台体（clock 与 launcher 退役 `tick`，改走前台节拍 + 屏装载后重推）。本 ADR 定的实现方式（`etl::callback_timer` 挂在唯一 UI 任务里）与两种策略的线程语义不变。

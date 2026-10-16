@@ -7,10 +7,11 @@
  *   ① 进程入口：起唯一 UI 任务（FreeRTOS 静态任务）→ 进调度器，自己不干活
  *   ② HAL 初始化：时间 / 持久化 / 日志 / 系统 / 总线 / 显示 / 输入，逐个报状态
  *   ③ 框架 boot：3 个 App 注册（launcher/clock/settings）→ 打印每个 App 的后台策略 → 默认前台 LauncherApp
- *      （后台武装时机 = issue 23 / ADR 0009：boot 只武装默认前台；其余 App 等第一次被切进前台，
- *       所以 clock 在 ⑤ 之前后台不跑 —— ⑨ 的清单里有两项专门盯这件事）
+ *      （后台武装时机 = issue 23 / ADR 0009：boot 只武装默认前台；其余 App 等第一次被切进前台。
+ *       ADR 0015 之后 demo 里没有一个 App 申请后台体：时间/天气是**前台渲染型**，只随前台帧推 ——
+ *       ⑨ 的清单里有三项盯这件事）
  *   ④ 启动器主屏：EEZ Studio 的 launcher 屏 —— 点屏上「闹钟」行（Flow SetPage → clock 屏）
- *   ⑤ 前台切换 #1：EEZ 屏按钮驱动 → clock 进场（onEnter；同帧武装它的后台策略 → tick 起跑）
+ *   ⑤ 前台切换 #1：EEZ 屏按钮驱动 → clock 进场（onEnter；同帧走一遍武装时机，无后台体）
  *   ⑥ EEZ 屏往返 + App 间消息：点 clock 屏「← 返回」按钮回启动器（SetPage 回 launcher 屏，
  *       屏名约定驱动切回归）；settings->bump_level() 广播亮度消息 → clock 收到（手绘
  *       Level +1 按钮退役后的逻辑入口，界面提交给 EEZ 屏）
@@ -286,7 +287,7 @@ void ui_main(void* argument) noexcept {
   auto* settings = static_cast<embark::demo::SettingsApp*>(framework.app(2));
 
   int frames_run = 0;
-  std::uint32_t ticks_before_first_enter = 0;  ///< 进 clock 之前采到的节拍数（应为 0：没打开过就不跑）
+  std::uint32_t fg_ticks_before_first_enter = 0;  ///< 进 clock 之前采到的前台帧数（应为 0：没打开过就不推）
   ELOG_INFO("④ UI 循环（5 ms/帧）：先点 EEZ launcher 屏的按钮 —— Flow SetPage 到 clock 屏，桥把切屏翻成切 App");
   for (;;) {
     framework.step();
@@ -315,10 +316,10 @@ void ui_main(void* argument) noexcept {
     if (frames_run == bump_level_frame) { settings->bump_level(); }
     if (frames_run == quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
     if (frames_run == arm_probe_frame) {
-      ticks_before_first_enter = clock->ticks();
-      ELOG_INFO("③b 后台武装时机（第 {} 帧，还没点进 clock）：clock 已武装={}，ticks={}（没打开过的 App 后台不跑）",
+      fg_ticks_before_first_enter = clock->foreground_ticks();
+      ELOG_INFO("③b 武装时机（第 {} 帧，还没点进 clock）：clock 已武装={}，前台帧={}（没打开过的 App 一帧都不跑）",
                 frames_run, framework.background_armed(framework.id_of(*clock)) ? 1 : 0,
-                ticks_before_first_enter);
+                fg_ticks_before_first_enter);
     }
 
     // --- 解说：前台切换 / 亮度 / 后台回流 -------------------------------------
@@ -333,17 +334,17 @@ void ui_main(void* argument) noexcept {
                 clock->brightness());
     }
     if (frames_run == tick_checkpoint_first) {
-      ELOG_INFO("后台节拍采样（第 {} 帧）：clock ticks={}（武装后才十几拍，不到 1 个周期 20 拍 → 0 属正常）；"
-                "启动器前台帧={}",
-                frames_run, clock->ticks(), launcher->foreground_ticks());
+      ELOG_INFO("前台帧采样（第 {} 帧）：clock 前台帧={}（它还没进过前台 → 0）；启动器前台帧={}（它在跑）",
+                frames_run, clock->foreground_ticks(), launcher->foreground_ticks());
     }
     if (frames_run == eez_click_frame + 6) {
-      ELOG_INFO("⑤ EEZ 屏按钮驱动切前台：切到 {}（onEnter；同一帧武装它的后台策略，tick 从此刻起算周期）",
+      ELOG_INFO("⑤ EEZ 屏按钮驱动切前台：切到 {}（onEnter；同一帧走武装时机，但它没有后台体 —— "
+                "时间/日历从这一帧起随前台帧推）",
                 framework.apps().at(framework.foreground())->name());
     }
     if (frames_run == tick_checkpoint_second) {
-      ELOG_INFO("后台节拍第二次采样：clock ticks={}（继续增长 = 武装之后一直在跑，人在前台也跑）",
-                clock->ticks());
+      ELOG_INFO("前台帧第二次采样：clock 前台帧={}（进前台后逐帧推时间与日历 = 前台渲染型，ADR 0015）",
+                clock->foreground_ticks());
     }
     if (frames_run == screen_life_check_frame) {
       const bool clock_gone = !embark::demo::eez_ui_bridge_screen_created("clock");
@@ -367,10 +368,18 @@ void ui_main(void* argument) noexcept {
   CheckList checklist;
   checklist.check("总帧数跑到位", frames_run >= quit_frame + 1, static_cast<unsigned long>(frames_run),
                   static_cast<unsigned long>(quit_frame) + 1UL);
-  const auto first_ticks = static_cast<unsigned long>(clock->ticks());
-  checklist.check("clock 后台节拍 > 0（进过前台后持续跑）", first_ticks > 0UL, first_ticks, 1UL);
-  checklist.check("进 clock 之前它的后台没跑（武装时机：没打开过就不跑）", ticks_before_first_enter == 0UL,
-                  static_cast<unsigned long>(ticks_before_first_enter), 0UL);
+  const auto clock_fg_ticks = static_cast<unsigned long>(clock->foreground_ticks());
+  checklist.check("clock 前台帧 > 0（进过前台后逐帧推时间与日历）", clock_fg_ticks > 0UL, clock_fg_ticks, 1UL);
+  checklist.check("进 clock 之前它一帧都没跑（刷新只随前台）", fg_ticks_before_first_enter == 0UL,
+                  static_cast<unsigned long>(fg_ticks_before_first_enter), 0UL);
+  unsigned apps_with_background = 0;
+  for (embark::AppId i = 0; i < framework.apps().size(); ++i) {
+    if (framework.apps().at(i)->settings().background != embark::BackgroundPolicy::suspend) {
+      ++apps_with_background;
+    }
+  }
+  checklist.check("没有任何 App 申请后台体（时间/天气靠前台节拍，ADR 0015）", apps_with_background == 0U,
+                  static_cast<unsigned long>(apps_with_background), 0UL);
   const auto clock_armed = static_cast<unsigned long>(framework.background_armed(framework.id_of(*clock)));
   checklist.check("clock 在第一次进前台时就已武装", clock_armed == 1UL, clock_armed, 1UL);
   const auto arm_failures = static_cast<unsigned long>(framework.arm_failures());
@@ -383,7 +392,7 @@ void ui_main(void* argument) noexcept {
   checklist.check("clock enter=1 / resume=1（EEZ 往返再进）",
                   clock->enters() == 1 && clock->resumes() == 1,
                   static_cast<unsigned long>(clock->enters() * 10U + clock->resumes()), 11UL);
-  checklist.check("settings 从未进入（薄壳：逻辑入口 bump_level 代替屏交互）",
+  checklist.check("settings 本剧本从未进入（它的屏由 --ui-launcher-pages 覆盖：进屏 / 亮度 +1 / 返回）",
                   settings->enters() == 0 && settings->resumes() == 0,
                   static_cast<unsigned long>(settings->enters() * 10U + settings->resumes()), 0UL);
   checklist.check("亮度消息回流（clock.brightness==1）", clock->brightness() == 1,

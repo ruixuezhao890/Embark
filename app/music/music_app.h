@@ -10,7 +10,7 @@
  *   - onEnter/onResume 只按屏名加载自己的屏（缺屏只记日志，不崩）；
  *   - onForegroundTick 泵一帧；
  *   - 回主屏由屏上的"返回"按钮经设计器事件 embark_ui_open_launcher 承担
- *     （非主屏的任意屏还能直接上滑返回，见 aidogui_ui_nav.h）。
+ *     （2026-10-16 起回程只有这一条路：上滑返回手势已撤除，见 docs/adr/0014-in-screen-back.md）。
  *
  * 后台策略 = 默认 suspend（占位屏没有要刷的数据，回到前台时屏会重建）。
  */

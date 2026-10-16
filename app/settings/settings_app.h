@@ -1,20 +1,21 @@
 /**
- * Embark · 设置 App（薄壳）。后台策略 = suspend（默认值，示范最小设置）；界面 = EEZ 屏 “settings”。
+ * Embark · 设置 App（薄壳）。后台策略 = suspend（默认值，示范最小设置）；界面 = AiDoGUI 屏 “settings”。
  *
  * 本 App 展示两种跨层数据出口：
  *   1) 亮度档 level_：改动经 SettingsApp::bump_level()（0..3 循环 +1），广播 BrightnessMessage
  *      （id 0x21，定义在 app/common/app_messages.h）给 ClockApp —— 消息驱动，App 间不互相 include；
- *   2) UI 呈现一律交给 EEZ 屏绑定 Flow 全局变量（C++ 不再碰控件）。
+ *   2) 屏上的「亮度 +1」按钮经 ui_backend_bind_action("settings","Btn_Bright",…) 直接回调
+ *      bump_level()；档位值不进 UI（按钮恒显「+1」），只广播给 ClockApp。
  *
  * 薄壳纪律（与 launcher_app / clock_app 完全一致，2026-10-06 目录化后各 App 独立成目录）：
  *   - App 不建屏、不 lv_scr_load；onCreate 只记账（本 App 顺带持有框架句柄以备 publish）；
- *   - onEnter/onResume 只按屏名加载自己的 EEZ 屏（缺屏 App 策略 A：保持当前屏 + 告警）；
- *   - onForegroundTick 泵 eez_ui_bridge_tick；
- *   - 切 App 只经 fw.request_switch()；回主屏由 EEZ 屏按钮 SetPage 回 launcher 屏承担
- *       （导航壳 2026-10-06 退役）；
+ *   - onEnter/onResume 只按屏名加载自己的 AiDoGUI 屏（缺屏 App 策略 A：保持当前屏 + 告警）；
+ *   - onForegroundTick 泵一帧 ui_backend_tick()；
+ *   - 切 App 只经 fw.request_switch()；回主屏由屏上的「返回」按钮承担（设计器事件
+ *       embark_ui_open_launcher，与 clock/weather/music/album 一致；见 ADR 0014）；
  *   - App 之间只走消息（本 App publish BrightnessMessage）。
  *
- * 编译开关 EMBARK_EEZ_UI_BRIDGE：宿主构建（app/CMakeLists.txt 定义）接 EEZ 生成代码；
+ * 编译开关 EMBARK_AIDOGUI_UI（宿主构建 app/CMakeLists.txt 定义）接 AiDoGUI 生成的屏代码；
  * 未定义的目标（esp32 真机）把桥调用编译成 no-op —— 本 App 逻辑（bump_level/广播）照常可跑。
  */
 #ifndef EMBARK_APP_SETTINGS_APP_H
@@ -29,7 +30,7 @@
 
 namespace embark::demo {
 
-/// 示例 App：设置（亮度档）。后台策略 = suspend（最小设置样板）；界面 = EEZ 屏 “settings”。
+/// 示例 App：设置（亮度档）。后台策略 = suspend（最小设置样板）；界面 = AiDoGUI 屏 “settings”。
 class SettingsApp final : public App {
  public:
   SettingsApp() noexcept = default;
@@ -51,7 +52,7 @@ class SettingsApp final : public App {
   void onExit() override;
   void onForegroundTick(std::uint32_t now_ms) override;
 
-  /// 亮度档 +1（0..3 循环）；广播 BrightnessMessage。EEZ Flow 动作/验收程序调用。
+  /// 亮度档 +1（0..3 循环）；广播 BrightnessMessage。屏上「亮度 +1」按钮/验收程序调用。
   void bump_level();
 
   // --- 验收观测（全部在 UI 任务里跑，非线程敏感）------------------------------

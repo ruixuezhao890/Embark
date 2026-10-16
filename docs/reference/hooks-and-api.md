@@ -22,7 +22,7 @@
 | `onPause()` | **每次**离开前台 | UI | 保存状态、停自己的节拍；打日志 | 碰 UI（框架不碰你的 UI，也不替你收尾） |
 | `onResume()` | **每次**回到前台 | UI | 恢复显示；**再挂一次屏**（你的屏可能已被别的 App 覆盖） | 以为「屏还在」 |
 | `onForegroundTick(now_ms)` | **每帧一次**，仅当前台 | UI | 推数据给 UI：先 `set_var_*` 再 `eez_ui_bridge_tick()`；EEZ App 驱动 `eez_flow_tick()` | 任何耗时工作——它就在 UI 循环里，卡住 = 掉帧 |
-| `onBackgroundTick(now_ms)` | 武装之后按 `settings().period_ms` 周期；**默认没被打开过 = 一次都不跑** | **tick 策略 = UI 任务；own_task 策略 = 独立任务** | 轻活（tick）；阻塞 / 重计算（own_task） | own_task 里**碰 UI**、**publish**——回 UI 只能 `post` 信封 |
+| `onBackgroundTick(now_ms)` | 武装之后按 `settings().period_ms` 周期；**默认没被打开过 = 一次都不跑** | **tick 策略 = UI 任务；own_task 策略 = 独立任务** | 轻活（tick）；阻塞 / 重计算（own_task） | own_task 里**碰 UI**、**publish**——回 UI 只能 `post` 信封。**今天没有 App 声明后台体**，这个钩子今天一次都不会被调（[ADR 0015](../adr/0015-app-retention-and-refresh.md)） |
 | `onMessage(const Message&)` | 每条广播一次 | UI | 按 `msg.get_message_id()` 自分发 | 以为收不到自己发的消息——**v1 是广播，自己发的也会回来**（§3 第 2 条） |
 | `onExit()` | **恰好 1 次** | UI | 收尾、落盘、打日志 | 依赖它做日常清理——**v1 只有关机路径会触发**，没有别的退役路径 |
 
@@ -54,7 +54,8 @@
 - 默认 `ArmPolicy::on_first_enter`：**第一次进过前台**（`onEnter` 同一帧）才武装，之后才可能出现 `onBackgroundTick`。
 - 显式 `ArmPolicy::at_boot`：boot 期就武装（闹钟这类由持久化状态驱动的 App）。
 - 查询：`fw.background_armed(id)`；武装失败的累计次数：`fw.arm_failures()`。
-- 详见 [concepts/app-lifecycle.md](../concepts/app-lifecycle.md) §4。
+- 详见 [concepts/app-lifecycle.md](../concepts/app-lifecycle.md) §4（含 §4.3 谁该申请后台）。
+- **今天全仓没有 App 声明后台体**（clock 与 launcher 的 `tick` 已在 2026-10-16 退役，改走 `onForegroundTick`）：这条路今天没有实例，机制留着给将来「离开后必须继续推进」的 App（[ADR 0015](../adr/0015-app-retention-and-refresh.md)）。
 
 ---
 
@@ -196,6 +197,8 @@ Framework(hal::Context& hal, AppRegistry apps,
 ---
 
 ## 5. EEZ 薄桥 API（App 侧）
+
+> 当前界面走 **AiDoGUI 桥**（[app/common/aidogui_ui_bridge.h](../../app/common/aidogui_ui_bridge.h) / `ui_backend.h`：`ui_backend_bind_click` / `ui_backend_bind_action` / `ui_backend_bind_repaint`），见 [app/aidogui_ui/README.md](../../app/aidogui_ui/README.md)；本节是 EEZ 老链路（历史）。
 
 完整说明见 [guides/eez-ui-manual.md](../guides/eez-ui-manual.md) §8。
 声明在 [`app/common/eez_ui_bridge.h`](../../app/common/eez_ui_bridge.h)，命名空间 `embark::demo`。

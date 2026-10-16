@@ -10,7 +10,9 @@
  *
  * 除导航外，启动器还负责刷屏上那两个时间控件（L_Time / L_Clock0）：宿主上墙钟就是 PC
  * 时间（platform/host/host_time.cpp 直接读 system_clock），所以这里看到的 HH:MM 与电脑
- * 一致。刷在 onBackgroundTick 里而不是 onForegroundTick：时间一分钟只变一次，没必要每帧算。
+ * 一致。刷新挂在**屏装载后**（bind_repaint → repaint_screen()）：屏每次都是新对象、
+ * label 已被打回设计稿初值，必须重推一遍；这也是"回主屏时间停在设计稿 11:31"那个 bug
+ * 的根治办法 —— 以前靠每个 App 自己记得清缓存（ADR 0015）。
  *
  * 桥调用的开关在 app/common/ui_backend.h：宿主构建定义 EMBARK_AIDOGUI_UI（优先）与
  * EMBARK_EEZ_UI_BRIDGE（EEZ 老链路，迁移期并存），三句桥调用生效；两个宏都没定义的目标
@@ -38,6 +40,9 @@
 
 namespace embark::demo {
 
+// repaint 回调是裸函数指针（不能捕获 this）：进程内只有这一个启动器实例，文件级记下来。
+LauncherApp* LauncherApp::g_for_ui = nullptr;
+
 void LauncherApp::onCreate(Framework& fw) {
   ELOG_INFO("App {} onCreate", name());
   fw_ = &fw;  // 刷新时间要 hal().time.epoch_ms()（host_time.cpp = PC 墙上时间）
@@ -55,6 +60,12 @@ void LauncherApp::onCreate(Framework& fw) {
   // 而是把点击绑定声明在桥的绑定表里，屏每次重建后由观察者自动重挂回调 —— 设计器里
   // autosave 不会碰它，事件丢了也不影响（与手写进 screen.aid 的事件形成双保险）。
   ui_backend_bind_click("launcher", "Card_Clock", "clock");
+
+  // 主屏装载后重推控件值（ADR 0015）：桥在装载完新屏、销毁完旧屏之后回调本 App 的
+  // repaint_screen()。磁贴、时间、天气卡、"上次停在第几页"都归它，onEnter/onResume 里
+  // 不再需要各自记着清缓存/重建。
+  g_for_ui = this;
+  ui_backend_bind_repaint("launcher", &LauncherApp::on_screen_reloaded);
 #endif
 #endif
 }
@@ -63,29 +74,29 @@ void LauncherApp::onEnter() {
   ++enters_;
   ELOG_INFO("App {} 进入前台（enter {}, resume {}）", name(), enters_, resumes_);
 #if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+  // 装载自己的屏；桥装载完新屏会回调 repaint_screen()（磁贴/时间/天气卡/页号）。
   ui_backend_load_for_app(name());
 #endif
-  rebuild_tiles();  // 屏刚建：磁贴带/页码点是新的空容器，按注册表重新长一遍
-  // 屏刚装载：控件是设计器里的初值（"11:31" 写死的文案），立刻刷一次真时间。
-  // 后台策略是 tick（见本文件末尾 settings()），下一次刷新由 onBackgroundTick 接手。
+  // 兜底：上一个 App 没有同名屏时桥不会重载屏、也就不会回调 repaint（既定降级路径），
+  // 这里补一次值刷新。正常路径下 repaint 刚推过，两个缓存都命中，这两行是空转。
   refresh_clock();
-  shown_city_ = 0xFFU;  // 屏重建过：天气卡的四个文案要重画
   refresh_weather();
 }
 
 void LauncherApp::onPause() {
-  ELOG_INFO("App {} 退到后台（enter {}, resume {}）", name(), enters_, resumes_);
+  // 视图留存：离开时屏还在，记下磁贴带停在第几页，回来时 repaint_screen() 跳回去。
+  page_ = launcher_tiles_current_page();
+  ELOG_INFO("App {} 退到后台（enter {}, resume {}, 磁贴停在第 {} 页）", name(), enters_,
+            resumes_, page_ + 1U);
 }
 
 void LauncherApp::onResume() {
   ++resumes_;
   ELOG_INFO("App {} 回到前台（enter {}, resume {}）", name(), enters_, resumes_);
 #if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
-  ui_backend_load_for_app(name());
+  ui_backend_load_for_app(name());  // 同 onEnter：屏装载后由桥回调 repaint_screen()
 #endif
-  rebuild_tiles();  // 从别的 App 回来 = 屏重建过，磁贴也是新的空容器
-  refresh_clock();  // 同 onEnter：屏重建过，控件回到初值
-  shown_city_ = 0xFFU;
+  refresh_clock();   // 兜底（同上）：屏没被重载时也能把时间推到最新
   refresh_weather();
 }
 
@@ -97,15 +108,26 @@ void LauncherApp::onForegroundTick(std::uint32_t now_ms) {
 #endif
 }
 
-void LauncherApp::onBackgroundTick(std::uint32_t now_ms) {
-  (void)now_ms;
-  ++ticks_;
-  refresh_clock();
-  refresh_weather();  // 在天气屏里换了城市，回到主屏时卡片跟着变（值没变就不写控件）
+void LauncherApp::onExit() {
+  g_for_ui = nullptr;
+  ELOG_INFO("App {} onExit", name());
 }
 
-void LauncherApp::onExit() {
-  ELOG_INFO("App {} onExit", name());
+void LauncherApp::on_screen_reloaded() {
+  if (g_for_ui != nullptr) {
+    g_for_ui->repaint_screen();
+  }
+}
+
+void LauncherApp::repaint_screen() {
+  // 屏是新的：label 回设计稿初值（时间 "11:31"、天气卡是默认城市），缓存的"上次画过什么"
+  // 全部作废，然后重建磁贴、最后跳回上次停留的页（磁贴带要先有新内容再跳）。
+  last_minute_ = 0xFFFFFFFFU;
+  shown_city_ = 0xFFU;
+  refresh_clock();
+  refresh_weather();  // 在天气屏里换了城市，回主屏时卡片跟着变（值没变就不写控件）
+  rebuild_tiles();
+  launcher_tiles_show_page(page_);
 }
 
 void LauncherApp::rebuild_tiles() {
@@ -178,16 +200,6 @@ void LauncherApp::refresh_weather() {
     }
   }
 #endif
-}
-
-AppSettings LauncherApp::settings() const {
-  // 一分钟一次的刷新（周期取 1 s：墙钟本身按分钟变，多刷只是空转，省下来的 CPU
-  // 给前台 App）。后台策略 tick 意味着这个 App 在前台和后台都会跑 —— 启动器是 App 0，
-  // 常驻后台正是我们要的（切到 clock 再回来，时间已经是最新的）。
-  AppSettings s{};
-  s.background = BackgroundPolicy::tick;
-  s.period_ms = 1000;
-  return s;
 }
 
 }  // namespace embark::demo

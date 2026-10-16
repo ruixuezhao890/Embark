@@ -5,6 +5,8 @@ Embark 里 App 之间**不互相 include、不碰对方符号**（spec §7、iss
 本文讲"怎么用"，概念与取舍见 `adr/0004-background-tick-and-state-policy.md` 与
 [GLOSSARY](../../GLOSSARY.md)。
 
+> **今天没有 App 在跑后台**（2026-10-16 / [ADR 0015](../adr/0015-app-retention-and-refresh.md)）：三种策略都还在，但**后台是显式申请的例外**（默认 `suspend`）——clock 与 launcher 已退役 `tick`，改走前台节拍（`onForegroundTick`）+ 屏装载后重推。本文讲的是「要用后台时怎么用」。
+
 ## 消息模型：两条路径
 
 | 路径 | 载体 | 语义 | 什么时候用 |
@@ -85,7 +87,7 @@ class LampApp final : public embark::App {
 ## 后台策略：三种，每 App 声明一次
 
 `App::settings()` 返回 `AppSettings{策略, 周期, 栈深, 优先级, 武装时机}`（最后一项有默认值，4 字段写法照旧可用）。
-注意：**声明 ≠ 一上电就在后台跑** —— 默认在 App **第一次进过前台**那一刻才武装；要"开机就跑"得显式声明 `ArmPolicy::at_boot`（见本节末「武装时机」）：
+注意：**声明 ≠ 一上电就在后台跑** —— 默认在 App **第一次进过前台**那一刻才武装；要"开机就跑"得显式声明 `ArmPolicy::at_boot`（见本节末「武装时机」）。**今天全仓没有 App 声明后台体**，所以下面三条与后面所有例子读作「想申请时怎么做」：
 
 | 策略 | 语义 | 适合 | 注意 |
 | --- | --- | --- | --- |
@@ -94,7 +96,7 @@ class LampApp final : public embark::App {
 | `own_task` | 框架经 `ITaskSpawner` 从静态池里给你分一个槽、建一个 FreeRTOS 任务，周期跑同一个钩子 | 长阻塞、重计算的活 | 任务在**武装时**才创建（默认"第一次进前台"、不是 boot；`at_boot` 则在 `framework.cpp` 的 boot 第 9 步）； 栈深/优先级自配（下面代码块给了一档示例：256 字 / 优先级 4，低于 UI 任务的 5）；栈深按**宿主字长**算（256 字 = 2 KB），真机用 `stack_word_bytes` 换成同样的字节数（见 [reference/pitfalls.md](../reference/pitfalls.md)）；回调运行在你的任务里，**不能碰 UI 对象、不能 `publish`**，回 UI 走 `post` 信封 |
 
 ```cpp
-// tick 例：clock 每 100 ms 跳一次（宿主每 20 拍）
+// tick 例（历史：clock 曾每 100 ms 跳一次；2026-10-16 退役，见 ADR 0015）
 AppSettings settings() const override {
   return AppSettings{BackgroundPolicy::tick, 100U, 0U, 0U};
 }
@@ -118,7 +120,7 @@ AppSettings settings() const override {
 **第一次进过前台**的那一刻（`onEnter` 之后、同一帧）。默认前台（注册表第 0 个）在 boot 里
 就进过前台，所以它当场武装；唯一的例外是 `ArmPolicy::at_boot`（下面第二条）。
 
-- 武装一次即长期有效：之后退回后台（`onPause`）后台照跑 —— 不是「只在前台之外跑」
+- 武装一次即长期有效：之后退回后台（`onPause`）后台照跑 —— 不是「只在前台之外跑」。**今天没有 App 走这条路**：不走后台的显示改由 `onForegroundTick`（离开前台自然停）承担
   （`own_task` 在平台上是常驻任务，没有暂停/恢复这回事）。
 - 没被打开过的 App，后台**完全不跑**：用户视角「我没开它，它自己在跑」不再成立。
 - 观测：`fw.background_armed(id)`（是否已武装）、`fw.arm_failures()`（运行期武装失败累计）。
@@ -247,7 +249,7 @@ const embark::Error err = fw.spawn_own_task(fw.id_of(*this));
 开机即武装共四个用例）。
 
 ## 演示对照
-`app/launcher/`（主屏 + 导航接线）、`app/clock/`（tick 100ms 推进显示变量 + 收 `BrightnessMessage`）、`app/settings/`
+`app/launcher/`（主屏 + 导航接线 + 视图留存 + 值重推）、`app/clock/`（前台节拍推进显示 + 月历视图留存 + 收 `BrightnessMessage`）、`app/settings/`
 （suspend + `publish` 亮度消息 + `bump_level` 逻辑入口）就是最小可读范本；`app/common/app_messages.h` 定义了
-`BrightnessMessage`。**这三个 App 都没声明 `own_task`**：后台演示只有 `clock` 的 `tick`，`own_task` 的
+`BrightnessMessage`。**今天这三个 App 都不声明后台策略**（全仓也没有别的 App 声明）：`tick` 的历史样板是 clock 的 100 ms，已按 [ADR 0015](../adr/0015-app-retention-and-refresh.md) 退役；`own_task` 的
 完整系统用例在 `tests/kernel/test_own_task_lifecycle.cpp`（宿主演示 `ui_demo` 仍按这 3 个 App 注册）。

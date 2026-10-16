@@ -14,13 +14,15 @@
  * 入口有两条，都指到本 App：launcher 屏的天气卡（Card_Weather，设计器「调用函数」
  * embark_ui_open_weather）与主屏磁贴体系之外的任何界面控件都可照抄这个约定。
  *
- * 刷新纪律：只在"进屏 / 回屏 / 切城市"时写控件（数据是桩，不会自己变）；onForegroundTick
- * 只泵桥的 tick（AiDoGUI 侧是 no-op，没有变量层）。每次 lv_label_set_text 都是 LVGL 堆上
- * 一次 alloc + free，所以不做每帧重写。
+ * 刷新纪律：数据是桩、不会自己变，所以只在"屏装载后 / 切城市"时写控件 —— 屏装载后的那次
+ * 由桥回调 repaint_screen()（onCreate 里声明一次，见 aidogui_ui_nav_bind_repaint / ADR 0015），
+ * 不再由 onEnter/onResume 手工调用；onForegroundTick 只泵桥的 tick（AiDoGUI 侧是 no-op）。
+ * 每次 lv_label_set_text 都是 LVGL 堆上一次 alloc + free，所以不做每帧重写。
  *
  * 后台策略：suspend（默认）—— 天气数据不会自己变，没必要占 tick。
  *
- * 薄壳纪律与其他 App 一致：不建屏、不 lv_scr_load，切换只经框架/界面事件。
+ * 薄壳纪律与其他 App 一致：不建屏、不 lv_scr_load，切换只经框架/界面事件；onCreate 只记下
+ * 框架句柄 + 声明"屏装载后重推控件值"。
  */
 #ifndef EMBARK_APP_WEATHER_APP_H
 #define EMBARK_APP_WEATHER_APP_H
@@ -63,8 +65,14 @@ class WeatherApp final : public App {
  private:
   /// 把当前城市的 5 天与"现在"写进 weather 屏（屏没装载 → 静默跳过）。
   void refresh_display();
-  /// 给左右箭头挂点击回调（控件随屏重建，onEnter/onResume 都要重挂）。
+  /// 屏装载后的重推钩子（桥在每次装载完新屏后调用，见 aidogui_ui_nav_bind_repaint）：
+  /// 屏每次都是新对象 —— 重挂左右箭头、重画 5 天与"现在"。
+  void repaint_screen();
+  /// 给左右箭头挂点击回调（控件随屏重建，repaint_screen() 里重挂）。
   void bind_city_buttons();
+  /// bind_repaint 收的是裸函数指针（不能捕获 this）：转发到当前实例。
+  static void on_screen_reloaded();
+  static WeatherApp* g_for_ui;  // 当前接线的天气实例（进程内只有一个）
   /// 切城市：改下标 → 落盘 → 立刻重画。
   void shift_city(int delta);
   static void on_city_prev(lv_event_t* event);

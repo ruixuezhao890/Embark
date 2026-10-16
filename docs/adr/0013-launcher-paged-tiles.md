@@ -1,5 +1,8 @@
 # 启动器分页磁贴 + 非主屏上滑返回
 
+> **状态（2026-10-16）**：决策 4（非主屏上滑返回）已被 [0014](0014-in-screen-back.md) 撤回
+> ——回程改为每个 App 屏里自带的「返回」按钮；决策 1 / 2 / 3 / 5 / 6 / 7 仍然有效，本 ADR 保留作历史记录。
+
 用户 2026-10-15 提出（原话）："我后续可能要增加新的app，这不能滑动根本选不到后面的app，
 帮我修改一下，让它可以滑动选择app"。前一轮 [0011](0011-aidogui-ui-source.md) 把界面来源换成
 AiDoGUI 之后，主屏的 4 个磁贴是**设计稿里手摆的固定控件**——加第 5 个 App 就没有位置，
@@ -78,4 +81,6 @@ album 已释放、上滑命中 1 次、磁贴重新建出 5 个）；**主屏上
 [0011](0011-aidogui-ui-source.md)（界面来源与被本 ADR 改掉的手摆磁贴）、
 [0007](0007-font-management.md)（字体红线与子集化）、
 `app/launcher/launcher_pages.h`（分页几何）、`app/launcher/launcher_tiles.cpp`（磁贴绘制）、
-`app/common/aidogui_ui_nav.cpp`（上滑返回）、`docs/guides/new-app-guide.md`（加 App 的操作手册）。
+`app/common/aidogui_ui_nav.cpp`（屏 ↔ App 导航桥）、`docs/guides/new-app-guide.md`（加 App 的操作手册）。
+
+**2026-10-16 追加**：决策 4 的上滑返回已删除，回程改由屏内返回按钮承担 —— 见 [0014](0014-in-screen-back.md)。

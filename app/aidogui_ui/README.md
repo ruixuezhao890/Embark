@@ -72,7 +72,7 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 设计器位置三级查找：`AIDOGUI_HOME` → 仓库根 `.aidogui-home` → `tools/aidogui/home.txt`
 （本机路径，已 gitignore）。换机器时改最后一处即可。
 
-## 五块屏与导航（第 2 步）
+## 六块屏与导航（第 2 步）
 
 | 屏（id == name） | 控件 | 数据 | 回程 |
 | --- | --- | --- | --- |
@@ -81,8 +81,9 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 | `weather` | 37（返回 / 城市栏 ◀ 城市 ▶ / 「现在」卡 / 5 天逐行 日期·天气字·一句话·温度） | `WeatherApp` 只在进屏/回屏/切城市时写（数据是桩，不会自己变）；城市存 `hal().storage` 的 `wx.city` | `Btn_Back` → launcher |
 | `music` | 7（返回 / 标题 / 占位卡 + 两行字） | 无（占位屏，App 侧只有薄壳） | `Btn_Back` → launcher |
 | `album` | 7（同上） | 无（占位屏） | `Btn_Back` → launcher |
+| `settings` | 8（返回 / 标题 / 亮度卡 `Card_Bright` + 「亮度 +1」`Btn_Bright`） | `SettingsApp::bump_level()` 就地 +1（档位 0..3 循环）并广播 `BrightnessMessage`（ClockApp 收） | `Btn_Back` → launcher；`Btn_Bright` 是**逻辑动作**（`ui_backend_bind_action`），不切屏 |
 
-### 两条不在设计器里的导航
+### 一条不在设计器里的导航 + 逻辑动作绑定
 
 - **主屏磁贴**：磁贴**不是设计稿里的控件** —— 设计稿只放一个空容器 `Band_Apps`，磁贴由
   `LauncherApp` 在每次屏装载后按注册表重建（顺序 = 注册顺序，跳过第 0 个 = 主屏自己），
@@ -90,9 +91,20 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
   不用动设计稿（超过 4 个自动多一页 + 多一个页码点）。分页几何是纯函数
   `app/launcher/launcher_pages.h`（每页 4 个 / 页数 / 页容器 x / 页码点 x），有 doctest 单测
   `tests/kernel/test_launcher_pages.cpp`。
-- **上滑返回**：非主屏的屏在装载时由桥给屏根挂 `LV_EVENT_GESTURE`，`LV_DIR_TOP` →
-  `framework.request_home()`；**主屏不挂**（在主屏上滑什么也不发生）。App 与设计器都不用声明，
-  新加的 App 屏自动有（ADR 0013）。
+- **逻辑动作绑定**：屏上按钮要**就地干点事**（不切屏，如设置屏的「亮度 +1」）时，App 在
+  `onCreate` 里 `ui_backend_bind_action("屏名", "控件名", &回调)` 声明一次。它与 `bind_click` 共用
+  一张表（上限 8 条，同一控件先后声明两种绑定时后写生效），回调由桥在每次装载后统一重挂，
+  所以 App 里**不要**自己 `lv_obj_add_event_cb`（控件随屏 destroy 消失）。样板见
+  `app/settings/settings_app.cpp`（[ADR 0014](../../docs/adr/0014-in-screen-back.md) 决策 2）。
+- **控件值重推**：屏每次装载都是**新建**的（控件值 = 设计稿初值），所以「值是谁写的」也要声明一次 ——
+  App 在 `onCreate` 里 `ui_backend_bind_repaint("屏名", 回调)`，桥在**每次屏装载后**回调它，由它把控件值
+  按 App 当前状态重写一遍（[ADR 0015](../../docs/adr/0015-app-retention-and-refresh.md)）。样板见
+  `app/clock/clock_app.cpp` 的 `repaint_screen()`（顺带保留用户翻到的月历月）与 `app/launcher/launcher_app.cpp`
+  （跳回离开时的页码）。不声明的后果：控件停在设计稿（launcher 时间停在 `11:31` 就是这么来的）。
+
+**回程没有第二条通道**：非主屏的回程就是屏里的 `Btn_Back` 挂设计器事件 `embark_ui_open_launcher`
+（六张屏都是这么做的）。早先由桥给屏根挂 `LV_EVENT_GESTURE` 的「非主屏上滑返回」已按用户要求
+删除（ADR 0014 撤回 ADR 0013 决策 4），主屏提示行文案随之改回「左右滑动翻页」。
 
 导航**不挂 `CHANGE_SCREEN`**（`_ui_screen_change()` 会绕过桥的按需 init/destroy），而是给控件挂
 「**调用函数**」动作，函数名约定 `embark_ui_open_<App 名>`：
@@ -104,8 +116,11 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 | weather | Btn_Back | 调用函数 | `embark_ui_open_launcher` |
 | music | Btn_Back | 调用函数 | `embark_ui_open_launcher` |
 | album | Btn_Back | 调用函数 | `embark_ui_open_launcher` |
+| settings | Btn_Back | 调用函数 | `embark_ui_open_launcher` |
+| settings | Btn_Bright | （设计器里不挂事件） | App 侧 `ui_backend_bind_action("settings", "Btn_Bright", ...)` → `SettingsApp::bump_level()` |
 
-（磁贴不带设计器事件：它们是运行时建的，见上一节。）
+（磁贴不带设计器事件：它们是运行时建的，见上一节。设置屏的 `Btn_Bright` 也不挂设计器事件：
+它是本 App 的逻辑动作，由导航桥在装载后重挂。）
 
 生成代码会吐一句裸调用（`embark_ui_open_clock();`），原型在
 `app/common/aidogui_ui_hooks.h`（该头由 `app/aidogui_ui/CMakeLists.txt` 用 `-include`
@@ -113,8 +128,8 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 框架切前台 App。**加一个目标 App** = 设计器里改函数名 + 在 `EMBARK_AIDOGUI_HOOK_APPS` 表里
 加一行；`export.ps1` 会数生成代码里的 `embark_ui_open_*()`：0 条告警、名字没声明直接报错。
 不想在设计器里挂事件时，备用路径是 App 的 onCreate 里
-`aidogui_ui_nav_bind_click(屏名, 控件名, App 名)` 声明一次（控件随屏销毁消失，由桥在每次
-装载后重挂）。
+`aidogui_ui_nav_bind_click(屏名, 控件名, App 名)` 声明一次；只想要逻辑动作（不切屏）就用
+`aidogui_ui_nav_bind_action(屏名, 控件名, 回调)`。两者都是控件随屏销毁消失、由桥在每次装载后重挂；**控件值**走第三条 `ui_backend_bind_repaint(屏名, 回调)`（ADR 0015）。
 
 数据也**不在设计器里绑变量**（AiDoGUI 没有变量层）：App 用
 `aidogui_ui_bridge_widget(屏名, 控件名)` 拿 `lv_obj_t*`，值变了才 `lv_label_set_text` /

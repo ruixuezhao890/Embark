@@ -23,7 +23,7 @@
 
 ```sh
 ./build/platform/host/embark_host_ui.exe --click   # 退出码 0 = launcher ⇄ clock 往返成功
-./build/platform/host/embark_host_tour.exe         # 17 项自检全过
+./build/platform/host/embark_host_tour.exe         # EEZ 老链路走查程序（当前红 8 项且不稳定，见 .scratch/app-retention/acceptance.md）
 ./build/platform/host/embark_host_ui.exe --eez     # EEZ 屏按钮往返 + 变量桥自检
 ```
 

@@ -15,20 +15,40 @@ _Avoid_: 任务、线程、页面、界面
 _Avoid_: 当前页、活跃任务
 
 **Background app（后台 App）**：
-非前台的 App，按自身的后台策略运行；但声明了策略 ≠ 已经在跑 —— 只有**武装过**的 App 才在后台动（默认在第一次进过前台时武装；声明 `ArmPolicy::at_boot` 的在 boot 就武装），见 **Arm**。
+非前台的 App。今天**后台不是默认形态**：App 默认 `suspend`（退到后台什么都不跑），要后台体的 App 必须显式申请（见 **Retention**）；声明了策略也 ≠ 已经在跑——只有**武装过**的 App 才在后台动（默认在第一次进过前台时武装；声明 `ArmPolicy::at_boot` 的在 boot 就武装），见 **Arm**。
 _Avoid_: 挂起的任务、休眠任务
 
 **Background policy（后台策略）**：
-每个 App 的自有设置，决定它退到后台之后的行为：挂起、按周期跑轻量逻辑，或拥有自己的任务。
+每个 App 的自有设置（`AppSettings`），决定它退到后台之后的行为：`suspend`（默认）、按周期跑轻量逻辑（`tick`），或拥有自己的任务（`own_task`）。**后台是例外不是默认**：今天全仓没有 App 声明后台体，能不能吃后台由宿主验收当**不变量**断言（[ADR 0015](docs/adr/0015-app-retention-and-refresh.md)）。
 _Avoid_: 优先级、调度策略
 
 **Arm（后台武装 / Armed）**：
-声明了后台策略的 App 在**第一次进过前台**（`onEnter` 同一帧）才真正开始跑后台：`tick` 策略此时才 `start` 已注册的定时器，`own_task` 策略此时才经 `ITaskSpawner` 创建任务（框架内部 `Framework::arm_background`，幂等；观测 `background_armed(id)` / `arm_failures()`）。武装一次长期有效 —— 之后退回后台照跑，与前后台无关；没被打开过的 App 后台完全不跑。默认前台（注册表第 0 个）在 boot 里就进过前台，所以 boot 当场武装它。声明 `AppSettings::arm == ArmPolicy::at_boot` 的 App 不等前台：boot 第 9 步（先 at_boot 轮、再默认前台轮）就武装，因为它由持久化状态驱动。语义见 ADR 0009（默认）与 ADR 0010（显式 eager）。
+声明了后台策略的 App 在**第一次进过前台**（`onEnter` 同一帧）才真正开始跑后台：`tick` 策略此时才 `start` 已注册的定时器，`own_task` 策略此时才经 `ITaskSpawner` 创建任务（框架内部 `Framework::arm_background`，幂等；观测 `background_armed(id)` / `arm_failures()`）。武装一次长期有效 —— 之后退回后台照跑，与前后台无关；没被打开过的 App 后台完全不跑。默认前台（注册表第 0 个）在 boot 里就进过前台，所以 boot 当场武装它。声明 `AppSettings::arm == ArmPolicy::at_boot` 的 App 不等前台：boot 第 9 步（先 at_boot 轮、再默认前台轮）就武装，因为它由持久化状态驱动。语义见 ADR 0009（默认）与 ADR 0010（显式 eager）。**今天没有 App 申请后台体**，所以也没有 App 会被武装（[ADR 0015](docs/adr/0015-app-retention-and-refresh.md)）。
 _Avoid_: 启动后台、初始化后台、后台开关、懒加载
 
 **Background tick（后台节拍）**：
-`BackgroundPolicy::tick` 策略的落地方式：框架在 UI 任务里用 `etl::callback_timer` 按 per-App 周期调用 `onBackgroundTick(now_ms)`；周期以 UI 循环周期（宿主 5 ms）为粒度向上取整，`period_ms == 0` 就是不跑。定时器在 boot 只**注册**不启动：默认第一次进前台（**Arm**）才 `start`，周期从那一刻起算；`at_boot` 的 App 在 boot 第 9 步就 `start`。
+`BackgroundPolicy::tick` 策略的落地方式：框架在 UI 任务里用 `etl::callback_timer` 按 per-App 周期调用 `onBackgroundTick(now_ms)`；周期以 UI 循环周期（宿主 5 ms）为粒度向上取整，`period_ms == 0` 就是不跑。定时器在 boot 只**注册**不启动：默认第一次进前台（**Arm**）才 `start`，周期从那一刻起算；`at_boot` 的 App 在 boot 第 9 步就 `start`。**今天没有 App 走这条路**：clock 曾用 `tick` / 100 ms，2026-10-16 退役，改走**前台渲染型刷新**（[ADR 0015](docs/adr/0015-app-retention-and-refresh.md)）。
 _Avoid_: 软件定时器、任务轮询
+
+**Retention（留存申请）**：
+「离开之后还需不需要**往前推进**」的声明：需要 = 显式申请后台体（`BackgroundPolicy::tick` / `own_task`），不需要 = 默认 `suspend`。留存申请是**例外的**，因为绝大多数 App 的「回来还在原页面」靠的是 **View state**，不是接着跑。见 [ADR 0015](docs/adr/0015-app-retention-and-refresh.md)。
+_Avoid_: 常驻、保活、后台开关
+
+**View state（视图状态）**：
+App 里「下次回来要原样」的那部分状态（页码、翻到的月份、播放位置）。屏每次装载都是**新建**的（桥纪律「切走即 destroy / 回来即 init」，控件值就是设计稿的初值），所以视图状态必须由 App 自己存成成员变量：`onPause` 记下、屏装载后的重推里恢复。**不进 KV**（KV 是掉电才需要的持久化）。
+_Avoid_: 缓存、会话、界面状态
+
+**Frozen（冻结）**：
+「离开即停 CPU、状态留 RAM、回来原样继续」的一种留存方式（红白机、编辑器这类状态大的 App）。冻结**不需要**申请后台体——因为离开后本就不推进；它要的是 **View state** 与内存预算。
+_Avoid_: 挂起任务、休眠进程
+
+**Foreground-rendered refresh（前台渲染型刷新）**：
+「只在看得见时才需要刷新」的显示（主屏分钟、天气卡、clock 秒）。做法是 `onForegroundTick`（每帧、仅前台）+ 进屏 / 回屏重算 + 事件通知，**不占后台节拍**。判据两句话：离开后需要推进吗（不需要）、回来时需要原样吗（不需要，重算即可）。
+_Avoid_: 后台刷新、轮询守卫
+
+**Value repaint（值重推）**：
+屏装载完成后，把控件值按 App 当前状态重写一遍的机制：`ui_backend_bind_repaint(屏名, fn)` 在 `onCreate` 声明一次（实现 `aidogui_ui_nav_bind_repaint`，容量 8 条），桥的屏观察者每次装载后回调——与点击绑定 / 逻辑动作绑定对称。**定位**：桥已规定「每次屏装载都要做的事」只挂在观察者一处，值重推是唯一还没挂上去的那件事，漏了就会看到控件停在设计稿（launcher 时间停在 `11:31` 就是这么来的）。
+_Avoid_: 手动同步、onEnter 里清缓存
 
 **Bus（消息总线）**：
 `embark::Bus`（基于 `etl::message_bus`）在框架内做同步广播；同一任务内 `Framework::publish()` 直达订阅者，无人订阅的消息丢弃并计数 + WARN。
@@ -126,8 +146,12 @@ _Avoid_: 图标、按钮、App 卡片
 应用列表在启动器上的分组单位：一页装不下时按固定容量分页，同一时刻只显示一页，左右滑动换页。
 _Avoid_: 滚动列表、标签页
 
+**In-screen back（屏内返回）**：
+每个 App 的屏里自带一个「返回」按钮，点击走设计器事件 `embark_ui_open_launcher`（等效 `request_home()`）回主屏。回程的**唯一**通道：框架不提供统一手势或返回键，新 App 要自己摆按钮（六张现成屏可抄，见 `app/aidogui_ui/README.md`；[ADR 0014](docs/adr/0014-in-screen-back.md)）。
+_Avoid_: 返回键、导航栈后退、上滑返回
+
 **Swipe-up back（上滑返回）**：
-在非主屏界面上向上滑动 = 请求回主屏（等效 `request_home()`）。设备没有返回键，这是统一的回程手势，对之后新增的 App 一视同仁，不在各屏里各自实现。
+（已退役，2026-10-16）非主屏界面向上滑 = 请求回主屏（`request_home()`）的统一回程手势，随 ADR 0013 引入、被 ADR 0014 撤回：手势与同屏的横向翻页/滚动共存时容易误触，且五张 App 屏本来就有返回按钮。回程现在由**屏内返回按钮**承担（见上一条），本条目为历史术语保留。
 _Avoid_: 返回键、导航栈后退
 
 **request_home（回主屏请求）**：
@@ -155,7 +179,7 @@ _Avoid_: 运行时描述符、注册文件
 _Avoid_: 魔法颜色、主题对象
 
 **AiDoGUI App（AiDoGUI 应用）**：
-页面由 AiDoGUI Designer 工程 `app/aidogui_ui/screen.aid` 导出（生成代码入库，见 ADR 0011）、业务逻辑由 C++ 实现的 App；它是薄壳——onCreate/onEnter 调 `aidogui_ui_bridge_load_screen_for_app(name())` 挂自己的屏，界面数据靠 `aidogui_ui_bridge_widget(屏, 控件名)` 拿到 `lv_obj_t*` 后直接写，不手写任何 LVGL 布局、也不 include 生成代码头。跨 App 切换在**设计器里给控件挂「调用函数」动作**声明（函数名约定 `embark_ui_open_<App 名>`，生成代码的裸调用落到 `app/common/aidogui_ui_hooks.h` 的 C 入口 → `aidogui_ui_nav_request_app()`）；**不要**用 CHANGE_SCREEN 动作（`_ui_screen_change()` 会绕过桥的按需 init/destroy）。备用路径 `aidogui_ui_nav_bind_click(屏名, 控件名, App 名)` 仍在：App 里声明一次，控件随屏销毁消失、由桥在每次装载后重挂回调。制作界面的唯一方式（手绘已退役）。
+页面由 AiDoGUI Designer 工程 `app/aidogui_ui/screen.aid` 导出（生成代码入库，见 ADR 0011）、业务逻辑由 C++ 实现的 App；它是薄壳——onCreate/onEnter 调 `aidogui_ui_bridge_load_screen_for_app(name())` 挂自己的屏，界面数据靠 `aidogui_ui_bridge_widget(屏, 控件名)` 拿到 `lv_obj_t*` 后直接写，不手写任何 LVGL 布局、也不 include 生成代码头。跨 App 切换在**设计器里给控件挂「调用函数」动作**声明（函数名约定 `embark_ui_open_<App 名>`，生成代码的裸调用落到 `app/common/aidogui_ui_hooks.h` 的 C 入口 → `aidogui_ui_nav_request_app()`）；**不要**用 CHANGE_SCREEN 动作（`_ui_screen_change()` 会绕过桥的按需 init/destroy）。备用路径 `aidogui_ui_nav_bind_click(屏名, 控件名, App 名)` 仍在：App 里声明一次，控件随屏销毁消失、由桥在每次装载后重挂回调；**控件值**同理，由 `ui_backend_bind_repaint(屏名, fn)` 在每次装载后重推（**Value repaint**，ADR 0015）。制作界面的唯一方式（手绘已退役）。
 _Avoid_: Studio 页面、生成式 App、Flow 应用（EEZ 时代的叫法是「EEZ App」，随 ADR 0008 归档）
 
 **Screen name convention（屏名约定）**：
@@ -163,7 +187,7 @@ AiDoGUI 里 screen 名 == 同名 App 的名字（子页 `<app名>_<编号>_sub`�
 _Avoid_: 编号映射表、手工维护的屏清单
 
 **UI bridge（界面桥）**：
-`app/common/aidogui_ui_bridge.h` 的双向接线：Embark → 界面是 `load_screen` / `load_screen_for_app`（按屏名约定载屏，**切走即释放**）、`unload_current`（显示器交给桥的空屏兜底）与 `widget(屏, 控件名)`（**控件表 = 界面数据接口**，按名拿 `lv_obj_t*`）；界面 → Embark 是屏观察者：**每次装载屏都回调**（桥自己发起的 `load_screen*` 也通知——观察者靠这条把点击绑定重挂到新控件上，备用路径；主路径是设计器里挂的「调用函数」事件；请求切到「已是前台」的 App 时框架直接 return，不会成环）。字体也由桥加载（BIN 走 'S' 盘），失败只降级告警。App 只调桥，不 include 生成代码头。
+`app/common/aidogui_ui_bridge.h` 的双向接线：Embark → 界面是 `load_screen` / `load_screen_for_app`（按屏名约定载屏，**切走即释放**）、`unload_current`（显示器交给桥的空屏兜底）与 `widget(屏, 控件名)`（**控件表 = 界面数据接口**，按名拿 `lv_obj_t*`）；界面 → Embark 是屏观察者：**每次装载屏都回调**（桥自己发起的 `load_screen*` 也通知——观察者靠这条把点击绑定重挂到新控件上、并调 App 的值重推钩子（**Value repaint**）；请求切到「已是前台」的 App 时框架直接 return，不会成环）。字体也由桥加载（BIN 走 'S' 盘），失败只降级告警。App 只调桥，不 include 生成代码头。
 _Avoid_: 生成代码直连、App 里 include ui.h
 
 **Style scope（样式域）**：

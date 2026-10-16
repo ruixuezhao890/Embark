@@ -81,13 +81,13 @@ flowchart TD
 ### 主线一：生命周期 —— App 什么时候被调
 
 [app-lifecycle.md](app-lifecycle.md)：boot 九步装配、一帧七段、前后台切换为何"请求只登记"、
-三种后台策略各挂在哪里、own task 从创建到回收的完整生命周期。
+三种后台策略各挂在哪里（**今天全仓无人声明**，见 §4.3 的三条轴与五类）、own task 从创建到回收的完整生命周期。
 配套契约表在 [../reference/hooks-and-api.md](../reference/hooks-and-api.md) §1。
 
 ### 主线二：消息 —— App 之间怎么说话
 
 [messages-and-background.md](messages-and-background.md)：总线广播（同任务）与收件箱信封（跨任务）
-两条路、消息类型怎么定义、三种后台策略怎么选（含判据表）。
+两条路、消息类型怎么定义、三种后台策略怎么选（含判据表）；后台现在是显式申请的例外（[ADR 0015](../adr/0015-app-retention-and-refresh.md)）。
 
 ### 主线三：可移植性 —— 换一块板子要动什么
 

@@ -187,48 +187,56 @@ constexpr int uinav_next_fallback_y = 214;
 
 // --ui-launcher-pages（主屏分页验收）的时间轴与落点。
 // 主屏磁贴是按 App 注册表运行时生成的（app/launcher/launcher_tiles.cpp），本模式就是
-// "后面加了 App，还划得到、点得进吗" 的机器断言。时序：
+// "后面加了 App，还划得到、点得进吗" 的机器断言。回程一律走屏上的「返回」按钮
+// （上滑返回手势已去掉）。时序：
 //   帧 10   磁贴/页/页码点/字形与注册表自检
 //   帧 14..34 在磁贴带上横向拖（一帧一个插值点，跟 --drag 同理）
 //   帧 44   断言吸附到第 2 页
 //   帧 54   点第 5 个磁贴（「相册」，只在第 2 页上）→ 帧 64 断言进了相册屏
-//   帧 70..82 在相册屏上滑 → 帧 92 断言回到主屏
-//   帧 98..110 在主屏再上滑 → 帧 118 断言主屏不响应（上滑返回只对非主屏生效）
-//   帧 126  关窗
+//   帧 70   点相册屏「返回」→ 帧 78 断言回到主屏，**且仍停在第 2 页**（视图留存，ADR 0015）
+//   帧 84→104 反向拖回第 1 页 → 帧 118 断言吸附到第 1 页
+//   帧 124  点第 2 个磁贴（「设置」，第 1 页上）→ 帧 132 断言进了设置屏
+//   帧 138  点设置屏「亮度 +1」→ 帧 144 断言亮度档 +1（屏上的按钮真接到了逻辑上）
+//   帧 150  点设置屏「返回」→ 帧 160 断言回到主屏
+//   帧 168  关窗
 constexpr int ulp_check_frame = 10;
 constexpr int ulp_drag_press_frame = 14;
 constexpr int ulp_drag_release_frame = 34;
 constexpr int ulp_page_check_frame = 44;
 constexpr int ulp_tile_click_frame = 54;
 constexpr int ulp_album_check_frame = 64;
-constexpr int ulp_swipe_press_frame = 70;
-constexpr int ulp_swipe_release_frame = 82;
-constexpr int ulp_back_check_frame = 92;
-constexpr int ulp_home_swipe_press_frame = 98;
-constexpr int ulp_home_swipe_release_frame = 110;
-constexpr int ulp_home_check_frame = 118;
-constexpr int ulp_quit_frame = 126;
-constexpr int ulp_frames = 132;
+constexpr int ulp_album_back_frame = 70;
+constexpr int ulp_back_check_frame = 78;
+constexpr int ulp_back_drag_press_frame = 84;   // 回程留存住第 2 页 → 反向拖回第 1 页
+constexpr int ulp_back_drag_release_frame = 104;
+constexpr int ulp_page1_check_frame = 118;      // 反向拖 release 在 104，留 14 帧等吸附（正向那次也隔了 10 帧）
+constexpr int ulp_settings_tile_frame = 124;
+constexpr int ulp_settings_check_frame = 132;
+constexpr int ulp_bright_frame = 138;
+constexpr int ulp_bright_check_frame = 144;
+constexpr int ulp_settings_back_frame = 150;
+constexpr int ulp_home_check_frame = 160;
+constexpr int ulp_quit_frame = 168;
+constexpr int ulp_frames = 174;
 
 // 磁贴带（Band_Apps）在屏上是 0,202 240×56：横向拖动走带子下沿 y=254（避开磁贴本身，
-// 免得"拖完"被当成"点磁贴"）；上滑返回的落点走屏中间 x=120。
+// 免得"拖完"被当成"点磁贴"）。
 constexpr int ulp_band_y = 254;
 constexpr int ulp_drag_x_from = 200;
 constexpr int ulp_drag_x_to = 40;
-// 上滑的横坐标刻意放在 x=10：两张卡片都从 x=14 起，屏根是唯一命中的对象。
-// 为什么较真：LVGL 抬起时会把 CLICKED 发给"抬起点下的对象"（lv_indev.c 的
-// indev_proc_release），落点压在卡片上就会顺手把卡片点开 —— 上滑验收会莫名多一跳。
-constexpr int ulp_swipe_x = 10;
-constexpr int ulp_swipe_y_from = 250;   // 相册屏：空白处（屏根被点击命中）
-constexpr int ulp_swipe_y_to = 60;
-// 主屏再上滑时**不能**从 y=250 起手：那里压在 Band_Apps 上，而它是可横滚对象 ——
-// LVGL 一旦判定为滚动（scroll_obj != NULL）就不再派发手势（lv_indev.c:1123），
-// 那样"主屏不响应"会被通过，但通过的原因不对。y=196 落在天气卡(134..190)与磁贴带(202..)之间。
-constexpr int ulp_home_swipe_y_from = 200;  // 主屏：磁贴带从 y=202 起，这里在带外
-// 第 2 页吸附后第 1 格磁贴的中心（lv_obj_get_coords 给的是含滚动的屏坐标，第 5 格此时
-// 落在屏上 36,226 —— 和设计稿第 1 页第 1 格同位）。
+// 第 2 页吸附后第 5 格磁贴的中心（lv_obj_get_coords 给的是含滚动的屏坐标，此时落在
+// 屏上 36,226 —— 和设计稿第 1 页第 1 格同位）；「设置」是注册表第 2 个 App、第 1 页
+// 第 2 格，屏上 92,226 —— 反向拖回第 1 页之后才点得到（第 78 帧留存住的是第 2 页）。
 constexpr int ulp_tile_fallback_x = 36;
 constexpr int ulp_tile_fallback_y = 226;
+constexpr int ulp_settings_tile_fallback_x = 92;
+constexpr int ulp_settings_tile_fallback_y = 226;
+// 屏上「返回」（8,4 64×28 → 中心 40,18）与设置屏「亮度 +1」（卡 14,84 + 卡内 140,12
+// 60×32 → 屏上 184,112）：真几何取不到时用这两个兜底。
+constexpr int ulp_back_fallback_x = 40;
+constexpr int ulp_back_fallback_y = 18;
+constexpr int ulp_bright_fallback_x = 184;
+constexpr int ulp_bright_fallback_y = 112;
 
 #if defined(EMBARK_AIDOGUI_UI)
 // App 层唯一的界面接缝（app/common/ui_backend.h）在定义本宏时选 AiDoGUI：EEZ 的 nav
@@ -277,7 +285,7 @@ void print_usage() {
       "  --ui                AiDoGUI 验收（ADR 0011）：字体 6/6 + 屏表/控件表 + 切走即释放/回来即重建\n"
       "  --ui-nav            双向导航 + 月历翻月验收：点磁贴进 clock → 点返回回 launcher → 点时钟卡再进 clock → 点「>」「<」翻月并校验显示月与标题\n"
       "  --ui-weather        天气验收（ADR 0012）：点主屏天气卡进天气屏 → 天气屏 5 天逐字段对桩 → 点「>」切城市 → 点返回 → 主屏天气卡跟着换\n"
-      "  --ui-launcher-pages 主屏分页验收：磁贴/页/页码点按注册表生成 → 横向拖到第 2 页 → 点「相册」磁贴进相册屏 → 相册屏上滑回主屏 → 主屏上滑不响应\n"
+      "  --ui-launcher-pages 主屏分页验收：磁贴/页/页码点按注册表生成 → 横向拖到第 2 页 → 点「相册」磁贴进相册屏 → 点「返回」回主屏 → 点「设置」磁贴进设置屏 → 点「亮度 +1」校验逻辑绑定 → 点「返回」回主屏\n"
       "  --eez               EEZ 老代码回归（issue 19）：屏表/变量表自检 + 变量读写往返 + EEZ 屏点按钮切 App\n"
       "  --screenshot FILE  最后一帧存 BMP\n"
       "  --shot-frame N FILE 第 N 帧存 BMP（配 --eez 等故事线抓中途屏）\n"
@@ -724,7 +732,7 @@ bool aidogui_launcher_pages_check() {
   const bool geo_ok = x_t0 == 12 && x_t1 == 68 && x_p1 == 240 && x_d0 == 113 && x_d1 == 121;
   lv_obj_t* hint = embark::demo::aidogui_ui_bridge_widget("launcher", "L_Hint");
   const char* hint_text = hint != nullptr ? lv_label_get_text(hint) : nullptr;
-  const bool hint_ok = hint_text != nullptr && std::strcmp(hint_text, "左右滑动翻页，上滑返回") == 0 &&
+  const bool hint_ok = hint_text != nullptr && std::strcmp(hint_text, "左右滑动翻页") == 0 &&
                        aidogui_font_covers("launcher", "L_Hint");
   ELOG_INFO("主屏分页自检：磁贴 {}（期望 5）/ 页 {}（期望 2）/ 点 {}（期望 2）；顺序 {}；第 5 格 {}；"
             "几何 {}（磁贴 x {}/{}，第 2 页 x {}，点 x {}/{}）；字形 {}；提示行 {}（\"{}\"）",
@@ -756,28 +764,67 @@ bool aidogui_launcher_album_check() {
   return current != nullptr && std::strcmp(current, "album") == 0 && album_created && launcher_gone;
 }
 
-/// --ui-launcher-pages 帧 92：相册屏上滑应回主屏（且主屏磁贴重建出来 = 回来真的重画了）。
-bool aidogui_launcher_swipe_back_check() {
+/// --ui-launcher-pages 帧 78：相册屏点「返回」应回主屏（主屏磁贴重建出来 = 回来真的重画了），
+/// 而且**屏重建后仍停在离开时的第 2 页** —— 这是视图留存（App 自持 view state，ADR 0015）：
+/// 屏对象是新的、磁贴是从第 1 页重新长出来的，但 App 记得用户停在第几页，装载后跳回去。
+/// 回程走屏上的按钮（设计器事件 embark_ui_open_launcher）——上滑返回手势已按需求去掉。
+bool aidogui_launcher_back_check() {
   const char* current = embark::demo::aidogui_ui_bridge_current_screen();
   const bool launcher_created = embark::demo::aidogui_ui_bridge_screen_created("launcher");
   const bool album_gone = !embark::demo::aidogui_ui_bridge_screen_created("album");
-  const int hits = embark::demo::aidogui_ui_nav_swipe_back_hits();
   const std::size_t tiles = embark::demo::launcher_tiles_count();
-  ELOG_INFO("相册屏上滑后：当前屏 {}（launcher 已重建 {}，album 已释放 {}）；上滑返回命中 {} 次；"
-            "磁贴重新建出 {} 个",
+  const std::size_t page = embark::demo::launcher_tiles_current_page();
+  lv_obj_t* band = embark::demo::launcher_tiles_band();
+  const int scroll_x = band != nullptr ? lv_obj_get_scroll_x(band) : 0;
+  const int offset = scroll_x < 0 ? -scroll_x : scroll_x;
+  const bool page_kept = page == 1 && offset == 240;
+  ELOG_INFO("相册屏点「返回」后：当前屏 {}（launcher 已重建 {}，album 已释放 {}）；磁贴重新建出 {} 个；"
+            "视图留存 = 仍停在第 {} 页（scroll_x={}，期望第 2 页 = 240px，{}）",
             current != nullptr ? current : "<null>", launcher_created ? "是" : "否",
-            album_gone ? "是" : "否", hits, tiles);
+            album_gone ? "是" : "否", tiles, page + 1, scroll_x, page_kept ? "对" : "错");
   return current != nullptr && std::strcmp(current, "launcher") == 0 && launcher_created &&
-         album_gone && hits == 1 && tiles == 5;
+         album_gone && tiles == 5 && page_kept;
 }
 
-/// --ui-launcher-pages 帧 118：主屏上滑**不**应响应（上滑返回只对非主屏生效）。
-bool aidogui_launcher_home_swipe_check() {
+/// --ui-launcher-pages 帧 118：反向拖回第 1 页（留存在第 2 页之后，验收脚本自己把页翻回来）。
+bool aidogui_launcher_page1_check() {
+  const std::size_t page = embark::demo::launcher_tiles_current_page();
+  lv_obj_t* band = embark::demo::launcher_tiles_band();
+  const int scroll_x = band != nullptr ? lv_obj_get_scroll_x(band) : 0;
+  const int offset = scroll_x < 0 ? -scroll_x : scroll_x;
+  ELOG_INFO("主屏反向拖动后：停在第 {} 页（scroll_x={}，期望吸附回第 1 页 = 0px）", page + 1, scroll_x);
+  return page == 0 && offset == 0;
+}
+
+/// --ui-launcher-pages 帧 132：点第 1 页的「设置」磁贴应进设置屏（launcher 屏随切走释放）。
+bool aidogui_launcher_settings_check() {
   const char* current = embark::demo::aidogui_ui_bridge_current_screen();
-  const int hits = embark::demo::aidogui_ui_nav_swipe_back_hits();
-  ELOG_INFO("主屏上滑后：当前屏 {}（应仍停在 launcher）；上滑返回命中 {} 次（应仍为 1：主屏不响应）",
-            current != nullptr ? current : "<null>", hits);
-  return current != nullptr && std::strcmp(current, "launcher") == 0 && hits == 1;
+  const bool settings_created = embark::demo::aidogui_ui_bridge_screen_created("settings");
+  const bool launcher_gone = !embark::demo::aidogui_ui_bridge_screen_created("launcher");
+  ELOG_INFO("点「设置」磁贴后：当前屏 {}（settings 已创建 {}，launcher 已释放 {}）",
+            current != nullptr ? current : "<null>", settings_created ? "是" : "否",
+            launcher_gone ? "是" : "否");
+  return current != nullptr && std::strcmp(current, "settings") == 0 && settings_created &&
+         launcher_gone;
+}
+
+/// --ui-launcher-pages 帧 104：设置屏的「亮度 +1」是 App 的逻辑动作（aidogui_ui_nav_bind_action
+/// → SettingsApp::bump_level），点一下亮度档就该 +1（0..3 循环）——验收"屏上的按钮真接到了
+/// 逻辑上"，而不是只画了个能按的壳。
+bool aidogui_launcher_bright_check(std::size_t before, std::size_t after) {
+  const bool ok = after == (before + 1U) % 4U;
+  ELOG_INFO("设置屏点「亮度 +1」后：亮度档 {} → {}（期望 {}）{}", before, after,
+            (before + 1U) % 4U, ok ? "" : " ✘");
+  return ok;
+}
+
+/// --ui-launcher-pages 帧 118：设置屏点「返回」应回主屏，且磁贴重新建出。
+bool aidogui_launcher_home_check() {
+  const char* current = embark::demo::aidogui_ui_bridge_current_screen();
+  const std::size_t tiles = embark::demo::launcher_tiles_count();
+  ELOG_INFO("设置屏点「返回」后：当前屏 {}（应回到 launcher）；磁贴 {} 个",
+            current != nullptr ? current : "<null>", tiles);
+  return current != nullptr && std::strcmp(current, "launcher") == 0 && tiles == 5;
 }
 
 /// --ui-weather：天气屏是否与数据桩逐字段一致（城市名 / 现在区 / 5 天逐行）。
@@ -841,13 +888,33 @@ bool aidogui_weather_card_ok(std::size_t city) {
   for (const char* w : {"L_WCity", "L_WTemp", "L_WIcon", "L_WDesc"}) {
     if (!aidogui_font_covers("launcher", w)) { glyphs_ok = false; }
   }
+  // 图标盒要装得下"任何城市"的今日天气字：两字词（雷雨/多云/小雨…）在 22px 下约 44px，
+  // 盒子窄了 LVGL 就折行、第二行被裁（2026-10-16 把 L_WIcon 从 30 加宽到 46 就是为这个）。
+  // 这里直接量文本宽度，把"视觉上会不会折行"变成断言。
+  lv_obj_t* icon = embark::demo::aidogui_ui_bridge_widget("launcher", "L_WIcon");
+  const lv_font_t* icon_font =
+      icon != nullptr ? lv_obj_get_style_text_font(icon, LV_PART_MAIN) : nullptr;
+  lv_coord_t widest = 0;
+  const char* widest_text = "";
+  if (icon_font != nullptr) {
+    for (std::size_t i = 0; i < embark::demo::kWeatherCityCount; ++i) {
+      const char* text = embark::demo::weather_city(i).days[0].icon;
+      const lv_coord_t w = lv_txt_get_width(text, static_cast<std::uint32_t>(std::strlen(text)),
+                                             icon_font, 0, LV_TEXT_FLAG_NONE);
+      if (w > widest) { widest = w; widest_text = text; }
+    }
+  }
+  const lv_coord_t icon_box = icon != nullptr ? lv_obj_get_content_width(icon) : -1;
+  const bool icon_fits = icon_box > 0 && widest > 0 && icon_box >= widest;
   const bool ok = eq(text_of("L_WCity"), c.name) && eq(text_of("L_WTemp"), c.temp) &&
                   eq(text_of("L_WIcon"), c.days[0].icon) && eq(text_of("L_WDesc"), c.days[0].desc) &&
-                  glyphs_ok;
+                  glyphs_ok && icon_fits;
   ELOG_INFO("ui-weather 主屏天气卡：\"{}\" {} {} {}（期望 \"{}\" {} {} {}）{}",
             text_of("L_WCity") != nullptr ? text_of("L_WCity") : "?", text_of("L_WTemp") != nullptr ? text_of("L_WTemp") : "?",
             text_of("L_WIcon") != nullptr ? text_of("L_WIcon") : "?", text_of("L_WDesc") != nullptr ? text_of("L_WDesc") : "",
             c.name, c.temp, c.days[0].icon, c.days[0].desc, ok ? "" : " ✘");
+  ELOG_INFO("ui-weather 主屏天气卡图标盒：宽 {}，最长今日天气字 \"{}\" 量得 {}px（装得下：{}）",
+            icon_box, widest_text, widest, icon_fits ? "是" : "否 ✘");
   return ok;
 }
 #endif /* EMBARK_AIDOGUI_UI */
@@ -911,10 +978,18 @@ void ui_main(void* argument) noexcept {
   bool ulp_tiles_ok = false;   // --ui-launcher-pages：磁贴/页/点/几何/字形自检（帧 10）
   bool ulp_page_ok = false;    // --ui-launcher-pages：拖到第 2 页并吸附住（帧 44）
   bool ulp_album_ok = false;   // --ui-launcher-pages：点第 2 页的相册磁贴进相册屏（帧 64）
-  bool ulp_back_ok = false;    // --ui-launcher-pages：相册屏上滑回主屏（帧 92）
-  bool ulp_home_ok = false;    // --ui-launcher-pages：主屏上滑不响应（帧 118）
-  int ulp_tile_x = 0;          // --ui-launcher-pages：相册磁贴落点（按下/抬起同一个点）
+  bool ulp_back_ok = false;    // --ui-launcher-pages：相册屏点「返回」回主屏 + 视图留存（帧 78）
+  bool ulp_page1_ok = false;   // --ui-launcher-pages：反向拖回第 1 页（帧 118）
+  bool ulp_settings_ok = false;  // --ui-launcher-pages：点「设置」磁贴进设置屏（帧 132）
+  bool ulp_bright_ok = false;    // --ui-launcher-pages：点设置屏「亮度 +1」→ 亮度档 +1（帧 144）
+  bool ulp_home_ok = false;      // --ui-launcher-pages：设置屏点「返回」回主屏（帧 160）
+  int ulp_tile_x = 0;          // --ui-launcher-pages：磁贴落点（按下/抬起同一个点）
   int ulp_tile_y = 0;
+  int ulp_back_x = 0;          // --ui-launcher-pages：「返回」按钮落点
+  int ulp_back_y = 0;
+  int ulp_bright_x = 0;        // --ui-launcher-pages：「亮度 +1」按钮落点
+  int ulp_bright_y = 0;
+  int ulp_level_before = -1;   // --ui-launcher-pages：进设置屏时的亮度档（帧 132 记录）
   for (;;) {
     framework.step();
     ++frames_run;
@@ -1048,9 +1123,11 @@ void ui_main(void* argument) noexcept {
       if (frames_run == uiweather_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
     } else if (options->ui_launcher_pages) {
       // 主屏分页验收：磁贴/页/页码点都是运行时按注册表建的 → 横向划到第 2 页 → 点只存在于
-      // 第 2 页的「相册」→ 在相册屏上滑回主屏 → 在主屏再上滑（应不响应）。
-      // 落点走"读真实几何 + 兜底"，以后挪设计稿也不会瞎点。
+      // 第 2 页的「相册」→ 相册屏点「返回」回主屏 → 点第 1 页的「设置」磁贴进设置屏 →
+      // 点「亮度 +1」验收逻辑动作绑定 → 设置屏点「返回」回主屏。回程一律靠屏上的按钮
+      //（上滑返回手势已去掉）。落点走"读真实几何 + 兜底"，以后挪设计稿也不会瞎点。
 #if defined(EMBARK_AIDOGUI_UI)
+      auto* ulp_settings_app = static_cast<embark::demo::SettingsApp*>(framework.app(2));
       if (frames_run == ulp_check_frame) { ulp_tiles_ok = aidogui_launcher_pages_check(); }
       if (frames_run == ulp_drag_press_frame) {
         push_motion_and_press(options->scale, ulp_drag_x_from, ulp_band_y);
@@ -1075,32 +1152,74 @@ void ui_main(void* argument) noexcept {
         push_release(options->scale, ulp_tile_x, ulp_tile_y);
       }
       if (frames_run == ulp_album_check_frame) { ulp_album_ok = aidogui_launcher_album_check(); }
-      if (frames_run == ulp_swipe_press_frame) {
-        push_motion_and_press(options->scale, ulp_swipe_x, ulp_swipe_y_from);
+      // 相册屏「返回」→ 回主屏（组件事件 embark_ui_open_launcher）。
+      if (frames_run == ulp_album_back_frame) {
+        const PanelPoint back =
+            aidogui_widget_center("album", "Btn_Back", ulp_back_fallback_x, ulp_back_fallback_y);
+        ulp_back_x = back.x;
+        ulp_back_y = back.y;
+        push_motion_and_press(options->scale, ulp_back_x, ulp_back_y);
       }
-      if (frames_run > ulp_swipe_press_frame && frames_run < ulp_swipe_release_frame) {
-        const int steps = ulp_swipe_release_frame - ulp_swipe_press_frame;
-        const int t = frames_run - ulp_swipe_press_frame;
-        push_motion(options->scale, ulp_swipe_x,
-                    ulp_swipe_y_from + (ulp_swipe_y_to - ulp_swipe_y_from) * t / steps);
+      if (frames_run == ulp_album_back_frame + click_release_delta) {
+        push_release(options->scale, ulp_back_x, ulp_back_y);
       }
-      if (frames_run == ulp_swipe_release_frame) {
-        push_release(options->scale, ulp_swipe_x, ulp_swipe_y_to);
+      if (frames_run == ulp_back_check_frame) { ulp_back_ok = aidogui_launcher_back_check(); }
+      // 留存断言过了（回来仍在第 2 页），验收脚本自己把页翻回第 1 页 —— 反向拖一遍。
+      if (frames_run == ulp_back_drag_press_frame) {
+        push_motion_and_press(options->scale, ulp_drag_x_to, ulp_band_y);
       }
-      if (frames_run == ulp_back_check_frame) { ulp_back_ok = aidogui_launcher_swipe_back_check(); }
-      if (frames_run == ulp_home_swipe_press_frame) {
-        push_motion_and_press(options->scale, ulp_swipe_x, ulp_home_swipe_y_from);
+      if (frames_run > ulp_back_drag_press_frame && frames_run < ulp_back_drag_release_frame) {
+        const int steps = ulp_back_drag_release_frame - ulp_back_drag_press_frame;
+        const int t = frames_run - ulp_back_drag_press_frame;
+        push_motion(options->scale,
+                    ulp_drag_x_to + (ulp_drag_x_from - ulp_drag_x_to) * t / steps, ulp_band_y);
       }
-      if (frames_run > ulp_home_swipe_press_frame && frames_run < ulp_home_swipe_release_frame) {
-        const int steps = ulp_home_swipe_release_frame - ulp_home_swipe_press_frame;
-        const int t = frames_run - ulp_home_swipe_press_frame;
-        push_motion(options->scale, ulp_swipe_x,
-                    ulp_home_swipe_y_from + (ulp_swipe_y_to - ulp_home_swipe_y_from) * t / steps);
+      if (frames_run == ulp_back_drag_release_frame) {
+        push_release(options->scale, ulp_drag_x_from, ulp_band_y);
       }
-      if (frames_run == ulp_home_swipe_release_frame) {
-        push_release(options->scale, ulp_swipe_x, ulp_swipe_y_to);
+      if (frames_run == ulp_page1_check_frame) { ulp_page1_ok = aidogui_launcher_page1_check(); }
+      // 回到第 1 页之后，第 2 格就是「设置」。
+      if (frames_run == ulp_settings_tile_frame) {
+        const PanelPoint tile =
+            aidogui_tile_center(1, ulp_settings_tile_fallback_x, ulp_settings_tile_fallback_y);
+        ulp_tile_x = tile.x;
+        ulp_tile_y = tile.y;
+        push_motion_and_press(options->scale, ulp_tile_x, ulp_tile_y);
       }
-      if (frames_run == ulp_home_check_frame) { ulp_home_ok = aidogui_launcher_home_swipe_check(); }
+      if (frames_run == ulp_settings_tile_frame + click_release_delta) {
+        push_release(options->scale, ulp_tile_x, ulp_tile_y);
+      }
+      if (frames_run == ulp_settings_check_frame) {
+        ulp_settings_ok = aidogui_launcher_settings_check();
+        if (ulp_settings_app != nullptr) { ulp_level_before = static_cast<int>(ulp_settings_app->level()); }
+      }
+      // 设置屏「亮度 +1」：屏上没有组件事件，走 App 的 bind_action（aidogui_ui_nav_bind_action）。
+      if (frames_run == ulp_bright_frame) {
+        const PanelPoint bright =
+            aidogui_widget_center("settings", "Btn_Bright", ulp_bright_fallback_x, ulp_bright_fallback_y);
+        ulp_bright_x = bright.x;
+        ulp_bright_y = bright.y;
+        push_motion_and_press(options->scale, ulp_bright_x, ulp_bright_y);
+      }
+      if (frames_run == ulp_bright_frame + click_release_delta) {
+        push_release(options->scale, ulp_bright_x, ulp_bright_y);
+      }
+      if (frames_run == ulp_bright_check_frame) {
+        ulp_bright_ok = ulp_settings_app != nullptr && ulp_level_before >= 0 &&
+                        aidogui_launcher_bright_check(static_cast<std::size_t>(ulp_level_before),
+                                                      ulp_settings_app->level());
+      }
+      if (frames_run == ulp_settings_back_frame) {
+        const PanelPoint back =
+            aidogui_widget_center("settings", "Btn_Back", ulp_back_fallback_x, ulp_back_fallback_y);
+        ulp_back_x = back.x;
+        ulp_back_y = back.y;
+        push_motion_and_press(options->scale, ulp_back_x, ulp_back_y);
+      }
+      if (frames_run == ulp_settings_back_frame + click_release_delta) {
+        push_release(options->scale, ulp_back_x, ulp_back_y);
+      }
+      if (frames_run == ulp_home_check_frame) { ulp_home_ok = aidogui_launcher_home_check(); }
 #endif
       if (frames_run == ulp_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
     }
@@ -1129,8 +1248,9 @@ void ui_main(void* argument) noexcept {
             frames_run, framework.apps().at(framework.foreground())->name(), framework.switches());
   ELOG_INFO("启动器（屏名 launcher，界面来源见启动日志）：enters={} resumes={} 前台帧={}",
             launcher->enters(), launcher->resumes(), launcher->foreground_ticks());
-  ELOG_INFO("时钟（屏名 clock）：ticks={} 亮度={} settings 档={}；LVGL 未回收 {} 字节",
-          clock->ticks(), clock->brightness(), settings->level(),
+  ELOG_INFO("时钟（屏名 clock）：前台帧={} 亮度={} settings 档={}；LVGL 未回收 {} 字节（不申请后台，"
+            "时间只在进前台时推）",
+            clock->foreground_ticks(), clock->brightness(), settings->level(),
             embark_lvgl_outstanding_bytes());
   ELOG_INFO("天气（屏名 weather）：城市 {}（下标 {}）切城 {} 次；enters={} resumes={} 前台帧={}",
             weather->city_name(), weather->city_index(), weather->city_switches(), weather->enters(),
@@ -1141,7 +1261,8 @@ void ui_main(void* argument) noexcept {
     const char* last_screen = embark::demo::eez_ui_nav_last_screen();
     const bool launched_ok = framework.switches() == 4 && launcher->enters() == 1 &&
                              launcher->resumes() == 2 && launcher->foreground_ticks() > 0 &&
-                             clock->enters() == 1 && clock->resumes() == 1 && clock->ticks() > 0 &&
+                             clock->enters() == 1 && clock->resumes() == 1 &&
+                             clock->foreground_ticks() > 0 &&
                              clock->brightness() == 1 &&
                              embark::demo::eez_ui_nav_switch_requests() == 3 &&
                              last_screen != nullptr && std::strcmp(last_screen, "launcher") == 0 &&
@@ -1199,16 +1320,36 @@ void ui_main(void* argument) noexcept {
     if (!uiweather_ok) { exit_code = 2; }
   }
   if (options->ui_launcher_pages) {
-    // 五段检查在帧 10/44/64/92/118 就断完了（各自打了证据行），这里只落结论：
-    // 前台必须回主屏（app 0），switches 恰好 2（进相册 + 上滑回主屏各一跳）。
-    const bool ulp_ok = ulp_tiles_ok && ulp_page_ok && ulp_album_ok && ulp_back_ok && ulp_home_ok &&
-                        framework.foreground() == 0 && framework.switches() == 2;
-    ELOG_INFO("〔主屏分页验收{}〕（磁贴 {} / 页 {} / 点 {}；上滑返回命中 {} 次；前台 {}，switches={}）",
-              ulp_ok ? "通过" : "失败", embark::demo::launcher_tiles_count(),
+    // 八段检查在帧 10/44/64/78/108/122/134/150 就断完了（各自打了证据行），这里只落结论，
+    // 外加两条全局不变量（ADR 0015）：① 没有任何 App 申请后台体；② 写控件值的屏都声明了重推。
+    const bool ulp_ok = ulp_tiles_ok && ulp_page_ok && ulp_album_ok && ulp_back_ok && ulp_page1_ok &&
+                        ulp_settings_ok && ulp_bright_ok && ulp_home_ok &&
+                        framework.foreground() == 0 && framework.switches() == 4;
+    bool no_background_ok = true;
+    for (embark::AppId i = 0; i < framework.apps().size(); ++i) {
+      const auto* app = framework.apps().at(i);
+      const bool suspended = app->settings().background == embark::BackgroundPolicy::suspend;
+      ELOG_INFO("      槽 {} {} 的后台策略 = {}", i, app->name(),
+                suspended ? "suspend（没有后台体）" : "有后台体 ← 不该有");
+      if (!suspended) { no_background_ok = false; }
+    }
+    bool repaint_ok = true;
+#if defined(EMBARK_AIDOGUI_UI)
+    const int repaint_bindings = embark::demo::aidogui_ui_nav_repaint_bindings();
+    const int repaint_calls = embark::demo::aidogui_ui_nav_repaint_calls();
+    repaint_ok = repaint_bindings == 3 && repaint_calls >= 3;
+    ELOG_INFO("值重推：声明 {} 个屏（launcher / clock / weather，期望 3），屏装载后被调 {} 次（期望 ≥3）",
+              repaint_bindings, repaint_calls);
+#endif
+    const bool ulp_all_ok = ulp_ok && no_background_ok && repaint_ok;
+    ELOG_INFO("〔主屏分页验收{}〕（磁贴 {} / 页 {} / 点 {}；设置屏 {} 亮度档 {}→{}；"
+              "前台 {}，switches={}；无后台体 = {}，值重推 = {}）",
+              ulp_all_ok ? "通过" : "失败", embark::demo::launcher_tiles_count(),
               embark::demo::launcher_tiles_page_count(), embark::demo::launcher_tiles_dot_count(),
-              embark::demo::aidogui_ui_nav_swipe_back_hits(),
-              framework.apps().at(framework.foreground())->name(), framework.switches());
-    if (!ulp_ok) { exit_code = 2; }
+              ulp_settings_ok ? "已进" : "未进", ulp_level_before, settings->level(),
+              framework.apps().at(framework.foreground())->name(), framework.switches(),
+              no_background_ok ? "是" : "否", repaint_ok ? "对" : "错");
+    if (!ulp_all_ok) { exit_code = 2; }
   }
   if (options->eez) {
     // 故事线：点 launcher 屏按钮 → Flow SetPage 到 clock 屏 → 桥的屏观察者 →

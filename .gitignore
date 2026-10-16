@@ -49,3 +49,26 @@ lvgl_screen_by_ai/
 
 # AiDoGUI 打开工程时生成的桥会话目录（含本机端口与 token，绝不入库）
 app/aidogui_ui/.ai-workspace/
+
+# --- .scratch 本机探查噪声（抓帧/试构建/EEZ 备份/临时脚本与日志）---
+# .scratch/ 仍是 issue 追踪所在地，需要入库的只有 <feature>/{spec,acceptance,issues}/ 下的 md 与 evidence/
+.scratch/lvfc/
+.scratch/game_ui_build/
+.scratch/clock-screen/
+.scratch/_chrome_probe/
+.scratch/buildtest_orig/
+.scratch/eez_ui_backup*/
+.scratch/eez_app_asar.bin
+.scratch/*.log
+.scratch/*.png
+.scratch/*.bmp
+.scratch/*.ps1
+.scratch/*.js
+.scratch/*.txt
+.scratch/*.json
+.scratch/*.bin
+.scratch/screen.aid.bak-*
+
+# 本地备份（git bundle + 回滚说明），不入库
+.backup/
+

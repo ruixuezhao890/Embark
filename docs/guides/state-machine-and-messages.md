@@ -18,7 +18,7 @@
 | --- | --- |
 | 收消息只更新一个值（亮度档、传感器读数） | 直接存成员，别上状态机 |
 | 收消息要改变**行为 / 模式**（on/off、idle/running/error） | `etl::fsm`（本文） |
-| 周期性 / 时序行为（超时、闪烁、轮询节拍） | `etl::fsm` + `onBackgroundTick` 里喂事件 |
+| 周期性 / 时序行为（超时、闪烁、轮询节拍） | `etl::fsm` + `onBackgroundTick` 里喂事件（**今天没有 App 声明后台体**；只在看得见时才需要的时序行为改用 `onForegroundTick`，见 [ADR 0015](../adr/0015-app-retention-and-refresh.md)） |
 | 进入 / 退出某状态要做副作用（打日志、开定时器、推 UI 变量） | `etl::fsm` 的 `on_enter_state` / `on_exit_state` |
 | 只是"上一个 / 下一个"的线性流程 | 一个 `enum` + `switch` 就够，别上状态机 |
 
@@ -193,7 +193,7 @@ class LampApp final : public embark::App {
 7. **`etl::fsm` 的构造参数是 router id** —— 只有真把它挂到 `etl::message_bus` 上时才必须唯一；
    走 `onMessage` 转投时给 `0` 即可。
 8. **别在 `on_event` / `on_enter_state` 里做耗时活** —— `receive()` 在调用它的那条路径上同步跑；
-   从 `onBackgroundTick` 喂事件时，它就在唯一 UI 任务里（`tick` 策略，见 messages-and-background.md）。
+   从 `onBackgroundTick` 喂事件时，它就在唯一 UI 任务里（`tick` 策略，见 messages-and-background.md）。**今天全仓没有 App 声明后台体**，所以这份样板读作「将来真需要后台时怎么做」；纯前台时序改用 `onForegroundTick`（[ADR 0015](../adr/0015-app-retention-and-refresh.md)）。
 
 ## 6. 验收清单
 

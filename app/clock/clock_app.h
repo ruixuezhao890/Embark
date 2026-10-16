@@ -1,6 +1,7 @@
 /**
- * Embark · 时钟 App（薄壳）。后台策略 = tick（100 ms）：onBackgroundTick 里读墙钟、把
- * 时间与日历算出来写进界面控件（AiDoGUI 屏“clock”按名查找，见 aidogui_ui_bridge.h）。
+ * Embark · 时钟 App（薄壳）。**不申请后台**（suspend）：读墙钟、算时间与日历这件事只在
+ * 人在前台时做 —— onForegroundTick 逐帧调 refresh_display（同秒短路），屏装载后再由
+ * bind_repaint 回调 repaint_screen() 重推一遍（ADR 0015 退役了这里的 tick 100 ms）。
  * 数据出口：L_Time / L_SW / L_Date / L_MH / Cal / L_Doy / L_P1 / Bar_Prog / L_P2 /
  * L_Tm / L_Tw / L_Dim / L_Fd / L_Fw。
  *
@@ -17,9 +18,9 @@
  * （PCF85063）v1 还没接，esp32 后端返回 Error::unsupported —— 那时本 App 显示
  * “等待对时”占位，而不是把 0 当成 1970 年（契约见 include/embark/hal/time.h）。
  *
- * 刷新纪律：100 ms 一拍，但同一秒内不重算；算出的文案与上一拍相同也不写控件 ——
+ * 刷新纪律：前台逐帧调用，但同一秒内不重算；算出的文案与上一帧相同也不写控件 ——
  * 每次 lv_label_set_text 都是 LVGL 堆上 1 次 alloc + 1 次 free，所以只有值真变了
- * 才动界面。
+ * 才动界面。屏不在前台时一次都不算（没有后台节拍，也就没有"屏没了还在算"的空转）。
  *
  * 消息：收 SettingsApp 广播的 BrightnessMessage（id 0x21，定义在 app/common/app_messages.h）
  * 更新亮度档 —— 消息驱动，App 间不互相 include、不碰对方任何符号（spec §7）。
@@ -28,7 +29,8 @@
  *   - App 不建屏、不 lv_scr_load；onCreate 只记账/启后台逻辑；
  *   - onEnter/onResume 只做一件事：按屏名约定装载自己的屏
        （aidogui_ui_bridge_load_screen_for_app —— 设计器还没画同名屏时保持当前屏 +
-        告警，缺屏 App 策略 A：画好即自动生效）；
+        告警，缺屏 App 策略 A：画好即自动生效）；屏装载完由桥回调 repaint_screen()
+        重推控件值（ADR 0015），所以这里不再手写"清缓存"那一串；
  *   - onForegroundTick 泵 aidogui_ui_bridge_tick（AiDoGUI 侧是 no-op：没有变量层，
        控件值由 App 直接写）；
  *   - 切换只经 fw.request_switch() 请求；回主屏由 clock 屏的 Btn_Back「调用函数」
@@ -55,7 +57,7 @@
 
 namespace embark::demo {
 
-/// 示例 App：时钟 + 日历（薄壳）。后台策略 = tick（100 ms）；界面 = AiDoGUI 屏“clock”。
+/// 示例 App：时钟 + 日历（薄壳）。不申请后台；界面 = AiDoGUI 屏 "clock"。
 class ClockApp final : public App {
  public:
   ClockApp() noexcept = default;
@@ -65,22 +67,18 @@ class ClockApp final : public App {
   // 图标 = LV_SYMBOL_REFRESH（0xF021，字库已含）；accent 用默认。
   [[nodiscard]] const char* icon() const override { return LV_SYMBOL_REFRESH; }
 
-  [[nodiscard]] AppSettings settings() const override {
-    // tick 策略：周期 100 ms。（宿主 UI 循环 5 ms 一拍 → 每 20 拍一颗 tick。）
-    return AppSettings{BackgroundPolicy::tick, 100U, 0U, 0U};
-  }
+  // settings() 不覆盖：用 App 的默认值（suspend = 不申请后台）。时间与日历是前台渲染型：
+  // 只有人在时钟屏前才需要跟着秒走（onForegroundTick），离开后没有要推进的东西（ADR 0015）。
 
   void onCreate(Framework& fw) override;
   void onEnter() override;
   void onPause() override;
   void onResume() override;
   void onExit() override;
-  void onBackgroundTick(std::uint32_t now_ms) override;
   void onForegroundTick(std::uint32_t now_ms) override;
   void onMessage(const Message& msg) override;
 
   // --- 验收观测（本 App 无 own task，全部在 UI 任务里跑，非线程敏感）--------------
-  [[nodiscard]] std::uint32_t ticks() const noexcept { return ticks_; }
   [[nodiscard]] std::uint32_t brightness() const noexcept { return level_; }
   [[nodiscard]] std::uint32_t enters() const noexcept { return enters_; }
   [[nodiscard]] std::uint32_t resumes() const noexcept { return resumes_; }
@@ -89,6 +87,14 @@ class ClockApp final : public App {
   [[nodiscard]] bool clock_ready() const noexcept { return clock_ready_; }
 
  private:
+  /// 屏装载后的重推钩子（桥在每次装载完新屏后调用，见 aidogui_ui_nav_bind_repaint）：
+  /// 清掉"上次画过什么"的全部缓存 → 重算一遍 → 重挂月历翻月按钮。
+  /// **不清 cal_view_y_/cal_view_m_**：那是用户翻到的视图月，属于要留存的视图状态。
+  void repaint_screen();
+  /// bind_repaint 收的是裸函数指针（不能捕获 this）：转发到当前实例（范式同 settings_app.cpp）。
+  static void on_screen_reloaded();
+  static ClockApp* g_for_ui;  // 当前接线的时钟实例（进程内只有一个）
+
   /// 上次写进界面的文案：相同就不重写（省一次 LVGL 堆 alloc/free）。
   struct DisplayCache {
     char time[40];
@@ -112,7 +118,7 @@ class ClockApp final : public App {
   /// 月历控件：注入中文星期名 + 推进“今天 / 显示月”（控件不存在时静默跳过）。
   /// 显示月 = 视图月（cal_view_y_/cal_view_m_，0 表示跟随今天）。
   void push_calendar(int y, int m, int d);
-  /// 给 < / > 翻月按钮挂点击回调（控件随屏重建，onEnter/onResume 都要重挂）。
+  /// 给 < / > 翻月按钮挂点击回调（控件随屏重建，repaint_screen 里重挂）。
   void bind_calendar_buttons();
   /// 视图月 +delta（带年进位；改完立即重推控件）。
   void shift_calendar_month(int delta);
@@ -127,7 +133,7 @@ class ClockApp final : public App {
   DisplayCache shown_{};
   std::int32_t shown_prog_ = -1;
   // 月历控件（lv_calendar）上次推进的“今天 / 显示月”。控件随屏重建，回到设计器初值，
-  // 所以 onEnter/onResume 里要把它们清零，让下一拍重推一遍。
+  // 所以 repaint_screen() 里要把它们清零，让紧接着的那次 refresh_display 重推一遍。
   int cal_today_y_ = 0;
   int cal_today_m_ = 0;
   int cal_today_d_ = 0;
@@ -138,7 +144,6 @@ class ClockApp final : public App {
   int cal_view_y_ = 0;
   int cal_view_m_ = 0;
   bool cal_names_ready_ = false;  // 中文星期名是否已注入当前控件
-  std::uint32_t ticks_ = 0;
   std::uint32_t level_ = 0;
   std::uint32_t enters_ = 0;
   std::uint32_t resumes_ = 0;

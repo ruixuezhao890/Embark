@@ -19,7 +19,7 @@
 | **AiDoGUI Designer** | 画屏、排控件、配"点按钮切屏"、维护字体字符表 | 设计工程 `app/aidogui_ui/screen.aid`（**随仓库入库**，导出产物同样入库） |
 | **Embark App（C++）** | 业务逻辑：状态机、定时任务、消息、数据 | `app/<名字>/` 下两个文件，5 个钩子 |
 | **薄桥 `app/common/aidogui_ui_bridge.h`** | 生成代码 ↔ App 契约的唯一适配点（按屏名/控件名查找） | App 只调它，**不 include 生成代码头** |
-| **导航 `app/common/aidogui_ui_nav.{h,cpp}`** | 屏变化 → 切前台 App；**非主屏上滑返回** | App 只在 `onCreate` 里 `ui_backend_attach_nav(fw)` |
+| **导航 `app/common/aidogui_ui_nav.{h,cpp}`** | 屏变化 → 切前台 App；屏上控件 → App / 逻辑动作的绑定 | App 只在 `onCreate` 里 `ui_backend_attach_nav(fw)`（要绑逻辑动作再加一句 `ui_backend_bind_action`；有控件值要重推再加一句 `ui_backend_bind_repaint`） |
 
 铁的约定只有三条（[ADR 0011](../adr/0011-aidogui-ui-source.md)）：
 
@@ -28,11 +28,29 @@
 3. **数据接口走控件表按名查找**（`aidogui_ui_bridge_widget("屏名", "控件名")`），App 不直接引
    `ui_<屏id>_<控件名>` 全局——控件改名不会静默断链。
 
-另外两条**免费得到**的能力（不用你写一行）：
+另外一条**免费得到**的能力（不用你写一行）：
 
 - **主屏磁贴**：磁贴由注册表运行时生成（[ADR 0013](../adr/0013-launcher-paged-tiles.md)），
-  **加 App 自动多一个磁贴**（每页 4 个，超过自动多一页 + 多一个页码点），不用改设计稿；
-- **上滑返回**：任意**非主屏**屏上向上滑 = 回主屏，新 App 自动适配（主屏自己上滑无效果）。
+  **加 App 自动多一个磁贴**（每页 4 个，超过自动多一页 + 多一个页码点），不用改设计稿。
+
+**回程不免费，要你自己摆**：新 App 的屏里放一个「返回」按钮，在设计器里给它挂「调用函数」
+`embark_ui_open_launcher`（照 clock / weather / music / album / settings 六张现成屏抄），点击即回
+主屏。框架**没有**统一返回手势或返回键——早先的非主屏上滑返回已按用户要求撤回
+（[ADR 0014](../adr/0014-in-screen-back.md)）。
+
+屏上的按钮要**就地干点事**（不切屏，比如设置的「亮度 +1」）时，别自己给控件加事件回调：在
+`onCreate` 里声明一句 `ui_backend_bind_action("屏名", "控件名", &回调)`，回调由导航桥在每次装载后
+统一重挂（控件随屏销毁消失，自己挂会点一下就切两次；见 [ADR 0014](../adr/0014-in-screen-back.md) 决策 2）。
+
+还有两条**默认就该照做**的约定（[ADR 0015](../adr/0015-app-retention-and-refresh.md)）：
+
+- **不要申请后台**：`settings()` 返回 `AppSettings{}`（suspend）就行。「只有看得见时才需要刷新」的显示
+  （时间、天气）走 `onForegroundTick`（每帧、仅前台）或进屏刷新，**不要**为它声明 `tick` / `own_task`；
+  只有「离开后必须继续推进」的 App（放歌、下载）才申请，并写清理由。
+- **写了控件值就声明重推**：屏每次装载都是**新建**的（值 = 设计稿初值），在 `onCreate` 里
+  `ui_backend_bind_repaint("my", 回调)` 声明一次，桥会在每次屏装载后调它，在里面把控件值重写一遍；
+  要留存的位置（页码、翻到的月份）存成成员变量——照 `app/clock/clock_app.cpp` 与
+  `app/launcher/launcher_app.cpp` 抄。不声明的后果：控件停在设计稿（时间停在 `11:31` 就是这么来的）。
 
 ## 1. 跑起来（10 分钟）
 
@@ -52,16 +70,16 @@
 
 - 标题「启动器」+ 右上角实时时间；时钟卡、天气卡；
 - **磁贴带**：第 1 页「时钟 / 设置 / 天气 / 音乐」，下面 2 个**页码点**（居中）；
-- 点磁贴进 App；**在非主屏上向上滑回主屏**；左右拖动磁贴带翻页（松手吸附）。
+- 点磁贴进 App；**点屏里的「返回」按钮回主屏**；左右拖动磁贴带翻页（松手吸附）。
 
 四条验收命令（**带合成点击/手势的必须给 `--delay 40`**，见 §4）：
 
     ./build/platform/host/embark_host_ui --ui                          # 字体/屏表/切走即释放
     ./build/platform/host/embark_host_ui --ui-nav --delay 40           # 点磁贴 → 进屏 → 返回
-    ./build/platform/host/embark_host_ui --ui-launcher-pages --delay 40  # 分页 + 上滑返回 + 字形守卫
+    ./build/platform/host/embark_host_ui --ui-launcher-pages --delay 40  # 分页 + 设置屏三段 + 字形守卫 + 留存/重推不变量
     ./build/platform/host/embark_host_ui --ui-weather --delay 40       # 天气屏与主屏卡片同源
 
-每条都会打一行结论（例如 `〔主屏分页验收通过〕（磁贴 5 / 页 2 / 点 2；上滑返回命中 1 次；…）`），
+每条都会打一行结论（例如 `〔主屏分页验收通过〕（磁贴 5 / 页 2 / 点 2；设置屏 已进 亮度档 0→1；…）`），
 退出码 0 = 通过、非 0 = 失败。
 
 ## 2. 敲起来（10 分钟，C++ 侧）
@@ -234,7 +252,8 @@ ctest --test-dir build --output-on-failure              # 内核 + 分页纯函�
 ## 6. 从这里往哪走
 
 - 界面工程目录、字体 BIN、验收命令细节：**[app/aidogui_ui/README.md](../../app/aidogui_ui/README.md)**
-- 界面来源 / 分页与上滑返回的决策：**[adr/0011](../adr/0011-aidogui-ui-source.md)**、**[adr/0013](../adr/0013-launcher-paged-tiles.md)**
+- 界面来源 / 分页与回程的决策：**[adr/0011](../adr/0011-aidogui-ui-source.md)**、**[adr/0013](../adr/0013-launcher-paged-tiles.md)**、**[adr/0014](../adr/0014-in-screen-back.md)**（撤回上滑返回，回程 = 屏内返回按钮）
 - 本功能的规格与验收剧本：**[.scratch/launcher-pages/spec.md](../../.scratch/launcher-pages/spec.md)**、**[acceptance.md](../../.scratch/launcher-pages/acceptance.md)**
+- 回程改动与两个界面 bug（时钟缓存、天气两字被裁）+ 设置屏：**[.scratch/launcher-fixes/spec.md](../../.scratch/launcher-fixes/spec.md)**
 - 后台策略 / 消息总线 / own_task 生命周期：**[messages-and-background.md](../concepts/messages-and-background.md)**
 - 脚本与工具（验收开关与退出码部分仍然有效）：**[scaffold-and-tools.md](scaffold-and-tools.md)**

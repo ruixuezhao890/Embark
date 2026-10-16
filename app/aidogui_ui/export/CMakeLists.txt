@@ -9,6 +9,7 @@ SET(SOURCES
     screens/ui_weather.c
     screens/ui_music.c
     screens/ui_album.c
+    screens/ui_settings.c
 )
 
 add_library(ui ${SOURCES})

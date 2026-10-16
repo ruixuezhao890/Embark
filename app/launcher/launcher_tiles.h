@@ -37,6 +37,10 @@ struct LauncherTile {
 std::size_t launcher_tiles_rebuild(const char* screen_name, const LauncherTile* tiles,
                                    std::size_t count);
 
+/// 把磁贴带跳到第 <page> 页（0 起；越界收到最后一页），页码点同步重涂。
+/// 用途：回到主屏时恢复上次停留的页（视图留存，ADR 0015）；rebuild 自己一律从第 1 页开始。
+void launcher_tiles_show_page(std::size_t page);
+
 // --- 验收观测点（ui_demo.cpp 的 --ui-launcher-pages 用）----------------------
 /// 当前建出的磁贴数 / 页数 / 页码点数（屏未装载或未重建时都是 0）。
 std::size_t launcher_tiles_count();

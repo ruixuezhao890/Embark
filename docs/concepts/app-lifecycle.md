@@ -28,7 +28,7 @@ flowchart TD
     S2 --> S3["3 前台切换生效<br/>旧 onPause → 新 onEnter/onResume"]
     S3 --> S4["4 界面工作<br/>lv_timer_handler → 前台 App 的 LVGL 回调"]
     S4 --> S4b["4b 前台节拍<br/>onForegroundTick 每帧一次<br/>EEZ App → eez_flow_tick()"]
-    S4b --> S5["5 后台节拍<br/>tick 策略按 period 触发 onBackgroundTick"]
+    S4b --> S5["5 后台节拍<br/>只有声明了后台体的 App 才有（今天全仓没有）"]
     S5 --> S6["6 消息派发<br/>own task 收件箱抽干 → 总线广播"]
     S6 --> S7["7 own task 回收<br/>已返回任务的槽位归还"]
     S7 --> S0
@@ -41,9 +41,11 @@ flowchart TD
 | 3 | 边界切换 `apply_pending_switch` | 旧前台 `onPause`，新前台 `onEnter`/首个 `onResume` |
 | 4 | 界面工作（`lv_timer_handler`） | 前台 App 的 LVGL 回调（事件） |
 | 4b | 前台节拍 | 前台 App `onForegroundTick`（EEZ 用它驱动 `eez_flow_tick`） |
-| 5 | 后台节拍 | tick 策略 App 的 `onBackgroundTick`（按各自周期） |
+| 5 | 后台节拍 | 声明了 `tick` 的 App 的 `onBackgroundTick`（按各自周期）——**今天全仓没有这样的 App，这一段空转**（§4.3 / [ADR 0015](../adr/0015-app-retention-and-refresh.md)） |
 | 6 | 消息派发 | 每个 App 的 `onMessage`（收件箱信封 + 同帧 publish 的消息） |
 | 7 | own task 回收 | 入口已返回的任务 → 槽位归还（`reap_finished_own_tasks`） |
+
+> **第 5 段今天什么都不做**：全仓没有 App 声明后台体——clock 与 launcher 的 `tick` 已在 2026-10-16 退役，改走第 4b 段的前台节拍（§4.3 与 [ADR 0015](../adr/0015-app-retention-and-refresh.md)）。
 
 ## 2. boot()：装配顺序（进入循环之前，一次做完）
 
@@ -112,7 +114,7 @@ sequenceDiagram
 | `onPause` | 离开前台 | 每次离开 |
 | `onResume` | 再次成为前台 | 每次回来（onEnter 之后全是它） |
 | `onForegroundTick` | 每帧第 4b 段，仅前台 App | 前台期间每帧一次 |
-| `onBackgroundTick` | tick 策略按 period 触发（own_task 在自己的任务里循环） | **武装后**照跑：默认武装 = 第一次进前台，`at_boot` 的在 boot 第 9 步武装（4.2）；之后与前后台无关 |
+| `onBackgroundTick` | tick 策略按 period 触发（own_task 在自己的任务里循环） | **武装后**照跑：默认武装 = 第一次进前台，`at_boot` 的在 boot 第 9 步武装（4.2）；之后与前后台无关。**今天没有 App 声明后台体**，所以这个钩子今天一次都不会被调（§4.3） |
 | `onMessage` | 总线广播（第 6 段） | 每个 App 都收 |
 | `onExit` | 仅关机路径（`shutdown`） | 一生一次 |
 
@@ -121,20 +123,20 @@ sequenceDiagram
 `BackgroundPolicy` 是每 App 一个的声明、`ArmPolicy` 是武装时机的声明（[app.h](../../include/embark/app.h) `:37-52`），
 App 在 `settings()` 里自报家门；框架在 boot 第 7 步注册定时器、第 8 步校验 own_task 容量，
 然后在这个 App **第一次进前台**时武装它（4.1）——除非它声明了 `ArmPolicy::at_boot`，那样
-boot 第 9 步就武装（4.2）。
+boot 第 9 步就武装（4.2）。**今天全仓没有一个 App 声明后台体**（clock 与 launcher 的 `tick` 已按 §4.3 退役），所以下面这张表读法上更像「将来想申请后台时怎么做」。
 
 | 策略 | 谁在跑 | 挂在哪儿 | 注意 | 仓库例子 |
 | --- | --- | --- | --- | --- |
 | `suspend`（默认） | 谁也不跑 | — | 最省资源；只在被切到前台时有行为 | settings |
-| `tick` | 唯一 UI 任务 | step 第 5 段（ETL callback_timer） | **必须轻量**：阻塞会卡住整个 LVGL 动画；武装之后才 `start`（`at_boot` 的在 boot 第 9 步 start） | clock（100 ms） |
+| `tick` | 唯一 UI 任务 | step 第 5 段（ETL callback_timer） | **必须轻量**：阻塞会卡住整个 LVGL 动画；武装之后才 `start`（`at_boot` 的在 boot 第 9 步 start） | 今天无人用（历史：clock 100 ms） |
 | `own_task` | 独立 FreeRTOS 任务 | 自己的任务（栈深/优先级自配） | 发消息只能 `post()`，不能 `publish()`；完整生命周期见 §5 | 三个 App 都没声明；内核用例 `test_own_task_lifecycle.cpp` |
 
 要点：
 
 - **tick 的精度上限是帧粒度**：周期 = `ceil(period_ms / ui_loop_period_ms)` 个帧
   （framework.cpp `:87-89`）。宿主 5 ms 一拍。
-- **后台与前后台无关（武装之后）**：clock 被切走挂起时，它的 `onBackgroundTick` 照样每 100 ms 跑；
-  但在默认（`on_first_enter`）下，**第一次进过前台之前这个节拍根本不会开始**——见 4.1；
+- **后台一旦武装就与前后台无关**（这是本 ADR 定下的语义），但**今天没有 App 走这条路**：clock 曾在被切走后照样每 100 ms 跑（还每秒一条日志），2026-10-16 退役——「离开后不需要推进」的显示改走 4b 的前台节拍（§4.3）。
+- 在默认（`on_first_enter`）下，**第一次进过前台之前这个节拍根本不会开始**——见 4.1；
   声明 `at_boot` 的不等前台，见 4.2。
 
 ### 4.1 默认武装时机：第一次进前台才开跑（issue 23 / ADR 0009）
@@ -182,7 +184,7 @@ AppSettings settings() const override {
 
 | 声明 | boot 第 9 步 | 之后第一次进前台 | 典型 |
 | --- | --- | --- | --- |
-| `ArmPolicy::on_first_enter`（默认） | 只记账（不武装） | 同一帧武装 | clock、所有交互型 App |
+| `ArmPolicy::on_first_enter`（默认） | 只记账（不武装） | 同一帧武装 | 所有交互型 App（今天没有 App 声明后台体，这一行今天为空） |
 | `ArmPolicy::at_boot` | 当场武装（`tick` → `start` 定时器，`own_task` → 建任务） | 不重复武装（`arm_background` 幂等） | 闹钟、上电即采样的服务型 App |
 
 - boot 里 **at_boot 轮在前、默认前台轮在后**，两轮都按注册顺序；**任一轮失败 = 装配失败**
@@ -193,6 +195,22 @@ AppSettings settings() const override {
 - `at_boot` 只表达"什么时候开始跑"，不表达"跑起来不停"：`armed_` 仍是 RAM 位，每次开机
   重新按声明武装；App 自己的持久化状态（闹钟设了几点）用 `fw.hal().storage` 存。
 - 决策背景与弃选方案：[ADR 0010](../adr/0010-arm-at-boot.md)。
+
+### 4.3 谁该申请后台：三条轴、五类（2026-10-16 / [ADR 0015](../adr/0015-app-retention-and-refresh.md)）
+
+「App 退出就结束」在今天**并不存在**：App 对象 boot 到关机常驻，`onExit` 只在关机路径调；离开一个 App 时结束的只有**它的屏**（切走即 destroy）与**后台跑不跑**。所以「要不要后台」其实是三条正交的轴，别搅成一件：
+
+| 轴 | 问题 | 谁负责 |
+| --- | --- | --- |
+| 留存申请 | 离开之后还需要**往前推进**吗？ | 显式声明 `tick` / `own_task`（默认 `suspend`；**今天全仓无人声明**） |
+| 视图留存 | 回来时需要**原样**吗？ | App 自持 view state（屏会被销毁重建） |
+| 数据新鲜度 | 值什么时候**重算**？ | 第 4b 段的前台节拍 + 屏装载后重推 + 事件通知 |
+
+五类 App 与各自的答案见 [ADR 0015](../adr/0015-app-retention-and-refresh.md)。三条落地要点：
+
+- **前台渲染型不占后台**：clock（秒）与 launcher（主屏分钟、天气卡）由 `onForegroundTick` 驱动（只在前台跑，每帧一次、内部按秒/按分钟短路），进屏 / 回屏时重算。它们「离开后不需要推进」，也就没有后台体可申请。
+- **视图状态 App 自己存**：屏每次装载都是新建的，控件值就是你拿到的设计稿初值。要留的东西存成成员变量：launcher 的磁贴页码（`onPause` 记 `launcher_tiles_current_page()`，重推时跳回）、clock 的月历视图月（`cal_view_y_` / `cal_view_m_` 在重推里不清）。
+- **控件值重推挂到屏装载后**：`ui_backend_bind_repaint(屏名, fn)`（`onCreate` 声明一次）——桥的屏观察者第三次扩展，与点击绑定 / 逻辑动作绑定对称。不声明的话，屏重建后控件值会停在设计稿（launcher 时间停在 `11:31` 就是这么来的）。
 
 ## 5. own task：从创建到回收的完整生命周期
 
@@ -362,6 +380,9 @@ UI 来不及消化的信号）。契约见 framework.h `:31-34`。
 | 任务池：借（allocate）与还（deallocate）+ 槽位状态机 | `platform/common/pooled_task_spawner.h:97-155` |
 | own task 容量常量（max_own_tasks=2、栈 512 字） | `config/embark_limits.h:65-72` |
 | UI 端口契约（tick/pump_input/process） | `include/embark/ui_port.h` |
+| **控件值重推**（屏装载后 → App 的 repaint；容量 8 条） | `app/common/aidogui_ui_nav.cpp:77-110`（观察者里调）、声明入口 `app/common/ui_backend.h:61` |
+| App 的**视图留存**样板（磁贴页码 / 月历视图月） | `app/launcher/launcher_app.cpp`（`onPause` 记页码）、`app/clock/clock_app.cpp`（`repaint_screen()` 不清 `cal_view_*`） |
+| 前台渲染型刷新的驱动点（`onForegroundTick` → 写控件） | `app/clock/clock_app.cpp`、`app/launcher/launcher_app.cpp` |
 
 ## 8. 想再深入
 
@@ -370,7 +391,8 @@ UI 来不及消化的信号）。契约见 framework.h `:31-34`。
   [0004](../adr/0004-background-tick-and-state-policy.md)（后台节拍与状态范式）、
   [0005](../adr/0005-static-task-slots-and-pool.md)（静态槽位与任务池）、
   [0009](../adr/0009-background-arm-on-first-enter.md)（后台武装时机：第一次进前台才开跑）、
-  [0010](../adr/0010-arm-at-boot.md)（显式武装时机：`at_boot` 开机即武装）
+  [0010](../adr/0010-arm-at-boot.md)（显式武装时机：`at_boot` 开机即武装）、
+  [0015](../adr/0015-app-retention-and-refresh.md)（留存与刷新：三条轴、五类 App、值重推挂到屏装载后）
 - **比文档更权威的契约测试**：`tests/kernel/test_own_task_lifecycle.cpp` 与
   `tests/kernel/test_pooled_task_spawner.cpp`（own task 全链路）、`tests/kernel/test_framework.cpp`
   （切换/节拍/消息的正确用法）。
