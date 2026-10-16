@@ -80,7 +80,8 @@ idf.py -C platform/esp32/project -B build-esp32 -p COM5 flash monitor
 `build-esp32/embark_esp32.bin` **0x89880 字节**（app 分区 3 MB，富余 82%），bootloader
 0x5210 字节（富余 36%）。App 目录化 + 屏内返回改动之后（2026-10-16）产物是
 **0xc01c0 字节 = 786880 字节**（自检屏那版；issue 17 把静态子集字库接成默认字体后是
-**0xbf8d0 字节 = 784592 字节**，app 分区富余 75%），bootloader 仍是 0x5210（富余 36%）。
+**0xbf8d0 字节 = 784592 字节**；issue 25 加上真机 SD 后端 + IFileSystem + 字库 PSRAM 池之后是
+**0xc3580 字节 = 800128 字节**，app 分区富余 75%），bootloader 仍是 0x5210（富余 36%）。
 **源清单只有一份**：`project/components/embark/CMakeLists.txt` 现在只 `include` 仓库根的
 `cmake/embark_sources.cmake`（issue 20），加文件改那份；它的配置期审计会在路径写错、
 归口目录里有文件没登记、或 main.cpp 的裸头名找不到 include 目录时直接报错。`build` 结尾会把 esptool 直写命令打出来（不想用 `idf.py flash`
@@ -100,10 +101,12 @@ cmake -S . -B build -DEMBARK_BUILD_ESP32=ON   # 出现 embark_esp32_hint / embar
 | `IInput` | SDL 事件 | CST328：10 ms 节流轮询、坐标去重、press/move/release 状态机 |
 | `ITime` | 墙钟（SDL） | `esp_timer`（`epoch_ms()` → `unsupported`：板载 RTC 未接） |
 | `IPersistence` | exe 同目录二进制文件（32 定长槽） | NVS 命名空间 `embark`（键 ≤15、值 ≤64 字节，写入必 `nvs_commit`） |
+| `IFileSystem` | 可执行文件旁的 `embark_host_fs/`（或 `EMBARK_HOST_FS_ROOT`），定长 4 槽 | SD 卡挂载点 `/sdcard`（SPI2 + FATFS）；`EMBARK_SD_ENABLED` 默认 0，没配引脚 / 没插卡 → `Context::filesystem` 是 `nullptr` |
 | `ILogSink` | stdout | stdout = UART0 控制台（整行 fwrite + fflush） |
 | `ISystem` | 进程重启 + 平台水位 | `heap_caps`（只看内部 SRAM）+ `uxTaskGetStackHighWaterMark` + `esp_task_wdt_reset`，`fatal` → `abort`（走 IDF panic handler 打回溯） |
 | `IBus` | 一律 `unsupported`（这台机器没有物理总线） | `I2C_NUM_1` 上的 `i2c_master`（按地址懒建设备、不驱逐）；`spi_transfer` 仍是 `unsupported`（屏幕 SPI 由 `esp_lcd` 独占） |
 | LVGL 堆 | `malloc` + 记账（256 KB 软预算） | **`.bss` 静态池 48 KB**（`src/esp32_board.h` 的 `lvgl_pool_bytes`） |
+| 字库内存（`lv_font_load`） | `malloc`（`font_alloc_scope` 是空操作） | **PSRAM 定容池 128 KB**（`src/esp32_board.h` 的 `font_psram_bytes`，懒建；与那 48 KB 分开记账） |
 | 唯一 UI 任务 | `xTaskCreateStatic` + 宿主自起调度器 | `xTaskCreateStaticPinnedToCore(…, core 1)`，调度器已在跑 |
 | 后台 own task | 静态任务（不落核） | 静态任务落 core 0 |
 | 断言 / `fatal` | `platform/host/host_system.cpp` 唯一定义 | `src/esp32_system.cpp` 唯一定义 |
@@ -129,8 +132,27 @@ cmake -S . -B build -DEMBARK_BUILD_ESP32=ON   # 出现 embark_esp32_hint / embar
 5. **背光**：`backlight_pwm_hz = 5000` / `backlight_pwm_bits = 13` / `backlight_default_percent = 70`。
 6. **FreeRTOS 计时**：`CONFIG_FREERTOS_HZ=1000` 是硬要求（默认 100 Hz 下 `pdMS_TO_TICKS(5) == 0`，
    UI 循环会忙等）。改过 `sdkconfig.defaults` 之后要 `idf.py fullclean` 再构建。
-7. **v1 有意不做**（将来要就得先加 HAL 面）：`epoch_ms()`（PCF85063 RTC）、SD 卡/音频、
+7. **v1 有意不做**（将来要就得先加 HAL 面）：`epoch_ms()`（PCF85063 RTC）、音频、
    WiFi/BLE、`spi_transfer()`、低功耗与深睡。
+8. **SD 卡（issue 25）**：默认**关**（`src/esp32_board.h` 的 `EMBARK_SD_ENABLED 0`，四个信号脚是 `-1`）。
+   要用得先量接线：卡座的 CS / MOSI / MISO / CLK 各走哪个 GPIO（这块板的手册不给这组，照 2D/3D 图纸或
+   万用表量；12PIN 排针上的 IO18 / IO15 / GPIO43 / GPIO44 只是候选），填进 `sd_pin_*` 再把开关置 1 ——
+   开了却没填引脚会被 `esp32_board.h` 末尾的 `static_assert` 在**编译期**拦下。挂载点 `/sdcard`（SPI2，10 MHz）。
+   验证用卡上的一个运行时字库：把 `app/aidogui_ui/export/font/ui_font_ui_heiti_14.bin` 拷到卡的
+   `fonts/` 目录（`sd_font_probe_file` 指的路径），启动日志应出现这几行：
+
+   ```
+   I (1624) embark: SD：已挂载 /sdcard（SD32G 30436 MB，31914983424 字节）
+   I (1625) embark: BRINGUP SD：/sdcard（SD32G 30436 MB）已挂载，开始运行时字库自检
+   I (1700) embark: BRINGUP SD：字库已加载并渲染；fonts/ui_font_ui_heiti_14.bin 的 启动 量得 28×14 px；记账 7932 / 102400 字节，引用 1 次，字库池在用 7932 / 131072 字节
+   I (1701) embark: BRINGUP SD：释放后记账 0 字节、在册 0 个、字库池在用 0 字节（都应归零）
+   ```
+
+   判读：只有 `SD：本板未配置卡座引脚…跳过挂载` + `BRINGUP SD：文件系统未挂载…整体跳过` 两行 → 开关或接线；
+   `BRINGUP SD：… 加载失败（错误码 3）` → 卡上没有那个文件（`not_found`）；错误码 8（`corrupt_data`）→ 文件不是
+   `lv_font_conv` 产物；同一个心跳行里的 **LVGL 池未回收/峰值看不出变化**是对的（字库不占那 48 KB）。
+   屏上还会多出一行黄字「启动」在底部中间（`check_sd_font` 真的渲染并刷了一帧），这是"字库文件能被
+   解析并画出字形"的当场证据。
 
 ## 6. 两条构建纪律
 
@@ -158,10 +180,17 @@ I (512) embark: ST7789 就绪：240×320 竖屏，SPI 80 MHz，BGR=1，像素小
 I (640) embark: 框架就绪：3 个 App，默认前台 launcher；LVGL 8.3.11，绘制缓冲 40 行，LVGL 静态池 49152 字节
 I (648) embark: BRINGUP 自检屏就绪：四角 TL/TR/BL/BR，四条色带 R/G/B/W；点四角核对坐标（左上应 ≈0,0，右下应 ≈239, 319）
 I (1620) embark: BRINGUP 触摸按下：12, 9
+I (1624) embark: SD：已挂载 /sdcard（SD32G 30436 MB，31914983424 字节）
+I (1625) embark: BRINGUP SD：/sdcard（SD32G 30436 MB）已挂载，开始运行时字库自检
+I (1700) embark: BRINGUP SD：字库已加载并渲染；fonts/ui_font_ui_heiti_14.bin 的 启动 量得 28×14 px；记账 7932 / 102400 字节，引用 1 次，字库池在用 7932 / 131072 字节
+I (1701) embark: BRINGUP SD：释放后记账 0 字节、在册 0 个、字库池在用 0 字节（都应归零）
 I (10420) embark: 心跳：2000 帧；堆空余 268435456 字节，UI 栈余 6824 字节；LVGL 池未回收 9978 / 峰值 12480 字节；刷新 214 次，触摸按下 3 次
 ```
 
 心跳每 2000 帧（≈10 s）一行，上板调试主要靠它：堆、UI 栈水位、LVGL 静态池、刷新次数、触摸次数。
+SD 那四行只在插了卡（且填了引脚）时出现；默认关 / 没插卡时是 `SD：本板未配置卡座引脚（esp32_board.h 的
+EMBARK_SD_ENABLED = 0），跳过挂载` 与 `BRINGUP SD：文件系统未挂载（板级没配卡座引脚，或没插卡），
+运行时字库整体跳过` 两行。
 致命错误长这样（`abort()` → IDF panic handler 打回溯与寄存器）：
 
 ```

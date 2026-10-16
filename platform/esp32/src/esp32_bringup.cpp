@@ -6,9 +6,13 @@
 
 #include <lvgl.h>
 
+#include <embark/font_ledger.h>
 #include <middleware/elog/elog.hpp>
 
 #include "esp32_board.h"
+#include "esp32_hal.h"
+#include "font_alloc_scope.h"
+#include "font_service.h"
 
 namespace embark::platform::esp32::bringup {
 namespace {
@@ -102,6 +106,71 @@ void pump_touch() {
     }
   }
   g_pressed_before = pressed;
+}
+
+void check_sd_font() {
+  Esp32Hal& hal = Esp32Hal::instance();
+  hal::Context& context = hal.context();
+  if (context.filesystem == nullptr) {
+    ELOG_INFO("BRINGUP SD：文件系统未挂载（板级没配卡座引脚，或没插卡），运行时字库整体跳过");
+    return;
+  }
+  ELOG_INFO("BRINGUP SD：{}（{}）已挂载，开始运行时字库自检", hal.sd().mount_point(),
+            hal.sd().info());
+
+  // 账本与服务都是"一个进程一份"的对象：函数内静态，绕开静态初始化顺序。
+  static FontLedger ledger;
+  static FontService service(*context.filesystem, ledger);
+  if (const Error prepared = service.init(); prepared != Error::none) {
+    ELOG_WARN("BRINGUP SD：字库服务没起来（错误码 {}），跳过", static_cast<int>(prepared));
+    return;
+  }
+
+  etl::expected<lv_font_t*, Error> loaded = service.load(sd_font_probe_file);
+  if (!loaded) {
+    ELOG_WARN("BRINGUP SD：{} 加载失败（错误码 {}）—— 卡上有这个文件吗？", sd_font_probe_file,
+              static_cast<int>(loaded.error()));
+    return;
+  }
+  lv_font_t* font = *loaded;
+
+  // 量一次宽度：走得通说明 cmap 与字形描述都解析出来了。
+  lv_point_t measured{};
+  lv_txt_get_size(&measured, sd_font_probe_text, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+
+  // 真渲染一个字形：放进 label，立刻同步刷一次屏（不等 UI 循环），再删掉 label ——
+  // 删完才 release，否则屏上会留着指向已释放字库的指针。
+  lv_disp_t* display = lv_disp_get_default();
+  if (display != nullptr) {
+    lv_obj_t* label = lv_label_create(lv_scr_act());
+    lv_obj_set_style_text_font(label, font, 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(0xFFFF00), 0);
+    lv_label_set_text(label, sd_font_probe_text);
+    lv_obj_align(label, LV_ALIGN_BOTTOM_MID, 0, -8);
+    lv_refr_now(display);
+    lv_obj_del(label);
+  }
+
+  const auto refs = ledger.refs(sd_font_probe_file);
+  ELOG_INFO(
+      "BRINGUP SD：字库已加载并渲染；{} 的 {} 量得 {}×{} px；记账 {} / {} 字节，引用 {} "
+      "次，字库池在用 "
+      "{} / {} 字节",
+      sd_font_probe_file, sd_font_probe_text, static_cast<int>(measured.x),
+      static_cast<int>(measured.y), static_cast<unsigned>(ledger.used_bytes()),
+      static_cast<unsigned>(ledger.budget_bytes()),
+      refs.has_value() ? static_cast<unsigned>(*refs) : 0U,
+      static_cast<unsigned>(font_alloc_outstanding_bytes()),
+      static_cast<unsigned>(font_alloc_pool_bytes()));
+
+  const Error released = service.release(sd_font_probe_file);
+  if (released != Error::none) {
+    ELOG_WARN("BRINGUP SD：释放失败（错误码 {}）", static_cast<int>(released));
+    return;
+  }
+  ELOG_INFO("BRINGUP SD：释放后记账 {} 字节、在册 {} 个、字库池在用 {} 字节（都应归零）",
+            static_cast<unsigned>(ledger.used_bytes()), static_cast<unsigned>(ledger.loaded()),
+            static_cast<unsigned>(font_alloc_outstanding_bytes()));
 }
 
 }  // namespace embark::platform::esp32::bringup

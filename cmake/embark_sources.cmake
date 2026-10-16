@@ -82,21 +82,24 @@ set(EMBARK_APP_SOURCES_DEVICE
 set(EMBARK_COMMON_STATIC_POOL_SOURCES
         "${EMBARK_ROOT}/platform/common/static_pool.cpp")
 
-# LVGL 端口 + UI 端口：两侧都编（宿主 SDL 与真机 esp_lcd + CST328 共用同一份）。
+# LVGL 端口 + UI 端口 + 运行时字库服务：两侧都编（宿主 SDL 与真机 esp_lcd + CST328 共用
+# 同一份）。
 set(EMBARK_COMMON_UI_SOURCES
         "${EMBARK_ROOT}/platform/common/lvgl_port.cpp"
-        "${EMBARK_ROOT}/platform/common/lvgl_ui_port.cpp")
-
-# 宿主专属 —— 真机要等 SD 后端（issue 25）才有对应功能，所以不进真机清单。
-# 这个"显式声明"就是收口 B 的减法被减数：归口目录里任何**没写在这里、也不在上面两份**的
-# 文件都会让下面的审计报错。
-set(EMBARK_COMMON_UI_HOST_ONLY_SOURCES
-        # 运行时字库服务（issue 17）：把 LVGL 的 'F' 盘接到 hal::IFileSystem 并记账；
-        # 真机 Context::filesystem == nullptr，编进去只是一份永不调用的死代码。
+        "${EMBARK_ROOT}/platform/common/lvgl_ui_port.cpp"
+        # 运行时字库服务（issue 17）：把 LVGL 的 'F' 盘接到 hal::IFileSystem 并记账。
+        # issue 25 起真机也有了 IFileSystem 后端（SD 卡），所以它两侧都编 —— 没插卡时
+        # Context::filesystem == nullptr，init() 返回 not_ready，整条路径安静地不生效。
         "${EMBARK_ROOT}/platform/common/font_service.cpp")
+
+# 宿主专属 —— 真机没有对应后端，所以不进真机清单。这个"显式声明"就是收口 B 的减法
+# 被减数：归口目录里任何**没写在这里、也不在上面两份**的文件都会让下面的审计报错。
+# issue 25 起这份名单是空的：运行时字库服务已经升级成"两侧都编"（见上），真机在没插卡时
+# 靠 Context::filesystem == nullptr 让它自然失效，不需要在源清单里区分平台。
+set(EMBARK_COMMON_UI_HOST_ONLY_SOURCES)
 set(EMBARK_COMMON_AIDOGUI_RES_SOURCES
         # AiDoGUI 资源盘（'S' 盘，ADR 0011）：宿主根 = 仓库里的导出目录；
-        # 真机要等 esp_vfs_fat 挂载点（同 issue 25）。
+        # 真机没有这份目录（要挂得先有 SD/flash 上的资源分区，另开 issue）。
         "${EMBARK_ROOT}/platform/common/aidogui_res_fs.cpp")
 
 # 真机要编的共用胶水 = 上面两份（定容池 + LVGL/UI 端口），由减法得到。
@@ -121,6 +124,10 @@ set(EMBARK_ESP32_SOURCES
         "${EMBARK_ROOT}/platform/esp32/src/esp32_bus.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_display.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_input.cpp"
+        # SD 卡（issue 25）：挂载 + hal::IFileSystem 后端。板级引脚默认没填，
+        # 运行时整条路径返回 not_ready（见 esp32_board.h 的 SD 一节）。
+        "${EMBARK_ROOT}/platform/esp32/src/esp32_sd.cpp"
+        "${EMBARK_ROOT}/platform/esp32/src/esp32_filesystem.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_ui_task.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_lvgl_mem.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_bringup.cpp"
@@ -140,6 +147,17 @@ list(REMOVE_DUPLICATES EMBARK_APP_INCLUDE_DIRS_DEVICE)
 
 # --- 配置期审计（每次 cmake 配置跑一遍；四条规则） ----------------------------
 # 与 include 次数无关：GLOBAL 属性保证一次配置只审一次（本文件会被多个组件 include）。
+#
+# 但**脚本模式要整段跳过**：ESP-IDF 收集组件 REQUIRES 时会用 `cmake -P` 跑
+# tools/cmake/scripts/component_get_requirements.cmake，它同样 include 各组件的
+# CMakeLists.txt（其中就有本文件）；脚本模式里 file(GLOB ... CONFIGURE_DEPENDS) 直接
+# 报错 "CONFIGURE_DEPENDS is invalid for script and find package modes"，整个配置就断在
+# 这里（2026-10-17 加 SD 的 REQUIRES 时踩到：REQUIRES 一变，IDF 就重跑这个脚本模式
+# 收集 —— 所以 issue 20 收口之后一直没暴露）。审计只在真正的配置阶段跑。
+if(CMAKE_SCRIPT_MODE_FILE)
+  return()
+endif()
+
 # 下面的 file(GLOB) 带 CONFIGURE_DEPENDS：归口目录里新增/删除文件会在下一次构建时
 # 自动触发重配 ⇒ 「加了文件忘了登记」当场就断，不必等谁手工重新 cmake。
 get_property(_embark_manifest_audited GLOBAL PROPERTY EMBARK_MANIFEST_AUDITED)

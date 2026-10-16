@@ -60,6 +60,19 @@ Error Esp32Hal::init() noexcept {
     }
   }
 
+  // SD 卡放最后（issue 25）：挂载要等卡上电、跑 SPI 协商，失败原因还可能是"根本没插卡"——
+  // 那是正常状态而不是故障，所以只记日志、不返回错误，也不接 Context::filesystem。
+  const Error sd_error = sd_.mount();
+  if (sd_error == Error::none) {
+    const Error root_error = filesystem_.attach_root(sd_.mount_point());
+    if (root_error == Error::none) {
+      context_.filesystem = &filesystem_;
+    } else {
+      ELOG_WARN("SD：挂载成功但文件系统根目录装不上（错误码 {}），运行时字库不可用",
+                static_cast<int>(root_error));
+    }
+  }
+
   initialized_ = true;
   return Error::none;
 }

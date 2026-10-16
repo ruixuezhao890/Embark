@@ -136,6 +136,26 @@ extern "C" size_t embark_lvgl_budget_bytes(void) {
   return embark::lvgl_alloc_budget_bytes;
 }
 
+// --- 字库分配作用域（issue 25）：宿主是空操作 ---------------------------------
+// 宿主有真实堆，字库加载与 LVGL 共用上面那个 AllocationCounter，没有"换一块内存"这回事
+// （PSRAM 是真机才有的概念）。接口留着是为了让 platform/common/font_service.cpp 两侧
+// 共用同一份代码：加载/释放字库时无脑包一层作用域，各自平台决定它意味着什么。
+namespace embark::platform {
+
+void font_alloc_scope_begin() noexcept {}
+
+void font_alloc_scope_end() noexcept {}
+
+std::size_t font_alloc_pool_bytes() noexcept {
+  return 0;  // 没有独立字库区：账记在 LVGL 主池上（embark_lvgl_peak_bytes）
+}
+
+std::size_t font_alloc_outstanding_bytes() noexcept {
+  return 0;
+}
+
+}  // namespace embark::platform
+
 namespace embark::platform::host {
 
 std::size_t lvgl_outstanding_bytes() noexcept {

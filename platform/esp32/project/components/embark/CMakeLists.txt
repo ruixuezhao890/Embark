@@ -31,7 +31,12 @@ idf_component_register(
              "${CMAKE_BINARY_DIR}/include"         # middleware 视图（<middleware/etl|efmt|elog/...>）
              "${EMBARK_ROOT}/third_party/etl/include"  # <etl/...>（ETL 是 header-only）
              ${EMBARK_APP_INCLUDE_DIRS_DEVICE}     # app/、app/common/ 与各 App 目录（推导）
-        REQUIRES lvgl embark_font nvs_flash esp_timer esp_lcd driver)
+        # fatfs / sdmmc / esp_driver_sdspi|sdmmc|spi：SD 卡（issue 25）用 SPI 模式挂 FAT，
+        # 走 esp_vfs_fat_sdspi_mount（driver/sdspi_host.h、driver/sdmmc_host.h、
+        # driver/spi_master.h）。板级引脚默认没填，但驱动代码照样编译（见 esp32_sd.cpp）。
+        # 注意 REQUIRES 写成**一行**：IDF 会把它们抄进 build_properties.temp.cmake，
+        # 跨行/夹注释会让那份生成文件报 "Argument not separated from preceding token"。
+        REQUIRES lvgl embark_font nvs_flash esp_timer esp_lcd driver fatfs sdmmc esp_driver_sdspi esp_driver_sdmmc esp_driver_spi)
 
 # 内核与 App 的编译口径（与宿主 embark_kernel_flags 对齐：C++17、无异常、无 RTTI）。
 set_property(TARGET ${COMPONENT_LIB} PROPERTY CXX_STANDARD 17)

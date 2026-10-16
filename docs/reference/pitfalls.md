@@ -225,8 +225,11 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
 
 ## LVGL 界面文案
 
-LVGL 内置字体只有 Montserrat（无中文字形），v1 界面文案用英文；中文显示
-需要另配 CJK 字体（未纳入 v1）。框架与日志的中文不受影响（那是宿主侧输出）。
+LVGL 内置字体只有 Montserrat（无中文字形），所以中文界面文案全靠静态子集字库
+`embark_zh_14`（issue 17 起它就是 `LV_FONT_DEFAULT`）和 aidogui/EEZ 导出屏自带的
+运行时字库。**新增中文字符串时必须跑 `node tools/font/audit_glyphs.mjs`**（CI 也跑）：
+缺字会 exit 1 并给出行号；补字要改 `tools/font/gen_font.mjs` 的 `UI_TEXT` 再重新生成字库。
+框架与日志的中文不受影响（那是宿主侧输出）。
 ## EEZ Studio 生成代码（issue 19）
 
 - 生成代码的 UI 文本进 `app/eez_ui/screens.c`（`lv_label_set_text` 调用），不叫
@@ -243,3 +246,17 @@ LVGL 内置字体只有 Montserrat（无中文字形），v1 界面文案用英�
 - 需要 C 语言的注意：顶层 `project()` 已显式 `LANGUAGES C CXX`（见
   common-pitfalls 的 CMake 小节），子目录再 `project()` 隐式启用 C 的工具链
   规则变量不外泄。
+## ESP-IDF 组件 CMakeLists 会被执行两遍（issue 25 踩到）
+
+`platform/esp32/project/components/*/CMakeLists.txt` 里的 `include(...)` **会在两种模式下各跑一遍**，
+第二遍是**脚本模式**（`cmake -P tools/cmake/scripts/component_get_requirements.cmake` —— IDF 收组件
+REQUIRES 时用它跑一遍各组件 CMakeLists）：
+
+- 脚本模式里没有配置阶段，`file(GLOB ... CONFIGURE_DEPENDS)` 直接报
+  `CONFIGURE_DEPENDS is invalid for script and find package modes`，整个配置断在这里。
+  所以 `cmake/embark_sources.cmake` 的审计段前面有一句 `if(CMAKE_SCRIPT_MODE_FILE) return() endif()`
+  （变量定义要照常执行 —— 脚本模式还得能解析 `idf_component_register`）。
+  **症状隐蔽**：issue 20 收口后一路正常，直到有人改了 REQUIRES（IDF 才重跑那个脚本）才炸。
+- `idf_component_register(... REQUIRES ...)` 的参数**写一行**：跨行或夹注释会被抄进生成的
+  `build_properties.temp.cmake`，报
+  `Syntax Warning … Argument not separated from preceding token by whitespace`，并被 IDF 当致命错误打出来。

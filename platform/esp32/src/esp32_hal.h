@@ -9,7 +9,8 @@
  * ST7789 + CST328，直接是 Esp32Hal 的成员 —— 少一次装配，也少一处可能忘记挂的地方。
  *
  * 初始化顺序：日志最先（后面每一步失败都要有出口），然后时间/系统，再存储与总线，
- * 最后显示与输入（要动 GPIO / SPI / I2C，放在能打日志之后出问题才看得见）。
+ * 显示与输入（要动 GPIO / SPI / I2C，放在能打日志之后出问题才看得见），最后挂 SD 卡
+ * （issue 25：插卡是可选路径，挂在最后，失败只记日志、不挡启动）。
  */
 #ifndef EMBARK_PLATFORM_ESP32_HAL_H
 #define EMBARK_PLATFORM_ESP32_HAL_H
@@ -20,9 +21,11 @@
 
 #include "esp32_bus.h"
 #include "esp32_display.h"
+#include "esp32_filesystem.h"
 #include "esp32_input.h"
 #include "esp32_log_sink.h"
 #include "esp32_persistence.h"
+#include "esp32_sd.h"
 #include "esp32_system.h"
 #include "esp32_time.h"
 
@@ -36,7 +39,9 @@ class Esp32Hal {
   Esp32Hal& operator=(const Esp32Hal&) = delete;
 
   /// 依次初始化各后端并装好默认 logger。返回第一个失败项；none = 全部就绪；幂等。
-  /// 顺序：log → time → system → storage → bus → display → input。
+  /// 顺序：log → time → system → storage → bus → display → input → sd。
+  /// SD 挂载失败（没配置引脚 / 没插卡 / 认不出卡）不算失败：只记日志，Context::filesystem
+  /// 保持 nullptr，运行时字库服务据此返回 not_ready。
   [[nodiscard]] Error init() noexcept;
 
   [[nodiscard]] hal::Context& context() noexcept { return context_; }
@@ -48,11 +53,14 @@ class Esp32Hal {
   [[nodiscard]] Esp32Bus& bus() noexcept { return bus_; }
   [[nodiscard]] Esp32Display& display() noexcept { return display_; }
   [[nodiscard]] Esp32Input& input() noexcept { return input_; }
+  /// SD 卡（issue 25）：没插卡时 mounted() == false，其余接口照样能问。
+  [[nodiscard]] SdCard& sd() noexcept { return sd_; }
+  [[nodiscard]] Esp32FileSystem& filesystem() noexcept { return filesystem_; }
 
  private:
   Esp32Hal() noexcept
-      // filesystem = nullptr：真机还没有盘（SD 后端是 issue 17 之后的独立 issue，
-      // 前置门槛是 HAL 面与板子接线确认），运行时字库服务据此返回 not_ready。
+      // filesystem 先留 nullptr：它指的是 SD 挂载点上的一块盘（issue 25），只有 init() 里
+      // 挂载成功才接上 —— 没卡的机器这格永远是空，运行时字库服务据此返回 not_ready。
       : binder_(log_),
         context_{time_, storage_, log_, system_, bus_, &display_, &input_, nullptr} {}
 
@@ -63,7 +71,9 @@ class Esp32Hal {
   Esp32Bus bus_;
   Esp32Display display_;
   Esp32Input input_;
-  LogSinkBinder binder_;  // 必须活在 logger 之后：elog 里存的是它的指针
+  SdCard sd_;  // SD 卡（issue 25）：没插卡也活着，只是 mounted() == false
+  Esp32FileSystem filesystem_;  // 根 = SD 挂载点；只在挂载成功后才被 Context 指到
+  LogSinkBinder binder_;        // 必须活在 logger 之后：elog 里存的是它的指针
   hal::Context context_;
 
   bool log_installed_ = false;

@@ -101,6 +101,36 @@ inline constexpr bool touch_mirror_y = false;
 // main.cpp 的两处 if constexpr 一起删）。
 inline constexpr bool bringup_self_test = true;
 
+// --- SD 卡（issue 25）----------------------------------------------------------
+// 板上确实有 Micro SD 卡座（微雪官方 wiki 列了它），但卡座的信号线没出现在任何官方
+// 页面里（只有 2D/3D 图纸），所以四个信号脚先留成 -1 占位：照原理图查出来、或者在卡座
+// 焊点与排针之间用万用表量通断，填完再把 EMBARK_SD_ENABLED 改成 1。填之前下面末段的
+// static_assert 会挡下来 —— 与其让一个引脚写错的固件跑起来，不如编译期就报错。
+//
+// 走 SPI 而不是 SDMMC：SPI 对引脚没有额外要求，任意四个 GPIO 都能接；SDMMC 要求卡座
+// 的信号走在固定的 IO_MUX 引脚上，而这一点在查到接线之前无法确认。SPI 主机用 SPI2
+// （SPI3 归屏幕，见 esp32_display.cpp），驱动是 IDF 的 sdspi（fatfs 之上那一层与 SDMMC 共用）。
+// 想外接模块的话：板上 12PIN 多功能接口给出的 IO18 / IO15 / GPIO43 / GPIO44 正好四根。
+#define EMBARK_SD_ENABLED 0
+inline constexpr bool sd_enabled = (EMBARK_SD_ENABLED != 0);
+inline constexpr int sd_pin_cs = -1;
+inline constexpr int sd_pin_mosi = -1;
+inline constexpr int sd_pin_miso = -1;
+inline constexpr int sd_pin_clk = -1;
+// 卡检测脚（卡座上的 CD）：-1 = 没接。填了就只在启动日志里报一行电平 —— 极性随卡座
+// 而定，确认之前不拿它做判断（挂载失败同样能得出"没插卡"的结论）。
+inline constexpr int sd_pin_detect = -1;
+inline constexpr int sd_spi_host = 2;  // = SPI2_HOST
+// 10 MHz：杜邦线/长线也能跑稳；卡与线都短且质量好时可以往上加。
+inline constexpr std::uint32_t sd_spi_hz = 10U * 1000U * 1000U;
+inline constexpr const char* sd_mount_point = "/sdcard";
+// 运行时字库自检（bringup::check_sd_font）：卡上要放的文件 + 用来量宽度的两个字。路径
+// 相对挂载点，与宿主同一个口径（'F' 盘 = IFileSystem 的根）。卡上建个 fonts/ 目录，把
+// app/aidogui_ui/export/font/ui_font_ui_heiti_14.bin 抄进去即可（任意 lv_font_conv 出的
+// .bin 都行）；文件不在只是这一项跳过，不是故障。
+inline constexpr const char* sd_font_probe_file = "fonts/ui_font_ui_heiti_14.bin";
+inline constexpr const char* sd_font_probe_text = "启动";
+
 // --- 板载 I2C（IMU / RTC 共用）——框架 hal::IBus 走这条 ----------------------
 inline constexpr int bus_pin_sda = 11;
 inline constexpr int bus_pin_scl = 10;
@@ -124,6 +154,13 @@ inline constexpr std::uint8_t own_task_core = 0;
 // 宿主演示跑满一轮的 LVGL 未回收量不到 10 KB，48 KB 对四个 demo App 绰绰有余。
 inline constexpr std::size_t lvgl_pool_bytes = 48U * 1024U;
 
+// 字库区（issue 25）：运行时字库（lv_font_load）的分配单独走一块 PSRAM 池 ——
+// 与 LVGL 的 .bss 静态池（上面那个 lvgl_pool_bytes）分开，于是"加载字库"并不会推动
+// lvgl_peak_bytes：字库记账（font_budget_bytes，100 KB）与 LVGL 堆预算各管各的。
+// 池是首次要用时才从 PSRAM 里显式分配出来的（heap_caps_malloc + MALLOC_CAP_SPIRAM，
+// 见 esp32_lvgl_mem.cpp），没人加载字库就不占这块内存。0 = 关掉（字库与 LVGL 挤同一个池）。
+inline constexpr std::size_t font_psram_bytes = 128U * 1024U;
+
 // 任务栈预算。框架里的 *_stack_words 是按**宿主的字长**调的（x86-64 的 StackType_t = size_t
 // = 8 字节：2048 字 = 16 KB），而真机的 StackType_t 是 uint8_t（1 字 = 1 字节）——
 // 照字面乘过去只剩 1/8：UI 任务只拿到 2 KB，栈指针会掉到栈缓冲**下面**，
@@ -133,6 +170,12 @@ inline constexpr std::size_t lvgl_pool_bytes = 48U * 1024U;
 inline constexpr std::size_t stack_word_bytes = 8U;
 inline constexpr std::size_t ui_task_stack_bytes = embark::ui_task_stack_words * stack_word_bytes;
 inline constexpr std::size_t own_task_stack_bytes = embark::own_task_stack_words * stack_word_bytes;
+
+// SD 启用（EMBARK_SD_ENABLED = 1）时四个信号脚必须都填好；卡检测脚可以继续留 -1。
+static_assert(EMBARK_SD_ENABLED == 0 ||
+                  (sd_pin_cs >= 0 && sd_pin_mosi >= 0 && sd_pin_miso >= 0 && sd_pin_clk >= 0),
+              "SD 已启用（EMBARK_SD_ENABLED = 1）但信号脚还是 "
+              "-1：先从原理图/图纸查出卡座接线，再打开这个开关");
 
 }  // namespace embark::platform::esp32
 

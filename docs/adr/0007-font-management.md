@@ -68,11 +68,45 @@ psram中再进行引用吧？"）。核查仓库与 LVGL 8.3.11 后的决策：
   （打印该进清单的字符集）与 `--selftest`（自造缺字夹具验证报错路径）。
 - **CI**：新增 `font-audit` job（先 `--selftest` 再审计），见 `.github/workflows/ci.yml`。
 
-**本次未做（按本 ADR 的决策推迟）**：真机 SD 后端与 PSRAM 显式分配（要先加 HAL 的 SPI 面 + 板子接线确认，
-见 `.scratch/embark-v1/issues/25-esp32-sd-filesystem.md`）；FreeType（`config/lv_conf.h` 保持关闭）；App 层 v1
-不使用运行时字库——界面文案全在静态子集里。
+**issue 17 当时未做（按本 ADR 第 2 点的"接口先行、SD 后置"推迟）**：真机 SD 后端与 PSRAM 显式分配 ——
+**2026-10-17 已由 issue 25 补上**，见下面「落地（2026-10-17，issue 25）」；FreeType（`config/lv_conf.h` 保持关闭）；
+App 层 v1 不使用运行时字库——界面文案全在静态子集里。
 
 **测试**：`tests/kernel/test_font_ledger.cpp`（记账纯逻辑：复用计数 / 预算 / 表项 / 错误路径不泄漏）、
 `tests/host/test_host_filesystem.cpp`（宿主后端：非法路径、EOF、seek、槽位耗尽）、
 `tests/host/test_font_service.cpp`（端到端：加载真实 `ui_font_ui_heiti_14.bin` → 渲染出像素 → 引用与额度归零
 → 多释放报 `not_found`；不是字库的文件报 `corrupt_data` 且不占额度）。
+## 落地（2026-10-17，issue 25）
+
+真机 SD 后端 + 字库走 PSRAM 显式分配，逐条对应本 ADR 的第 1/2/3 点：
+
+- **SD 后端（只做 SPI 模式）**：`platform/esp32/src/esp32_sd.{h,cpp}`——`sdspi` + FATFS（`spi_bus_initialize` →
+  `esp_vfs_fat_sdspi_mount`），SPI2 主机（SPI3 归屏幕），挂载点 `/sdcard`，`format_if_mount_failed = false`
+  （不格式化用户卡），成功后打一行卡名与容量。**不做 SDMMC**：SPI 对引脚无要求（任意 4 个 GPIO），
+  SDMMC 要求信号走固定 IO_MUX 脚，而这块板的卡座接线查不到 ⇒ 少写一条分支。
+- **板级开关默认关**：`esp32_board.h` 的 `EMBARK_SD_ENABLED 0` + `sd_pin_{cs,mosi,miso,clk} = -1`，文件末
+  `static_assert(EMBARK_SD_ENABLED == 0 || (四个信号脚 >= 0), ...)` 把"开了却没填引脚"变成编译期错误。
+  **驱动代码无条件编译**（不随开关烂掉），运行时第一行 `if (!sd_enabled) return not_ready;`。
+- **真机 IFileSystem 后端**：`platform/esp32/src/esp32_filesystem.{h,cpp}`——与宿主后端同形（定长槽、拒绝
+  绝对路径 / `..` / 含 `:`、`close` 幂等），根由 `attach_root(sd_.mount_point())` 给。装配在 `esp32_hal.cpp`：
+  **挂载成功才** `context_.filesystem = &filesystem_`，否则保持 `nullptr`；挂载失败 / 没配引脚只记日志，
+  **不算故障**（没插卡不该拦住开机）。这也让 `hal::Context::filesystem` 的可空指针语义在两侧一致地表达
+  "这台机器有没有盘"，而不是给一个恒 `not_ready` 的实例。
+- **字库内存走 PSRAM**：`platform/common/font_alloc_scope.h` 的作用域接缝 + 真机侧 `esp32_lvgl_mem.cpp` 里的
+  PSRAM 定容池（`heap_caps_malloc(MALLOC_CAP_SPIRAM, font_psram_bytes)` 懒建，128 KB；`lv_font_load` 期间的
+  分配落它，归还按指针归属判断），宿主侧空实现。于是字库记账（`font_budget_bytes` 100 KB 那条线）与 LVGL
+  堆预算仍是两笔账：加载前后 `lvgl_peak_bytes` 不变。
+- **`font_service.cpp` 升级为两侧都编**：issue 17 时它只在宿主构建里（`EMBARK_COMMON_UI_HOST_ONLY_SOURCES`，
+  那份清单现在为空）；真机有了 IFileSystem 之后同一份代码供两个目标，没插卡时 `init()` 返回 `not_ready`。
+- **HAL 面的偏离（相对 issue 25 门槛原文）**：原文要求"先补 `IBus::spi_transfer`"，实现里**没走 IBus**——SD
+  协议栈（CMD 序列 + DMA + FATFS）不属于"设备级 I2C/SPI 事务"那层抽象，按 ADR 0002 的能力粒度归
+  **IFileSystem 这条新面**；`esp32_bus.cpp` 的 `spi_transfer` 仍如实返回 `unsupported`。
+- **上板自检**：`bringup::check_sd_font()`（`esp32_bringup.cpp`，`main.cpp` 在自检屏之后调用）——有卡就加载
+  `fonts/ui_font_ui_heiti_14.bin`、`lv_txt_get_size` 量一次、同步刷一帧再删 label、打记账 / 引用 / PSRAM 池读数、
+  释放并核对归零；没卡就一行日志跳过。这是"字库文件真被解析并画出来"的真机证据（issue 25 验收第 3 条）。
+- **未做**：SD 上的 aidogui 资源盘（`'S'` 盘仍从编译期目录读）；真正的板级引脚（默认关，填法与判读见
+  `platform/esp32/README.md` §5 第 8 条）。
+
+**证据**：真机 `idf.py build` exit 0（`build-esp32/embark_esp32.bin` = 800128 B / 0xc3580，app 分区富余 75%；
+map 里 `esp32_sd.cpp` / `esp32_filesystem.cpp` / `font_service.cpp` / `font_ledger.cpp` / `font_alloc_scope` 都有归属）；
+宿主 `ctest` 2/2 + 四条界面验收全过；`tools/font/audit_glyphs.mjs` 仍 exit 0。

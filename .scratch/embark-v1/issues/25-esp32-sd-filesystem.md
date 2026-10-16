@@ -1,6 +1,6 @@
 # 25 · 真机 SD 后端：IFileSystem 的 esp32 实现 + 字库缓冲走 PSRAM 显式分配
 
-Status: open
+Status: resolved
 Type: feature
 Blocked by: 17
 来源: issue 17 落地时按契约推迟的部分（ADR 0007「接口先行，SD 后置」）
@@ -43,3 +43,39 @@ Blocked by: 17
 
 - 本条不阻塞任何现有功能：App 层 v1 不用运行时字库（界面文案全在静态子集 `embark_zh_14` 里）。
 - `config/lv_conf.h` 的 LVGL 自带 FS 驱动开关仍可保持关闭（`font_service` 自持盘符驱动）。
+## 落地（2026-10-17）
+
+- **SD（只做 SPI 模式）**：new `platform/esp32/src/esp32_sd.{h,cpp}` —— `sdspi` + FATFS
+  （`spi_bus_initialize` → `esp_vfs_fat_sdspi_mount`），SPI2 主机（SPI3 归屏幕），挂载点 `/sdcard`，
+  `format_if_mount_failed = false`。板级开关 `EMBARK_SD_ENABLED` 默认 0、四个信号脚 `-1`，文件末
+  `static_assert` 挡"开了却没填引脚"；驱动代码无条件编译，运行时 `if (!sd_enabled) return not_ready;`。
+  不做 SDMMC（这块板的卡座接线查不到，SPI 对引脚无要求）。
+- **真机 IFileSystem**：new `platform/esp32/src/esp32_filesystem.{h,cpp}`（与宿主后端同形：定长槽、
+  拒绝绝对路径 / `..` / 含 `:`、`close` 幂等）。装配在 `esp32_hal.cpp`：**挂载成功才**
+  `context_.filesystem = &filesystem_`，否则保持 `nullptr`（不是我原来写的"恒 `not_ready` 的实例"——
+  可空语义更贴"这台机器有没有盘"，与 display/input 同形）；挂载失败只记日志、**不算故障**。
+- **字库走 PSRAM**：new `platform/common/font_alloc_scope.h`（`begin/end` + 池观测）+ 真机侧
+  `platform/esp32/src/esp32_lvgl_mem.cpp` 的 PSRAM 定容池（`heap_caps_malloc(MALLOC_CAP_SPIRAM,`
+  `font_psram_bytes)` = 128 KB，懒建；归还按指针归属判断）+ `font_service.cpp` 四处 load/free 包作用域；
+  宿主侧空实现。**LVGL 静态池不受影响**（验收第 4 条）。
+- **`font_service.cpp` 升级为两侧都编**：`cmake/embark_sources.cmake` 把它从
+  `EMBARK_COMMON_UI_HOST_ONLY_SOURCES` 挪进 `EMBARK_COMMON_UI_SOURCES`（前者现在为空）。
+- **上板自检**：`esp32_bringup.cpp` 的 `check_sd_font()`（`main.cpp` 在自检屏之后调用）——有卡 → 加载
+  `fonts/ui_font_ui_heiti_14.bin`、`lv_txt_get_size` 量一次、同步刷一帧再删 label、打记账 / 引用 / PSRAM
+  池读数、释放并核对归零；没卡 → 一行日志跳过。
+- **HAL 面偏离**：门槛原文要求先补 `IBus::spi_transfer`，实现里**没走 IBus** —— SD 协议栈按 ADR 0002
+  的粒度归 IFileSystem 这条新面，`esp32_bus.cpp` 的 `spi_transfer` 仍 `unsupported`。板子引脚仍待填。
+- **验收对照**：①（无卡启动不受影响）由 `check_sd_font()` 的早退路径 + 真机日志保证；②（读写 / seek /
+  close 幂等 / 槽位）与真机后端同形，宿主侧由 `tests/host/test_host_filesystem.cpp` 6 个 case 覆盖；
+  ④（记账独立性）由 `tests/host/test_font_service.cpp` + 真机自检日志覆盖；③**的真机部分需要插卡上板**
+  （用户做——本机无串口设备）。
+- **证据**：真机 `idf.py build` exit 0（`build-esp32/embark_esp32.bin` = 800128 B / 0xc3580，app 分区富余 75%；
+  map 里 `esp32_sd.cpp` / `esp32_filesystem.cpp` / `font_service.cpp` / `font_ledger.cpp` / `font_alloc_scope`
+  都有归属）；宿主 `ctest` 2/2；四条界面验收（`--ui` / `--ui-nav` / `--ui-weather` / `--ui-launcher-pages`）全 exit 0。
+
+## Comments
+
+- 2026-10-17：落地完成，`Status: open → resolved`。两条前置门槛的处理："HAL 面"以 IFileSystem 这条
+  新面满足（偏离说明见上）；"板子接线确认"仍待用户 —— 默认关，填法与判读记在 `platform/esp32/README.md`
+  §5 第 8 条。顺带记一条构建坑：IDF 收 REQUIRES 时用 `cmake -P` 跑各组件 CMakeLists，脚本模式里
+  `file(GLOB ... CONFIGURE_DEPENDS)` 非法 —— 见 `cmake/embark_sources.cmake` 的 `CMAKE_SCRIPT_MODE_FILE` 早退。

@@ -208,12 +208,16 @@ lv_font_conv 生成、编译进 flash 的 C 数组字库，只收录 UI 实际�
 _Avoid_: 全量字库、外挂字体文件
 
 **IFileSystem（文件服务）**：
-框架级只读字节流接口（open/read/seek/close/size），句柄 `FileHandle = uint16_t`（0 = 无效）；宿主后端 `platform/host/host_filesystem.{h,cpp}` 读 `EMBARK_HOST_FS_ROOT`（默认可执行文件旁 `embark_host_fs/`，定长 4 槽，拒绝绝对路径 / `..` / 含 `:`），真机 SD 后端待后续 issue（`.scratch/embark-v1/issues/25-esp32-sd-filesystem.md`，需先加 HAL 面，当前 `spi_transfer` 如实返回 `unsupported`）。在 `hal::Context` 里它是**可空指针**（真机是 `nullptr`）—— 与 display/input 同类，因为真机还没有盘。
+框架级只读字节流接口（open/read/seek/close/size），句柄 `FileHandle = uint16_t`（0 = 无效）。两个后端同形（定长槽 `filesystem_max_open_files`、拒绝空路径 / 绝对路径 / `..` / 含 `:`）：宿主 `platform/host/host_filesystem.{h,cpp}`（根 = `EMBARK_HOST_FS_ROOT`，默认可执行文件旁 `embark_host_fs/`）、真机 `platform/esp32/src/esp32_filesystem.{h,cpp}`（根 = SD 挂载点，由 `attach_root()` 在挂载成功后接上）。SD 本身在 `platform/esp32/src/esp32_sd.{h,cpp}`：SPI 模式 `sdspi` + FATFS（`esp_vfs_fat_sdspi_mount`，SPI2 主机，挂载点 `/sdcard`），板级开关 `EMBARK_SD_ENABLED` 默认 0、四个信号脚默认 `-1`（`esp32_board.h` 末尾有 `static_assert` 门槛），没插卡就一行日志跳过、其余功能不受影响。在 `hal::Context` 里它是**可空指针**：真机只在 SD 挂载成功时指向真后端，否则是 `nullptr`（与 display/input 同类的可空语义，而不是"给了个恒 `not_ready` 的实例"）。
 _Avoid_: 文件系统、SD 驱动
 
 **Font ledger（字库记账）**：
-运行时字库的显式资源管理：字节预算 + 引用计数，包装 `lv_font_load` 与 `lv_font_free`，独立于 LVGL 全局堆预算；超预算返回 `no_space`。已落地：内核层 `include/embark/font_ledger.h` + `src/embark/font_ledger.cpp`（零堆、定长表、不依赖 LVGL）+ 平台侧 `platform/common/font_service.{h,cpp}`（把 LVGL 的 `'F'` 盘注册到 `hal::IFileSystem`；同路径复用只 +1 引用，引用归零才 free）。容量见 `config/embark_limits.h`：`font_budget_bytes` 100 KB、`font_max_loaded` 4、`font_path_bytes` 64。真机侧后续映射到 PSRAM 显式分配。
+运行时字库的显式资源管理：字节预算 + 引用计数，包装 `lv_font_load` 与 `lv_font_free`，独立于 LVGL 全局堆预算；超预算返回 `no_space`。已落地：内核层 `include/embark/font_ledger.h` + `src/embark/font_ledger.cpp`（零堆、定长表、不依赖 LVGL）+ 平台侧 `platform/common/font_service.{h,cpp}`（把 LVGL 的 `'F'` 盘注册到 `hal::IFileSystem`；同路径复用只 +1 引用，引用归零才 free）。容量见 `config/embark_limits.h`：`font_budget_bytes` 100 KB、`font_max_loaded` 4、`font_path_bytes` 64。真机侧已映射到 **PSRAM 定容池**（见 Font alloc scope）：字库不占 LVGL 的 48 KB 静态池，加载前后 `lvgl_peak_bytes` 不变。
 _Avoid_: 字体缓存、字库池
+
+**Font alloc scope（字库分配作用域）**：
+包住 `lv_font_load` / `lv_font_free` 的一段"接下来这批分配算字库的"标记：`font_alloc_scope_begin()` / `font_alloc_scope_end()` + 观测 `font_alloc_pool_bytes()` / `font_alloc_outstanding_bytes()`（`platform/common/font_alloc_scope.h`）。为什么需要它：LVGL 8.3.11 的 `lv_font_loader.c` 全部走 `lv_mem_alloc`，而钩子是我们自己的 —— 只能按"当前是否在字库作用域里"决定这次分配落 LVGL 静态池还是真机的 PSRAM 池；**归还**不看作用域、只看指针落在哪块池。真机实现在 `platform/esp32/src/esp32_lvgl_mem.cpp`（`heap_caps_malloc(MALLOC_CAP_SPIRAM)` 懒建 `font_psram_bytes` = 128 KB 定容池），宿主实现是空操作；唯一调用点是 `platform/common/font_service.cpp` 的四处 load/free。
+_Avoid_: 字体内存钩子、PSRAM 分配器
 
 **Coverage audit（缺字审计）**：
 构建期检查：扫描源码中的 UI 字符串，对照静态子集字库的覆盖清单，发现字库外字符即失败（CI 门禁），从源头防豆腐块。已落地 `tools/font/audit_glyphs.mjs`（Node、零依赖：扫描 `app/` `src/` `platform/` 里所有会把字符串送上屏的 setter，缺字打印字符 + 文件:行号并 exit 1）；另有 `--print-required`（打印该进清单的字符集）与 `--selftest`（自造缺字夹具验证报错路径）；CI 里是 `font-audit` job。LVGL 图标区 `U+F000–U+F8FF` 默认豁免（内置字形，不进清单），`--include-symbols` 可关掉豁免。

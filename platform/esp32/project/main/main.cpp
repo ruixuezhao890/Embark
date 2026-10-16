@@ -79,6 +79,10 @@ void ui_main(void*) noexcept {
     ep::bringup::show();
   }
 
+  // SD 卡 + 运行时字库自检（issue 25）：与自检屏相互独立（自检屏是 B 阶段的上板核对，
+  // 这项是 issue 25 的验收证据）。没插卡只打一行日志，不挡启动。
+  ep::bringup::check_sd_font();
+
   std::uint32_t frames = 0;
   for (;;) {
     // 一帧 = 喂时间 → 喂输入 →（框架在边界处执行前台切换）→ LVGL 渲染

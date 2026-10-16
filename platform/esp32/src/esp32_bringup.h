@@ -12,6 +12,10 @@
  *
  * 由 platform/esp32/src/esp32_board.h 的 bringup_self_test 开关控制（main.cpp 里两处
  * `if constexpr`）。真机接上 aidogui/EEZ UI 后端后把那个开关置 false，本对文件可整个删。
+ *
+ * 另有 check_sd_font()（issue 25）：SD 卡 + 运行时字库自检，与自检屏相互独立 —— 它不看
+ * bringup_self_test 这个开关，因为"卡上有字库文件、能加载、能渲染、账目归零"正是 issue 25
+ * 的验收证据（判读表见 platform/esp32/README.md §5）。
  */
 #ifndef EMBARK_PLATFORM_ESP32_BRINGUP_H
 #define EMBARK_PLATFORM_ESP32_BRINGUP_H
@@ -26,6 +30,11 @@ void show();
 /// UI 循环每帧调用一次：读 LVGL 输入设备的最新坐标（= UI 真正收到的坐标），
 /// 刷新屏上读数，并在按下沿打一条串口日志。show() 之前调用是 no-op。
 void pump_touch();
+
+/// SD 卡 + 运行时字库自检（issue 25）：挂载了 SD 就加载 sd_font_probe_file、量一次
+/// sd_font_probe_text 的尺寸、真渲染一个字形，然后释放并核对记账与 PSRAM 池归零；
+/// 没挂载只打一行日志。必须在 framework.boot()（lv_init）之后调用，只需调一次。
+void check_sd_font();
 
 }  // namespace embark::platform::esp32::bringup
 

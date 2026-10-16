@@ -101,9 +101,13 @@
 | `font_max_loaded` | `4` | 同时驻留的运行时字库份数 | 定长表。同路径重复 load 只 +1 引用、不占新槽；超了 → `no_space`。v1 界面全用静态子集字库，这个值只是给将来的动态文本留的门 |
 | `font_path_bytes` | `64` | 字库路径长度上限（相对文件系统根，含 `\0`） | 超长 → `invalid_argument`；`FontService::load` 据此开 `font_path_bytes + 4` 的缓冲拼 LVGL 盘符路径（`F:/…`） |
 
-> 宿主文件系统后端的根：环境变量 `EMBARK_HOST_FS_ROOT` 优先，否则可执行文件旁的 `embark_host_fs/`。
-> 真机侧 `hal::Context::filesystem` 是 `nullptr`（还没有盘），`FontService::init()` 会返回 `not_ready`——
-> 真机 v1 用的是静态子集字库。SD 后端见 [issue 25](../../.scratch/embark-v1/issues/25-esp32-sd-filesystem.md)。
+> 两个后端的根：宿主 = 环境变量 `EMBARK_HOST_FS_ROOT` 优先、否则可执行文件旁的 `embark_host_fs/`；
+> 真机 = SD 卡挂载点 `/sdcard`（[`platform/esp32/src/esp32_sd.{h,cpp}`](../../platform/esp32/src/esp32_sd.h)，
+> 板级开关 `EMBARK_SD_ENABLED` 默认 0）。没插卡 / 没配引脚时真机 `hal::Context::filesystem` 是 `nullptr`，
+> `FontService::init()` 返回 `not_ready` —— 界面文案全在静态子集字库 `embark_zh_14` 里，不受影响。
+>
+> 真机的**字库缓冲不在这几个常量里**：它走 `platform/esp32/src/esp32_board.h` 的 `font_psram_bytes`
+> （128 KB PSRAM 定容池，与 `lvgl_pool_bytes` 分开记账），机制见 ADR 0007 的 issue 25 落地小节。
 
 ---
 

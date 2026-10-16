@@ -14,6 +14,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "font_alloc_scope.h"
+
 namespace embark::platform {
 namespace {
 
@@ -218,7 +220,11 @@ etl::expected<lv_font_t*, Error> FontService::load(etl::string_view path) noexce
 
   char lv_path[font_path_bytes + 4] = {};
   std::snprintf(lv_path, sizeof(lv_path), "%c:/%s", kDriveLetter, path.data());
+  // 字库的内存从哪来是平台的事（真机 = PSRAM 里那块字库区，宿主 = LVGL 主堆）：
+  // 见 font_alloc_scope.h。作用域只影响 LVGL 自己的分配，FontLedger 的记账不受影响。
+  font_alloc_scope_begin();
   lv_font_t* font = lv_font_load(lv_path);
+  font_alloc_scope_end();
   if (font == nullptr) {
     static_cast<void>(ledger_->release(path));  // 没加载成功就不占额度
     return etl::unexpected(Error::corrupt_data);  // 文件在、也读得动：那就是格式/内存问题
@@ -234,7 +240,9 @@ etl::expected<lv_font_t*, Error> FontService::load(etl::string_view path) noexce
   }
 
   // 账上还有额度但表里没槽位：只可能是 font_max_loaded 与预算口径不一致，别静默漏掉。
+  font_alloc_scope_begin();
   lv_font_free(font);
+  font_alloc_scope_end();
   static_cast<void>(ledger_->release(path));
   return etl::unexpected(Error::no_space);
 }
@@ -255,7 +263,9 @@ Error FontService::release(etl::string_view path) noexcept {
   if (*refs > 1) {
     return Error::none;  // 还有引用：字库继续驻留
   }
+  font_alloc_scope_begin();
   lv_font_free(loaded_[slot].font);
+  font_alloc_scope_end();
   drop_loaded(slot);
   return Error::none;
 }
