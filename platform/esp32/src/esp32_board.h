@@ -92,6 +92,15 @@ inline constexpr bool touch_swap_xy = false;
 inline constexpr bool touch_mirror_x = false;
 inline constexpr bool touch_mirror_y = false;
 
+// --- bring-up 自检屏 ----------------------------------------------------------
+// 上板核对「方向 / 颜色 / 触摸」用的最小证据屏（platform/esp32/src/esp32_bringup.cpp）：
+// 四角色标 TL/TR/BL/BR + R/G/B/W 四条纯色带 + 中央实时触摸坐标。
+// 为什么默认开：真机还没有 UI 后端（app/common/ui_backend.h 的 #else 全是 no-op），
+// 烧上去本是一屏空白，bring-up 清单里的方向/颜色两项没有可比对的画面。
+// 接上 aidogui/EEZ UI 后端后把它置 false（esp32_bringup.{h,cpp} 可整个删，
+// main.cpp 的两处 if constexpr 一起删）。
+inline constexpr bool bringup_self_test = true;
+
 // --- 板载 I2C（IMU / RTC 共用）——框架 hal::IBus 走这条 ----------------------
 inline constexpr int bus_pin_sda = 11;
 inline constexpr int bus_pin_scl = 10;

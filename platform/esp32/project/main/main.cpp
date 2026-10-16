@@ -21,6 +21,7 @@
 #include "launcher_app.h"
 #include "settings_app.h"
 
+#include "esp32_bringup.h"
 #include "esp32_hal.h"
 #include "esp32_lvgl_mem.h"  // 静态池观测：容量 / 未回收 / 峰值（心跳日志要用）
 #include "esp32_task_spawner.h"
@@ -71,11 +72,22 @@ void ui_main(void*) noexcept {
             LVGL_VERSION_MINOR, LVGL_VERSION_PATCH, static_cast<int>(embark::lvgl_draw_buf_lines),
             static_cast<unsigned>(ep::lvgl_pool_capacity_bytes()));
 
+  // B 阶段上板核对：真机还没有 UI 后端，默认屏是空的，先画一张自检屏
+  //（四角色标 + R/G/B/W 色带 + 中央触摸坐标），核对完方向/颜色/触摸后把
+  // esp32_board.h 的 bringup_self_test 置 false。
+  if constexpr (ep::bringup_self_test) {
+    ep::bringup::show();
+  }
+
   std::uint32_t frames = 0;
   for (;;) {
     // 一帧 = 喂时间 → 喂输入 →（框架在边界处执行前台切换）→ LVGL 渲染
     framework.step();
     ++frames;
+
+    if constexpr (ep::bringup_self_test) {
+      ep::bringup::pump_touch();  // 自检屏上的坐标读数与按下沿日志
+    }
 
     if ((frames % heartbeat_frames) == 0U) {
       ELOG_INFO(

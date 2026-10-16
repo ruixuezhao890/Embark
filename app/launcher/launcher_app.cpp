@@ -85,7 +85,11 @@ void LauncherApp::onEnter() {
 
 void LauncherApp::onPause() {
   // 视图留存：离开时屏还在，记下磁贴带停在第几页，回来时 repaint_screen() 跳回去。
+  // 磁贴带是 AiDoGUI 屏上的控件：没有 UI 后端的构建（esp32 真机当前状态）里
+  // launcher_tiles.cpp 根本不参与编译，读页号无从谈起，保持上次记住的页号。
+#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
   page_ = launcher_tiles_current_page();
+#endif
   ELOG_INFO("App {} 退到后台（enter {}, resume {}, 磁贴停在第 {} 页）", name(), enters_,
             resumes_, page_ + 1U);
 }

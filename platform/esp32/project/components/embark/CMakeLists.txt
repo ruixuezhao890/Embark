@@ -42,6 +42,7 @@ set(EMBARK_ESP32_SOURCES
         "${EMBARK_ROOT}/platform/esp32/src/esp32_input.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_ui_task.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_lvgl_mem.cpp"
+        "${EMBARK_ROOT}/platform/esp32/src/esp32_bringup.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_hal.cpp")
 
 idf_component_register(
@@ -53,6 +54,9 @@ idf_component_register(
              "${EMBARK_ROOT}/include"              # embark/*.h
              "${EMBARK_ROOT}/config"               # embark_config.h / embark_limits.h / lv_conf.h
              "${EMBARK_ROOT}/app"                  # <app名>/ 各 App 的 {h,cpp}
+             "${EMBARK_ROOT}/app/launcher"         # launcher_app.h（2026-10-06 目录化后各 App 占一目录）
+             "${EMBARK_ROOT}/app/clock"            # clock_app.h
+             "${EMBARK_ROOT}/app/settings"         # settings_app.h
              "${EMBARK_ROOT}/app/common"           # app_messages.h（薄桥待接入 EEZ）
              "${EMBARK_ROOT}/platform/common"      # lvgl_port.h / lvgl_ui_port.h / static_pool.h
              "${EMBARK_ROOT}/platform/esp32/src"   # esp32_*.h

@@ -376,7 +376,11 @@ void ClockApp::refresh_display(std::uint32_t now_ms) {
 
   // 卡 2：月历。标题与格子都按「视图月」更新（默认 = 今天；用户翻月后两者一起切到
   // 显示月），全在 push_calendar 里做 —— 标题 push 挪过去是为了翻月时同拍联动。
+  // 月历是真的 lv_calendar 控件、由 aidogui 桥取到：没有该后端的构建（esp32 真机当前
+  // 状态）里 push_calendar 不参与编译（定义处同受本宏保护），调用点也得一起挡掉。
+#if defined(EMBARK_AIDOGUI_UI)
   push_calendar(y, m, d);
+#endif
 
   const std::int64_t first_days = days_from_civil(y, m, 1);
 
