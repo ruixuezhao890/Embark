@@ -102,11 +102,9 @@ bool var_index_of(const char* var_name, int& index) {
 
 // 启动时把变量表打出来：Studio 里加/删变量不用手改 C++，但日志要能看出桥认到了几个。
 void log_var_table() {
-  ELOG_INFO("EEZ 变量：{} 个（Flow 全局变量 = UI 显示数据接口）",
-            ::embark::demo::eez::kVarCount);
+  ELOG_INFO("EEZ 变量：{} 个（Flow 全局变量 = UI 显示数据接口）", ::embark::demo::eez::kVarCount);
   for (int i = 0; i < ::embark::demo::eez::kVarCount; ++i) {
-    ELOG_INFO("  [{}] {}", ::embark::demo::eez::kVars[i].index,
-              ::embark::demo::eez::kVars[i].name);
+    ELOG_INFO("  [{}] {}", ::embark::demo::eez::kVars[i].index, ::embark::demo::eez::kVars[i].name);
   }
 }
 

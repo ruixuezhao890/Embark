@@ -25,7 +25,9 @@ inline constexpr std::size_t eez_app_name_max = 32;
 
 namespace detail_screen_names {
 
-inline bool is_ascii_digit(char c) noexcept { return c >= '0' && c <= '9'; }
+inline bool is_ascii_digit(char c) noexcept {
+  return c >= '0' && c <= '9';
+}
 
 /// 子页 `<基名>_<数字>_sub` 里基名的长度；不是子页形状返回 0。
 /// 只认最后一段：要求以 "_sub" 结尾、紧邻至少一位数字、数字前是 '_'，且基名非空。
@@ -62,7 +64,7 @@ inline bool eez_ui_screen_is_subpage(const char* screen_name) noexcept {
 /// 屏名 → App 名候选，写进 buffer（总以空字符收尾），返回 buffer。
 /// 参数非法 / 结果为空 / buffer 装不下时返回 nullptr（调用方按"没有对应 App"处理）。
 inline const char* eez_ui_app_name_for_screen(const char* screen_name, char* buffer,
-                                             std::size_t size) noexcept {
+                                              std::size_t size) noexcept {
   if (screen_name == nullptr || buffer == nullptr || size == 0U) {
     return nullptr;
   }

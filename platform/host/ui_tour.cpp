@@ -48,7 +48,6 @@
 #include <embark_limits.h>
 
 #include "clock/clock_app.h"
-#include "settings/settings_app.h"
 #include "eez_ui_bridge.h"
 #include "host_context.h"
 #include "host_display.h"
@@ -57,12 +56,12 @@
 #include "launcher/launcher_app.h"
 #include "lvgl_port.h"
 #include "lvgl_ui_port.h"
-#include "screens.h"  // EEZ 生成的对象表：合成点击按真实控件几何算（见 widget_center）
 #include "own_task_spawner.h"
+#include "screens.h"  // EEZ 生成的对象表：合成点击按真实控件几何算（见 widget_center）
+#include "settings/settings_app.h"
 #include "ui_task.h"
 
 namespace {
-
 
 // --- 用例时间线（帧号）-------------------------------------------------------
 // 每帧 = HAL 的一跳（默认 5 ms），帧号是确定性的，所以这条用例每次跑法完全一样。
@@ -75,7 +74,7 @@ namespace {
 // （lv_obj_get_coords），改屏后自动跟着走。下面两个常量只是屏还没建好时的兜底。
 constexpr int launcher_button_fallback_x = 163;  ///< ④ launcher 屏「闹钟」行中心
 constexpr int launcher_button_fallback_y = 215;
-constexpr int clock_button_fallback_x = 188;     ///< ⑥ clock 屏「← 返回」按钮中心
+constexpr int clock_button_fallback_x = 188;  ///< ⑥ clock 屏「← 返回」按钮中心
 constexpr int clock_button_fallback_y = 295;
 constexpr int click_release_delta = 2;  ///< 按下后隔两帧抬起（LVGL 分两个读周期）
 
@@ -83,16 +82,19 @@ constexpr int click_release_delta = 2;  ///< 按下后隔两帧抬起（LVGL 分
 // （lv_indev.c prev_scr 非空），后续点击须落在动画结束后：16→56、72→112、
 // 122→162。
 
-constexpr int arm_probe_frame = 12;         ///< ③b 还没点进 clock：确认它尚未武装、ticks 恒 0
-constexpr int eez_click_frame = 14;         ///< ④ 点 launcher 屏「闹钟」行：按下（→ clock）
-constexpr int tick_checkpoint_first = 28;   ///< 第一次看 clock 的后台节拍
-constexpr int clock_back_frame = 70;        ///< ⑥ 点 clock 屏「← 返回」：回 launcher 屏（→ 启动器）；16–56 动画结束后
+constexpr int arm_probe_frame = 12;  ///< ③b 还没点进 clock：确认它尚未武装、ticks 恒 0
+constexpr int eez_click_frame = 14;  ///< ④ 点 launcher 屏「闹钟」行：按下（→ clock）
+constexpr int tick_checkpoint_first = 28;  ///< 第一次看 clock 的后台节拍
+constexpr int clock_back_frame =
+    70;  ///< ⑥ 点 clock 屏「← 返回」：回 launcher 屏（→ 启动器）；16–56 动画结束后
 constexpr int tick_checkpoint_second = 82;  ///< 第二次看后台节拍（对比增长）
 constexpr int bump_level_frame = 80;        ///< ⑥ settings->bump_level()：广播亮度消息
-constexpr int launcher_reenter_frame = 120; ///< ⑦ 再点 launcher 屏「闹钟」行：进 clock（回程交给 EEZ 屏按钮）；72–112 后
-constexpr int screen_life_check_frame = 115; ///< ⑧ 屏生命周期检查：第二段动画（72–112）结束后、⑦ 点击（120）前
-constexpr int quit_frame = 170;            ///< ⑩ 推关窗事件（122–162 动画结束后）
-constexpr int tour_end_frame = 180;        ///< 默认帧数上限
+constexpr int launcher_reenter_frame =
+    120;  ///< ⑦ 再点 launcher 屏「闹钟」行：进 clock（回程交给 EEZ 屏按钮）；72–112 后
+constexpr int screen_life_check_frame =
+    115;  ///< ⑧ 屏生命周期检查：第二段动画（72–112）结束后、⑦ 点击（120）前
+constexpr int quit_frame = 170;      ///< ⑩ 推关窗事件（122–162 动画结束后）
+constexpr int tour_end_frame = 180;  ///< 默认帧数上限
 
 struct Options {
   int scale = 1;
@@ -115,9 +117,12 @@ void print_usage() {
 /// 后台策略的中文解说（framework.apps().at(i)->settings() 展示用）。
 const char* policy_text(embark::BackgroundPolicy policy) {
   switch (policy) {
-    case embark::BackgroundPolicy::suspend: return "suspend（退前台就完全不跑）";
-    case embark::BackgroundPolicy::tick: return "tick（后台定时器，period_ms 如上）";
-    case embark::BackgroundPolicy::own_task: return "own_task（独立任务，period_ms 如上）";
+    case embark::BackgroundPolicy::suspend:
+      return "suspend（退前台就完全不跑）";
+    case embark::BackgroundPolicy::tick:
+      return "tick（后台定时器，period_ms 如上）";
+    case embark::BackgroundPolicy::own_task:
+      return "own_task（独立任务，period_ms 如上）";
   }
   return "?";
 }
@@ -125,7 +130,11 @@ const char* policy_text(embark::BackgroundPolicy policy) {
 // --- 真实控件几何（从 EEZ 生成代码的 objects 表读）-----------------------------
 // 合成点击必须落在控件真正的中心：屏幕随 EEZ 工程重画而移动，硬编码坐标每改一次屏
 // 就失效一次。这里只读、不建控件不改样式。
-struct PanelPoint { int x; int y; bool ok; };
+struct PanelPoint {
+  int x;
+  int y;
+  bool ok;
+};
 
 PanelPoint widget_center(const lv_obj_t* obj, int fallback_x, int fallback_y) {
   if (obj == nullptr) {
@@ -227,11 +236,18 @@ Options parse_options(int argc, char** argv) {
     const char* arg = argv[i];
     // 45 = ASCII 撇号（避免本文件里出现引号字面量，保持可移植）
     auto next_is_flag = [&]() { return i + 1 >= argc || argv[i + 1][0] == 45; };
-    if (std::strcmp(arg, "--scale") == 0 && !next_is_flag()) { options.scale = std::atoi(argv[++i]); }
-    else if (std::strcmp(arg, "--delay") == 0 && !next_is_flag()) { options.delay_ms = std::atoi(argv[++i]); }
-    else if (std::strcmp(arg, "--frames") == 0 && !next_is_flag()) { options.frames = std::atoi(argv[++i]); }
-    else if (std::strcmp(arg, "--screenshot") == 0 && !next_is_flag()) { options.screenshot = argv[++i]; }
-    else if (std::strcmp(arg, "--help") == 0) { print_usage(); std::exit(0); }
+    if (std::strcmp(arg, "--scale") == 0 && !next_is_flag()) {
+      options.scale = std::atoi(argv[++i]);
+    } else if (std::strcmp(arg, "--delay") == 0 && !next_is_flag()) {
+      options.delay_ms = std::atoi(argv[++i]);
+    } else if (std::strcmp(arg, "--frames") == 0 && !next_is_flag()) {
+      options.frames = std::atoi(argv[++i]);
+    } else if (std::strcmp(arg, "--screenshot") == 0 && !next_is_flag()) {
+      options.screenshot = argv[++i];
+    } else if (std::strcmp(arg, "--help") == 0) {
+      print_usage();
+      std::exit(0);
+    }
   }
   return options;
 }
@@ -271,8 +287,8 @@ void ui_main(void* argument) noexcept {
             framework.apps().at(0)->name());
   for (embark::AppId i = 1; i < framework.apps().size(); ++i) {
     const auto* app = framework.apps().at(i);
-    ELOG_INFO("    槽 {}：{}（{}，title={}）", i, app->name(), policy_text(app->settings().background),
-              app->title());
+    ELOG_INFO("    槽 {}：{}（{}，title={}）", i, app->name(),
+              policy_text(app->settings().background), app->title());
   }
   ELOG_INFO("    LVGL {}.{}.{}", LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH);
   ELOG_INFO("③b 后台武装：默认前台 {} 已武装={}；其余 App 等第一次被切进前台（clock 此刻未武装）",
@@ -287,46 +303,63 @@ void ui_main(void* argument) noexcept {
   auto* settings = static_cast<embark::demo::SettingsApp*>(framework.app(2));
 
   int frames_run = 0;
-  std::uint32_t fg_ticks_before_first_enter = 0;  ///< 进 clock 之前采到的前台帧数（应为 0：没打开过就不推）
-  ELOG_INFO("④ UI 循环（5 ms/帧）：先点 EEZ launcher 屏的按钮 —— Flow SetPage 到 clock 屏，桥把切屏翻成切 App");
+  std::uint32_t fg_ticks_before_first_enter =
+      0;  ///< 进 clock 之前采到的前台帧数（应为 0：没打开过就不推）
+  ELOG_INFO(
+      "④ UI 循环（5 ms/帧）：先点 EEZ launcher 屏的按钮 —— Flow SetPage 到 clock "
+      "屏，桥把切屏翻成切 App");
   for (;;) {
     framework.step();
     ++frames_run;
-    if (framework.exit_requested()) { break; }
+    if (framework.exit_requested()) {
+      break;
+    }
 
     // --- 合成输入（帧号驱动，确定性）-----------------------------------------
     // 每帧重新读真实几何：屏会随前台切换换掉，坐标必须跟着走。
     const PanelPoint clock_btn =
         widget_center(objects.obj0, clock_button_fallback_x, clock_button_fallback_y);
-    const PanelPoint alarm_row =
-        widget_center(objects.app_row_alarm, launcher_button_fallback_x, launcher_button_fallback_y);
+    const PanelPoint alarm_row = widget_center(objects.app_row_alarm, launcher_button_fallback_x,
+                                               launcher_button_fallback_y);
 
     if (frames_run == eez_click_frame || frames_run == launcher_reenter_frame) {
       scroll_into_view(objects.app_row_alarm);  // 闹钟行在屏外：先滚进视口再点
-      const PanelPoint row =
-          widget_center(objects.app_row_alarm, launcher_button_fallback_x, launcher_button_fallback_y);
+      const PanelPoint row = widget_center(objects.app_row_alarm, launcher_button_fallback_x,
+                                           launcher_button_fallback_y);
       push_motion_and_press(options->scale, row.x, row.y);
     }
     if (frames_run == eez_click_frame + click_release_delta ||
         frames_run == launcher_reenter_frame + click_release_delta) {
       push_release(options->scale, alarm_row.x, alarm_row.y);
     }
-    if (frames_run == clock_back_frame) { push_motion_and_press(options->scale, clock_btn.x, clock_btn.y); }
-    if (frames_run == clock_back_frame + click_release_delta) { push_release(options->scale, clock_btn.x, clock_btn.y); }
-    if (frames_run == bump_level_frame) { settings->bump_level(); }
-    if (frames_run == quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
+    if (frames_run == clock_back_frame) {
+      push_motion_and_press(options->scale, clock_btn.x, clock_btn.y);
+    }
+    if (frames_run == clock_back_frame + click_release_delta) {
+      push_release(options->scale, clock_btn.x, clock_btn.y);
+    }
+    if (frames_run == bump_level_frame) {
+      settings->bump_level();
+    }
+    if (frames_run == quit_frame) {
+      SDL_Event quit{};
+      quit.type = SDL_QUIT;
+      SDL_PushEvent(&quit);
+    }
     if (frames_run == arm_probe_frame) {
       fg_ticks_before_first_enter = clock->foreground_ticks();
-      ELOG_INFO("③b 武装时机（第 {} 帧，还没点进 clock）：clock 已武装={}，前台帧={}（没打开过的 App 一帧都不跑）",
-                frames_run, framework.background_armed(framework.id_of(*clock)) ? 1 : 0,
-                fg_ticks_before_first_enter);
+      ELOG_INFO(
+          "③b 武装时机（第 {} 帧，还没点进 clock）：clock 已武装={}，前台帧={}（没打开过的 App "
+          "一帧都不跑）",
+          frames_run, framework.background_armed(framework.id_of(*clock)) ? 1 : 0,
+          fg_ticks_before_first_enter);
     }
 
     // --- 解说：前台切换 / 亮度 / 后台回流 -------------------------------------
     if (framework.switches() != prev_switches) {
       prev_switches = framework.switches();
-      ELOG_INFO("◆ 前台切换完成（第 {} 帧，累计 {} 次）：现在前台是 {}",
-                frames_run, framework.switches(), framework.apps().at(framework.foreground())->name());
+      ELOG_INFO("◆ 前台切换完成（第 {} 帧，累计 {} 次）：现在前台是 {}", frames_run,
+                framework.switches(), framework.apps().at(framework.foreground())->name());
     }
     if (clock->brightness() != prev_brightness) {
       prev_brightness = clock->brightness();
@@ -334,25 +367,30 @@ void ui_main(void* argument) noexcept {
                 clock->brightness());
     }
     if (frames_run == tick_checkpoint_first) {
-      ELOG_INFO("前台帧采样（第 {} 帧）：clock 前台帧={}（它还没进过前台 → 0）；启动器前台帧={}（它在跑）",
-                frames_run, clock->foreground_ticks(), launcher->foreground_ticks());
+      ELOG_INFO(
+          "前台帧采样（第 {} 帧）：clock 前台帧={}（它还没进过前台 → "
+          "0）；启动器前台帧={}（它在跑）",
+          frames_run, clock->foreground_ticks(), launcher->foreground_ticks());
     }
     if (frames_run == eez_click_frame + 6) {
-      ELOG_INFO("⑤ EEZ 屏按钮驱动切前台：切到 {}（onEnter；同一帧走武装时机，但它没有后台体 —— "
-                "时间/日历从这一帧起随前台帧推）",
-                framework.apps().at(framework.foreground())->name());
+      ELOG_INFO(
+          "⑤ EEZ 屏按钮驱动切前台：切到 {}（onEnter；同一帧走武装时机，但它没有后台体 —— "
+          "时间/日历从这一帧起随前台帧推）",
+          framework.apps().at(framework.foreground())->name());
     }
     if (frames_run == tick_checkpoint_second) {
-      ELOG_INFO("前台帧第二次采样：clock 前台帧={}（进前台后逐帧推时间与日历 = 前台渲染型，ADR 0015）",
-                clock->foreground_ticks());
+      ELOG_INFO(
+          "前台帧第二次采样：clock 前台帧={}（进前台后逐帧推时间与日历 = 前台渲染型，ADR 0015）",
+          clock->foreground_ticks());
     }
     if (frames_run == screen_life_check_frame) {
       const bool clock_gone = !embark::demo::eez_ui_bridge_screen_created("clock");
       const bool launcher_kept = embark::demo::eez_ui_bridge_screen_created("launcher");
       clock_released_after_leave = clock_gone && launcher_kept;
-      ELOG_INFO("⑧ 屏生命周期（第 {} 帧，离开 clock 后、回程点击前）：clock created={}（应为 0，"
-                "Delete on unload 回收），launcher created={}（应为 1，createAtStart 常驻）",
-                frames_run, clock_gone ? 0 : 1, launcher_kept ? 1 : 0);
+      ELOG_INFO(
+          "⑧ 屏生命周期（第 {} 帧，离开 clock 后、回程点击前）：clock created={}（应为 0，"
+          "Delete on unload 回收），launcher created={}（应为 1，createAtStart 常驻）",
+          frames_run, clock_gone ? 0 : 1, launcher_kept ? 1 : 0);
     }
 
     if (options->frames > 0 && frames_run >= options->frames) {
@@ -366,10 +404,12 @@ void ui_main(void* argument) noexcept {
 
   ELOG_INFO("⑨ 收尾统计（共 {} 帧）：", frames_run);
   CheckList checklist;
-  checklist.check("总帧数跑到位", frames_run >= quit_frame + 1, static_cast<unsigned long>(frames_run),
+  checklist.check("总帧数跑到位", frames_run >= quit_frame + 1,
+                  static_cast<unsigned long>(frames_run),
                   static_cast<unsigned long>(quit_frame) + 1UL);
   const auto clock_fg_ticks = static_cast<unsigned long>(clock->foreground_ticks());
-  checklist.check("clock 前台帧 > 0（进过前台后逐帧推时间与日历）", clock_fg_ticks > 0UL, clock_fg_ticks, 1UL);
+  checklist.check("clock 前台帧 > 0（进过前台后逐帧推时间与日历）", clock_fg_ticks > 0UL,
+                  clock_fg_ticks, 1UL);
   checklist.check("进 clock 之前它一帧都没跑（刷新只随前台）", fg_ticks_before_first_enter == 0UL,
                   static_cast<unsigned long>(fg_ticks_before_first_enter), 0UL);
   unsigned apps_with_background = 0;
@@ -378,23 +418,26 @@ void ui_main(void* argument) noexcept {
       ++apps_with_background;
     }
   }
-  checklist.check("没有任何 App 申请后台体（时间/天气靠前台节拍，ADR 0015）", apps_with_background == 0U,
-                  static_cast<unsigned long>(apps_with_background), 0UL);
-  const auto clock_armed = static_cast<unsigned long>(framework.background_armed(framework.id_of(*clock)));
+  checklist.check("没有任何 App 申请后台体（时间/天气靠前台节拍，ADR 0015）",
+                  apps_with_background == 0U, static_cast<unsigned long>(apps_with_background),
+                  0UL);
+  const auto clock_armed =
+      static_cast<unsigned long>(framework.background_armed(framework.id_of(*clock)));
   checklist.check("clock 在第一次进前台时就已武装", clock_armed == 1UL, clock_armed, 1UL);
   const auto arm_failures = static_cast<unsigned long>(framework.arm_failures());
   checklist.check("武装失败计数 = 0", arm_failures == 0UL, arm_failures, 0UL);
-  checklist.check("前台切换恰好 3 次（launcher→clock→launcher→clock）",
-                  framework.switches() == 3, static_cast<unsigned long>(framework.switches()), 3UL);
+  checklist.check("前台切换恰好 3 次（launcher→clock→launcher→clock）", framework.switches() == 3,
+                  static_cast<unsigned long>(framework.switches()), 3UL);
   checklist.check("启动器 enter=1 / resume=1（一次回程：EEZ 屏往返）",
                   launcher->enters() == 1 && launcher->resumes() == 1,
                   static_cast<unsigned long>(launcher->enters() * 10U + launcher->resumes()), 11UL);
   checklist.check("clock enter=1 / resume=1（EEZ 往返再进）",
                   clock->enters() == 1 && clock->resumes() == 1,
                   static_cast<unsigned long>(clock->enters() * 10U + clock->resumes()), 11UL);
-  checklist.check("settings 本剧本从未进入（它的屏由 --ui-launcher-pages 覆盖：进屏 / 亮度 +1 / 返回）",
-                  settings->enters() == 0 && settings->resumes() == 0,
-                  static_cast<unsigned long>(settings->enters() * 10U + settings->resumes()), 0UL);
+  checklist.check(
+      "settings 本剧本从未进入（它的屏由 --ui-launcher-pages 覆盖：进屏 / 亮度 +1 / 返回）",
+      settings->enters() == 0 && settings->resumes() == 0,
+      static_cast<unsigned long>(settings->enters() * 10U + settings->resumes()), 0UL);
   checklist.check("亮度消息回流（clock.brightness==1）", clock->brightness() == 1,
                   static_cast<unsigned long>(clock->brightness()), 1UL);
   checklist.check("收件箱无溢出", framework.inbox_overflows() == 0,
@@ -413,15 +456,16 @@ void ui_main(void* argument) noexcept {
                   static_cast<unsigned long>(embark::demo::eez_ui_bridge_var_count()), 1UL);
   checklist.check("屏生命周期：离开 clock 后对象被回收（launcher 常驻）",
                   clock_released_after_leave, clock_released_after_leave ? 1UL : 0UL, 1UL);
-  checklist.check("屏生命周期：回到 clock 后重建，launcher 仍常驻",
-                  embark::demo::eez_ui_bridge_screen_created("clock") &&
-                      embark::demo::eez_ui_bridge_screen_created("launcher"),
-                  static_cast<unsigned long>(embark::demo::eez_ui_bridge_screen_created("clock")) * 10UL +
-                      static_cast<unsigned long>(embark::demo::eez_ui_bridge_screen_created("launcher")),
-                  11UL);
+  checklist.check(
+      "屏生命周期：回到 clock 后重建，launcher 仍常驻",
+      embark::demo::eez_ui_bridge_screen_created("clock") &&
+          embark::demo::eez_ui_bridge_screen_created("launcher"),
+      static_cast<unsigned long>(embark::demo::eez_ui_bridge_screen_created("clock")) * 10UL +
+          static_cast<unsigned long>(embark::demo::eez_ui_bridge_screen_created("launcher")),
+      11UL);
 
-  ELOG_INFO("启动器最终：enters={} resumes={} 前台帧={}（界面 = EEZ 屏 launcher）", launcher->enters(),
-            launcher->resumes(), launcher->foreground_ticks());
+  ELOG_INFO("启动器最终：enters={} resumes={} 前台帧={}（界面 = EEZ 屏 launcher）",
+            launcher->enters(), launcher->resumes(), launcher->foreground_ticks());
   ELOG_INFO("LVGL 堆账：未回收 {} 字节（budget {}）", embark_lvgl_outstanding_bytes(),
             embark_lvgl_budget_bytes());
 

@@ -109,8 +109,7 @@ void ui_main(void* argument) noexcept {
     hp::exit_process(1);
   }
 
-  ELOG_INFO("框架就绪：{} 个 App，默认前台 {}", framework.apps().size(),
-            framework.foreground());
+  ELOG_INFO("框架就绪：{} 个 App，默认前台 {}", framework.apps().size(), framework.foreground());
 
   // --- 3) 主循环：一拍 = framework.step() ----------------------------------
   // 你写代码的日常就在这里：step() 之前或之后插自己的每拍业务。

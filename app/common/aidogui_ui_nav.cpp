@@ -12,7 +12,7 @@
 #include <embark/log.h>
 
 #include "aidogui_ui_bridge.h"
-#include "aidogui_ui_hooks.h"     // 设计器「调用函数」事件的 C 入口声明（X 宏表）
+#include "aidogui_ui_hooks.h"  // 设计器「调用函数」事件的 C 入口声明（X 宏表）
 #include "eez_ui_screen_names.h"  // 屏名→App 名的纯解析（约定与 EEZ 相同，第二步改名）
 
 namespace embark::demo {
@@ -29,9 +29,10 @@ constexpr int kMaxClickBindings = 8;
 
 struct ClickBinding {
   const char* screen;  // AiDoGUI 屏名（== App 名，约定同 EEZ）
-  const char* widget;  // 控件名（设计器里的 name，如 Btn_Back / Card_Clock；主屏磁贴是运行时建的，不走这张表）
-  const char* app;     // 目标 App 名（导航绑定）；逻辑绑定为 nullptr
-  void (*action)();    // 就地调用的逻辑动作（如设置的「亮度 +1」）；导航绑定为 nullptr
+  const char*
+      widget;  // 控件名（设计器里的 name，如 Btn_Back / Card_Clock；主屏磁贴是运行时建的，不走这张表）
+  const char* app;  // 目标 App 名（导航绑定）；逻辑绑定为 nullptr
+  void (*action)();  // 就地调用的逻辑动作（如设置的「亮度 +1」）；导航绑定为 nullptr
 };
 
 ClickBinding g_bindings[kMaxClickBindings] = {};
@@ -79,8 +80,8 @@ void bind_clicks_for(const char* screen_name) {
 constexpr int kMaxRepaintBindings = 8;
 
 struct RepaintBinding {
-  const char* screen;    // AiDoGUI 屏名（== App 名）
-  void (*repaint)();     // App 的重推钩子（裸函数：回调不能捕获，App 自己记 this）
+  const char* screen;  // AiDoGUI 屏名（== App 名）
+  void (*repaint)();  // App 的重推钩子（裸函数：回调不能捕获，App 自己记 this）
 };
 
 RepaintBinding g_repaints[kMaxRepaintBindings] = {};
@@ -256,7 +257,7 @@ extern "C" {
 
 #define EMBARK_AIDOGUI_HOOK_DEFINE(app)                   \
   void embark_ui_open_##app(void) {                       \
-    (void)embark::demo::aidogui_ui_nav_request_app(#app);  \
+    (void)embark::demo::aidogui_ui_nav_request_app(#app); \
   }
 
 EMBARK_AIDOGUI_HOOK_APPS(EMBARK_AIDOGUI_HOOK_DEFINE)

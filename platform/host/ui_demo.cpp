@@ -55,18 +55,16 @@
 
 #include "album/album_app.h"
 #include "clock/clock_app.h"
+#include "eez_ui_bridge.h"
+#include "eez_ui_nav.h"
 #include "music/music_app.h"
 #include "settings/settings_app.h"
 #include "weather/weather_app.h"
-#include "eez_ui_bridge.h"
-#include "eez_ui_nav.h"
 #if defined(EMBARK_AIDOGUI_UI)
+#include "aidogui_res_fs.h"
 #include "aidogui_ui_bridge.h"
 #include "aidogui_ui_nav.h"
-#include "aidogui_res_fs.h"
 #endif
-#include "weather/weather_data.h"  // --ui-weather：拿数据桩逐字段比对界面
-#include "screens.h"  // EEZ 生成的对象表：合成点击按真实控件几何算（见 widget_center）
 #include "host_context.h"
 #include "host_display.h"
 #include "host_input.h"
@@ -76,7 +74,9 @@
 #include "lvgl_port.h"
 #include "lvgl_ui_port.h"
 #include "own_task_spawner.h"
+#include "screens.h"  // EEZ 生成的对象表：合成点击按真实控件几何算（见 widget_center）
 #include "ui_task.h"
+#include "weather/weather_data.h"  // --ui-weather：拿数据桩逐字段比对界面
 
 namespace {
 
@@ -91,7 +91,7 @@ namespace {
 // （lv_obj_get_coords），改屏后自动跟着走。下面两个常量只是屏还没建好时的兜底。
 constexpr int launcher_button_fallback_x = 163;  // launcher 屏「闹钟」行（app_row_alarm）中心
 constexpr int launcher_button_fallback_y = 215;
-constexpr int clock_button_fallback_x = 188;     // clock 屏「← 返回」按钮中心
+constexpr int clock_button_fallback_x = 188;  // clock 屏「← 返回」按钮中心
 constexpr int clock_button_fallback_y = 295;
 
 // 合成点击：press_frame 按下，隔 click_release_delta 帧抬起（LVGL 分两个读周期）。
@@ -207,9 +207,10 @@ constexpr int ulp_tile_click_frame = 54;
 constexpr int ulp_album_check_frame = 64;
 constexpr int ulp_album_back_frame = 70;
 constexpr int ulp_back_check_frame = 78;
-constexpr int ulp_back_drag_press_frame = 84;   // 回程留存住第 2 页 → 反向拖回第 1 页
+constexpr int ulp_back_drag_press_frame = 84;  // 回程留存住第 2 页 → 反向拖回第 1 页
 constexpr int ulp_back_drag_release_frame = 104;
-constexpr int ulp_page1_check_frame = 118;      // 反向拖 release 在 104，留 14 帧等吸附（正向那次也隔了 10 帧）
+constexpr int ulp_page1_check_frame =
+    118;  // 反向拖 release 在 104，留 14 帧等吸附（正向那次也隔了 10 帧）
 constexpr int ulp_settings_tile_frame = 124;
 constexpr int ulp_settings_check_frame = 132;
 constexpr int ulp_bright_frame = 138;
@@ -258,14 +259,16 @@ struct Options {
   int scale = 1;
   int delay_ms = 5;
   const char* screenshot = nullptr;
-  int shot_frame = 0;      // --shot-frame N FILE：第 N 帧截图（任意模式）
+  int shot_frame = 0;  // --shot-frame N FILE：第 N 帧截图（任意模式）
   const char* shot_path = nullptr;
   bool click = false;
   int click_x = clock_button_fallback_x;  // 默认 = clock 屏按钮中心（回启动器）
   int click_y = clock_button_fallback_y;
   bool drag = false;
-  int drag_x1 = 40;   int drag_y1 = 60;   // 默认落在 EEZ 屏的空白处（不碰按钮）
-  int drag_x2 = 100;  int drag_y2 = 140;
+  int drag_x1 = 40;
+  int drag_y1 = 60;  // 默认落在 EEZ 屏的空白处（不碰按钮）
+  int drag_x2 = 100;
+  int drag_y2 = 140;
   bool launch = false;
   int quit_at = 0;
   bool eez = false;
@@ -278,15 +281,24 @@ struct Options {
 void print_usage() {
   std::printf(
       "用法：embark_host_ui [选项]\n"
-      "  --frames N         跑 N 帧后退出（默认按模式：launch 200 / click 90 / drag 80 / eez 110 / ui 40 / ui-nav 110 / ui-launcher-pages 132 / 否则 0 = 一直跑到关窗）\n"
-"  --click [X,Y]      点 launcher 屏「闹钟」行切 clock（帧 20，自动滚进视口）→ 帧 70 在 clock 屏点 (X,Y)（默认按钮中心 %d,%d = 回启动器）\n"
-      "  --drag X1,Y1,X2,Y2 合成拖动冒烟（帧 15 按下 → 每帧一个插值点 → 帧 40 抬起；默认 40,60 → 100,140）\n"
-"  --launch            完整验收故事（request_switch('clock')→点屏按钮往返→bump_level 消息）\n"
-      "  --ui                AiDoGUI 验收（ADR 0011）：字体 6/6 + 屏表/控件表 + 切走即释放/回来即重建\n"
-      "  --ui-nav            双向导航 + 月历翻月验收：点磁贴进 clock → 点返回回 launcher → 点时钟卡再进 clock → 点「>」「<」翻月并校验显示月与标题\n"
-      "  --ui-weather        天气验收（ADR 0012）：点主屏天气卡进天气屏 → 天气屏 5 天逐字段对桩 → 点「>」切城市 → 点返回 → 主屏天气卡跟着换\n"
-      "  --ui-launcher-pages 主屏分页验收：磁贴/页/页码点按注册表生成 → 横向拖到第 2 页 → 点「相册」磁贴进相册屏 → 点「返回」回主屏 → 点「设置」磁贴进设置屏 → 点「亮度 +1」校验逻辑绑定 → 点「返回」回主屏\n"
-      "  --eez               EEZ 老代码回归（issue 19）：屏表/变量表自检 + 变量读写往返 + EEZ 屏点按钮切 App\n"
+      "  --frames N         跑 N 帧后退出（默认按模式：launch 200 / click 90 / drag 80 / eez 110 / "
+      "ui 40 / ui-nav 110 / ui-launcher-pages 132 / 否则 0 = 一直跑到关窗）\n"
+      "  --click [X,Y]      点 launcher 屏「闹钟」行切 clock（帧 20，自动滚进视口）→ 帧 70 在 "
+      "clock 屏点 (X,Y)（默认按钮中心 %d,%d = 回启动器）\n"
+      "  --drag X1,Y1,X2,Y2 合成拖动冒烟（帧 15 按下 → 每帧一个插值点 → 帧 40 抬起；默认 40,60 → "
+      "100,140）\n"
+      "  --launch            完整验收故事（request_switch('clock')→点屏按钮往返→bump_level 消息）\n"
+      "  --ui                AiDoGUI 验收（ADR 0011）：字体 6/6 + 屏表/控件表 + "
+      "切走即释放/回来即重建\n"
+      "  --ui-nav            双向导航 + 月历翻月验收：点磁贴进 clock → 点返回回 launcher → "
+      "点时钟卡再进 clock → 点「>」「<」翻月并校验显示月与标题\n"
+      "  --ui-weather        天气验收（ADR 0012）：点主屏天气卡进天气屏 → 天气屏 5 天逐字段对桩 → "
+      "点「>」切城市 → 点返回 → 主屏天气卡跟着换\n"
+      "  --ui-launcher-pages 主屏分页验收：磁贴/页/页码点按注册表生成 → 横向拖到第 2 页 → "
+      "点「相册」磁贴进相册屏 → 点「返回」回主屏 → 点「设置」磁贴进设置屏 → 点「亮度 "
+      "+1」校验逻辑绑定 → 点「返回」回主屏\n"
+      "  --eez               EEZ 老代码回归（issue 19）：屏表/变量表自检 + 变量读写往返 + EEZ "
+      "屏点按钮切 App\n"
       "  --screenshot FILE  最后一帧存 BMP\n"
       "  --shot-frame N FILE 第 N 帧存 BMP（配 --eez 等故事线抓中途屏）\n"
       "  --scale S           窗口放大倍数（默认 1 = 240×320 1:1）\n"
@@ -301,7 +313,11 @@ void print_usage() {
 // --- 真实控件几何（从 EEZ 生成代码的 objects 表读）-----------------------------
 // 合成点击必须落在控件真正的中心：屏幕随 EEZ 工程重画而移动，硬编码坐标每改一次屏
 // 就失效一次。这里只读、不建控件不改样式。
-struct PanelPoint { int x; int y; bool ok; };
+struct PanelPoint {
+  int x;
+  int y;
+  bool ok;
+};
 
 /// 控件中心（面板坐标 = 绝对坐标，LVGL 8 的 coords 已是屏坐标）。
 PanelPoint widget_center(const lv_obj_t* obj, int fallback_x, int fallback_y) {
@@ -408,39 +424,55 @@ Options parse_options(int argc, char** argv) {
   for (int i = 1; i < argc; ++i) {
     const char* arg = argv[i];
     auto next_is_flag = [&]() { return i + 1 >= argc || argv[i + 1][0] == '-'; };
-    if (std::strcmp(arg, "--frames") == 0 && !next_is_flag()) { options.frames = std::atoi(argv[++i]); }
-    else if (std::strcmp(arg, "--scale") == 0 && !next_is_flag()) { options.scale = std::atoi(argv[++i]); }
-    else if (std::strcmp(arg, "--delay") == 0 && !next_is_flag()) { options.delay_ms = std::atoi(argv[++i]); }
-    else if (std::strcmp(arg, "--screenshot") == 0 && !next_is_flag()) { options.screenshot = argv[++i]; }
-    else if (std::strcmp(arg, "--shot-frame") == 0 && i + 2 < argc) {
+    if (std::strcmp(arg, "--frames") == 0 && !next_is_flag()) {
+      options.frames = std::atoi(argv[++i]);
+    } else if (std::strcmp(arg, "--scale") == 0 && !next_is_flag()) {
+      options.scale = std::atoi(argv[++i]);
+    } else if (std::strcmp(arg, "--delay") == 0 && !next_is_flag()) {
+      options.delay_ms = std::atoi(argv[++i]);
+    } else if (std::strcmp(arg, "--screenshot") == 0 && !next_is_flag()) {
+      options.screenshot = argv[++i];
+    } else if (std::strcmp(arg, "--shot-frame") == 0 && i + 2 < argc) {
       options.shot_frame = std::atoi(argv[++i]);
       options.shot_path = argv[++i];
-    }
-    else if (std::strcmp(arg, "--quit-at") == 0 && !next_is_flag()) { options.quit_at = std::atoi(argv[++i]); }
-    else if (std::strcmp(arg, "--click") == 0) {
+    } else if (std::strcmp(arg, "--quit-at") == 0 && !next_is_flag()) {
+      options.quit_at = std::atoi(argv[++i]);
+    } else if (std::strcmp(arg, "--click") == 0) {
       options.click = true;
       if (!next_is_flag()) {
         int x = 0, y = 0;
-        if (std::sscanf(argv[++i], "%d,%d", &x, &y) == 2) { options.click_x = x; options.click_y = y; }
+        if (std::sscanf(argv[++i], "%d,%d", &x, &y) == 2) {
+          options.click_x = x;
+          options.click_y = y;
+        }
       }
-    }
-    else if (std::strcmp(arg, "--drag") == 0) {
+    } else if (std::strcmp(arg, "--drag") == 0) {
       options.drag = true;
       if (!next_is_flag()) {
         int x1 = 0, y1 = 0, x2 = 0, y2 = 0;
         if (std::sscanf(argv[++i], "%d,%d,%d,%d", &x1, &y1, &x2, &y2) == 4) {
-          options.drag_x1 = x1; options.drag_y1 = y1; options.drag_x2 = x2; options.drag_y2 = y2;
+          options.drag_x1 = x1;
+          options.drag_y1 = y1;
+          options.drag_x2 = x2;
+          options.drag_y2 = y2;
         }
       }
-    }
-    else if (std::strcmp(arg, "--launch") == 0) { options.launch = true; }
-    else if (std::strcmp(arg, "--eez") == 0) { options.eez = true; }
-    else if (std::strcmp(arg, "--ui") == 0) { options.ui = true; }
-    else if (std::strcmp(arg, "--ui-nav") == 0) { options.ui_nav = true; }
-    else if (std::strcmp(arg, "--ui-weather") == 0) { options.ui_weather = true; }
-    else if (std::strcmp(arg, "--ui-launcher-pages") == 0) { options.ui_launcher_pages = true; }
-    else if (std::strcmp(arg, "--help") == 0) { print_usage(); std::exit(0); }
-    else {
+    } else if (std::strcmp(arg, "--launch") == 0) {
+      options.launch = true;
+    } else if (std::strcmp(arg, "--eez") == 0) {
+      options.eez = true;
+    } else if (std::strcmp(arg, "--ui") == 0) {
+      options.ui = true;
+    } else if (std::strcmp(arg, "--ui-nav") == 0) {
+      options.ui_nav = true;
+    } else if (std::strcmp(arg, "--ui-weather") == 0) {
+      options.ui_weather = true;
+    } else if (std::strcmp(arg, "--ui-launcher-pages") == 0) {
+      options.ui_launcher_pages = true;
+    } else if (std::strcmp(arg, "--help") == 0) {
+      print_usage();
+      std::exit(0);
+    } else {
       // 严格解析：不认识的选项/缺参数直接报错退出（旧版静默忽略会让 --drag
       // 少了坐标时退化成"跑到底不退出"，非常难查）。
       std::fprintf(stderr, "未知选项或缺参数：%s\n", arg);
@@ -456,12 +488,17 @@ Options parse_options(int argc, char** argv) {
 /// LauncherApp::onBackgroundTick 按 PC 墙钟刷这两个 label，所以具体值随时钟变，
 /// 验收只校验「形状对 + 不是设计器写死的初值 "11:31"」——后者说明刷新没生效。
 bool aidogui_time_text_ok(const char* text) {
-  if (text == nullptr) return false;
-  if (std::strlen(text) != 5) return false;
-  if (text[2] != ':') return false;
+  if (text == nullptr)
+    return false;
+  if (std::strlen(text) != 5)
+    return false;
+  if (text[2] != ':')
+    return false;
   for (int i = 0; i < 5; ++i) {
-    if (i == 2) continue;
-    if (text[i] < '0' || text[i] > '9') return false;
+    if (i == 2)
+      continue;
+    if (text[i] < '0' || text[i] > '9')
+      return false;
   }
   const int hh = (text[0] - '0') * 10 + (text[1] - '0');
   const int mm = (text[3] - '0') * 10 + (text[4] - '0');
@@ -479,7 +516,9 @@ bool aidogui_acceptance() {
   const char* res_root = embark::platform::aidogui_res_fs_root();
   ELOG_INFO("aidogui 字体：{}/{} 个 BIN 加载成功（S: 盘 = {}）", fonts.loaded, fonts.total,
             res_root != nullptr ? res_root : "<未挂载>");
-  if (fonts.total <= 0 || fonts.loaded != fonts.total) { ok = false; }
+  if (fonts.total <= 0 || fonts.loaded != fonts.total) {
+    ok = false;
+  }
 
   // 2) 屏表：表来自生成代码（构建期解析），至少一屏且每项都能按名反查回来。
   const int screens = embark::demo::aidogui_ui_bridge_screen_count();
@@ -487,7 +526,9 @@ bool aidogui_acceptance() {
   for (int i = 0; i < screens; ++i) {
     const char* name = embark::demo::aidogui_ui_bridge_screen_name(i);
     ELOG_INFO("  aidogui 屏[{}]：{}", i, name != nullptr ? name : "<null>");
-    if (name == nullptr || !embark::demo::aidogui_ui_bridge_has_screen(name)) { ok = false; }
+    if (name == nullptr || !embark::demo::aidogui_ui_bridge_has_screen(name)) {
+      ok = false;
+    }
   }
 
   // 3) 前台 App 的屏已装载（LauncherApp::onEnter → ui_backend_load_for_app("launcher")），
@@ -497,7 +538,8 @@ bool aidogui_acceptance() {
   const int widgets = embark::demo::aidogui_ui_bridge_widget_count("launcher");
   ELOG_INFO("aidogui 当前屏：{}（已创建 {}）；控件 {} 个", current != nullptr ? current : "<null>",
             created_before ? "是" : "否", widgets);
-  if (current == nullptr || std::strcmp(current, "launcher") != 0 || !created_before || widgets <= 0) {
+  if (current == nullptr || std::strcmp(current, "launcher") != 0 || !created_before ||
+      widgets <= 0) {
     ok = false;
   }
 
@@ -507,7 +549,9 @@ bool aidogui_acceptance() {
   lv_obj_t* time_label = embark::demo::aidogui_ui_bridge_widget("launcher", "L_Time");
   const char* text = time_label != nullptr ? lv_label_get_text(time_label) : nullptr;
   ELOG_INFO("aidogui 控件按名：launcher/L_Time = \"{}\"", text != nullptr ? text : "<取不到>");
-  if (!aidogui_time_text_ok(text)) { ok = false; }
+  if (!aidogui_time_text_ok(text)) {
+    ok = false;
+  }
 
   // 5) 切走即释放：释放后根控件与每个控件指针都归零（LV_EVENT_DELETE 回调干的）。
   embark::demo::aidogui_ui_bridge_unload_current();
@@ -515,15 +559,20 @@ bool aidogui_acceptance() {
   lv_obj_t* after_unload = embark::demo::aidogui_ui_bridge_widget("launcher", "L_Time");
   ELOG_INFO("aidogui 释放后：已创建 {}；L_Time {}", created_after ? "是" : "否",
             after_unload != nullptr ? "还在" : "已释放");
-  if (created_after || after_unload != nullptr) { ok = false; }
+  if (created_after || after_unload != nullptr) {
+    ok = false;
+  }
 
   // 6) 回来即重建：再装载一次，控件重新建出来（LauncherApp 会在下一拍把时间刷成真值）。
   const bool reloaded = embark::demo::aidogui_ui_bridge_load_screen("launcher");
   lv_obj_t* time_label2 = embark::demo::aidogui_ui_bridge_widget("launcher", "L_Time");
   const char* text2 = time_label2 != nullptr ? lv_label_get_text(time_label2) : nullptr;
   ELOG_INFO("aidogui 重新装载：{}；控件 {} 个；L_Time = \"{}\"", reloaded ? "成功" : "失败",
-            embark::demo::aidogui_ui_bridge_widget_count("launcher"), text2 != nullptr ? text2 : "<取不到>");
-  if (!reloaded || !aidogui_time_text_ok(text2)) { ok = false; }
+            embark::demo::aidogui_ui_bridge_widget_count("launcher"),
+            text2 != nullptr ? text2 : "<取不到>");
+  if (!reloaded || !aidogui_time_text_ok(text2)) {
+    ok = false;
+  }
 
   return ok;
 }
@@ -544,9 +593,10 @@ bool aidogui_clock_check() {
   const char* time_text = time_label != nullptr ? lv_label_get_text(time_label) : nullptr;
   lv_obj_t* bar = embark::demo::aidogui_ui_bridge_widget("clock", "Bar_Prog");
   const int progress = bar != nullptr ? static_cast<int>(lv_bar_get_value(bar)) : -1;
-  ELOG_INFO("ui-nav 点磁贴后：当前屏 {}（clock 已创建 {}，控件 {} 个）；L_Time = \"{}\"; Bar_Prog = {}",
-            current != nullptr ? current : "<null>", created ? "是" : "否", widgets,
-            time_text != nullptr ? time_text : "<取不到>", progress);
+  ELOG_INFO(
+      "ui-nav 点磁贴后：当前屏 {}（clock 已创建 {}，控件 {} 个）；L_Time = \"{}\"; Bar_Prog = {}",
+      current != nullptr ? current : "<null>", created ? "是" : "否", widgets,
+      time_text != nullptr ? time_text : "<取不到>", progress);
   bool ok = current != nullptr && std::strcmp(current, "clock") == 0 && created && widgets > 0;
   // 数据真上屏了吗：时间是 App 写的真时间（含 ":"、没有占位的 "--"），进度条在 1..365
   // （设计器初值 value=0、占位文案是 "--##6ea0ff :#..."，都对不上）。
@@ -554,13 +604,17 @@ bool aidogui_clock_check() {
       std::strstr(time_text, "--") != nullptr) {
     ok = false;
   }
-  if (progress <= 0 || progress > 365) { ok = false; }
+  if (progress <= 0 || progress > 365) {
+    ok = false;
+  }
   // 导航命中：这一跳来自主屏运行时磁贴（launcher_tiles 的点击 → aidogui_ui_nav_request_app）。
   // C++ 侧 bind_click 还有一条备用绑定（launcher/Card_Clock → clock），本跳不经过它。
   const int hits = embark::demo::aidogui_ui_nav_click_hits();
   const int bindings = embark::demo::aidogui_ui_nav_click_bindings();
   ELOG_INFO("ui-nav 导航命中 {} 次（C++ 侧点击绑定 {} 条；本跳由设计器事件驱动）", hits, bindings);
-  if (hits != 1) { ok = false; }
+  if (hits != 1) {
+    ok = false;
+  }
   return ok;
 }
 
@@ -572,9 +626,11 @@ bool aidogui_back_check() {
   lv_obj_t* time_label = embark::demo::aidogui_ui_bridge_widget("launcher", "L_Time");
   const char* time_text = time_label != nullptr ? lv_label_get_text(time_label) : nullptr;
   const int hits = embark::demo::aidogui_ui_nav_click_hits();
-  ELOG_INFO("ui-nav 点返回后：当前屏 {}（launcher 已创建 {}，clock 已释放 {}）；launcher/L_Time = \"{}\"; 导航命中 {} 次",
-            current != nullptr ? current : "<null>", launcher_created ? "是" : "否",
-            clock_alive ? "否" : "是", time_text != nullptr ? time_text : "<取不到>", hits);
+  ELOG_INFO(
+      "ui-nav 点返回后：当前屏 {}（launcher 已创建 {}，clock 已释放 {}）；launcher/L_Time = "
+      "\"{}\"; 导航命中 {} 次",
+      current != nullptr ? current : "<null>", launcher_created ? "是" : "否",
+      clock_alive ? "否" : "是", time_text != nullptr ? time_text : "<取不到>", hits);
   return current != nullptr && std::strcmp(current, "launcher") == 0 && launcher_created &&
          !clock_alive && aidogui_time_text_ok(time_text) && hits == 2;
 }
@@ -582,9 +638,11 @@ bool aidogui_back_check() {
 /// 读 clock 屏月历控件（真 lv_calendar）当前的「显示月」；控件不在 / 读不到返回 false。
 bool aidogui_calendar_shown(int& y, int& m) {
   lv_obj_t* cal = embark::demo::aidogui_ui_bridge_widget("clock", "Cal");
-  if (cal == nullptr) return false;
+  if (cal == nullptr)
+    return false;
   const lv_calendar_date_t* shown = lv_calendar_get_showed_date(cal);
-  if (shown == nullptr) return false;
+  if (shown == nullptr)
+    return false;
   y = static_cast<int>(shown->year);
   m = static_cast<int>(shown->month);
   return true;
@@ -593,9 +651,11 @@ bool aidogui_calendar_shown(int& y, int& m) {
 /// 卡 2 标题 L_MH 应等于「<显示月>年<显示月>月」（标题跟着视图月走，翻月时同拍切换）。
 bool aidogui_month_title_ok(int y, int m) {
   lv_obj_t* label = embark::demo::aidogui_ui_bridge_widget("clock", "L_MH");
-  if (label == nullptr) return false;
+  if (label == nullptr)
+    return false;
   const char* text = lv_label_get_text(label);
-  if (text == nullptr) return false;
+  if (text == nullptr)
+    return false;
   char expect[24];
   std::snprintf(expect, sizeof expect, "%d年%d月", y, m);
   return std::strcmp(text, expect) == 0;
@@ -627,9 +687,12 @@ bool aidogui_next_check(int base_y, int base_m) {
   const bool title_ok = aidogui_month_title_ok(y, m);
   int expect_y = base_y;
   int expect_m = base_m + 1;
-  if (expect_m > 12) { expect_m = 1; ++expect_y; }
-  ELOG_INFO("ui-nav 点「>」后：显示月 {}-{}（期望 {}-{}）；标题{}",
-            shown_ok ? y : -1, shown_ok ? m : -1, expect_y, expect_m, title_ok ? "同步" : "不同步");
+  if (expect_m > 12) {
+    expect_m = 1;
+    ++expect_y;
+  }
+  ELOG_INFO("ui-nav 点「>」后：显示月 {}-{}（期望 {}-{}）；标题{}", shown_ok ? y : -1,
+            shown_ok ? m : -1, expect_y, expect_m, title_ok ? "同步" : "不同步");
   return shown_ok && y == expect_y && m == expect_m && title_ok;
 }
 
@@ -639,8 +702,8 @@ bool aidogui_prev_check(int base_y, int base_m) {
   int m = 0;
   const bool shown_ok = aidogui_calendar_shown(y, m);
   const bool title_ok = aidogui_month_title_ok(y, m);
-  ELOG_INFO("ui-nav 点「<」后：显示月 {}-{}（期望 {}-{}）；标题{}",
-            shown_ok ? y : -1, shown_ok ? m : -1, base_y, base_m, title_ok ? "同步" : "不同步");
+  ELOG_INFO("ui-nav 点「<」后：显示月 {}-{}（期望 {}-{}）；标题{}", shown_ok ? y : -1,
+            shown_ok ? m : -1, base_y, base_m, title_ok ? "同步" : "不同步");
   return shown_ok && y == base_y && m == base_m && title_ok;
 }
 /// 字形覆盖检查：把一段文本逐字符喂给 LVGL 字体表，任何一个字形缺失都算失败。
@@ -648,21 +711,34 @@ bool aidogui_prev_check(int base_y, int base_m) {
 /// i18n.customCharsetRows 里显式维护），漏一个字符**不会**编译或运行报错 —— 屏幕上只是
 /// 一个方框，验收却会"通过"。这里把"方框"变成可断言的失败。where 只进日志。
 bool font_covers_text(const lv_font_t* font, const char* text, const char* where) {
-  if (font == nullptr || text == nullptr) { return false; }
+  if (font == nullptr || text == nullptr) {
+    return false;
+  }
   bool ok = true;
   for (const unsigned char* p = reinterpret_cast<const unsigned char*>(text); *p != 0U;) {
     std::uint32_t cp = 0;
     int len = 1;
-    if (*p < 0x80U) { cp = *p; }
-    else if ((*p & 0xE0U) == 0xC0U) { cp = *p & 0x1FU; len = 2; }
-    else if ((*p & 0xF0U) == 0xE0U) { cp = *p & 0x0FU; len = 3; }
-    else { cp = *p & 0x07U; len = 4; }
-    for (int i = 1; i < len; ++i) { cp = (cp << 6) | (p[i] & 0x3FU); }
+    if (*p < 0x80U) {
+      cp = *p;
+    } else if ((*p & 0xE0U) == 0xC0U) {
+      cp = *p & 0x1FU;
+      len = 2;
+    } else if ((*p & 0xF0U) == 0xE0U) {
+      cp = *p & 0x0FU;
+      len = 3;
+    } else {
+      cp = *p & 0x07U;
+      len = 4;
+    }
+    for (int i = 1; i < len; ++i) {
+      cp = (cp << 6) | (p[i] & 0x3FU);
+    }
     p += len;
     lv_font_glyph_dsc_t dsc{};
     if (!lv_font_get_glyph_dsc(font, &dsc, cp, 0)) {
-      ELOG_INFO("字形缺失：{} 的字 U+{:04X} 不在该字号字体子集里（screen.aid 的 customCharsetRows 要补）",
-                where, cp);
+      ELOG_INFO(
+          "字形缺失：{} 的字 U+{:04X} 不在该字号字体子集里（screen.aid 的 customCharsetRows 要补）",
+          where, cp);
       ok = false;
     }
   }
@@ -672,7 +748,9 @@ bool font_covers_text(const lv_font_t* font, const char* text, const char* where
 /// 按名取控件后查它当前文本的字形覆盖（--ui-weather / --ui-launcher-pages 共用）。
 bool aidogui_font_covers(const char* screen, const char* widget) {
   lv_obj_t* obj = embark::demo::aidogui_ui_bridge_widget(screen, widget);
-  if (obj == nullptr) { return false; }
+  if (obj == nullptr) {
+    return false;
+  }
   char where[64];
   std::snprintf(where, sizeof where, "%s/%s", screen, widget);
   return font_covers_text(lv_obj_get_style_text_font(obj, LV_PART_MAIN), lv_label_get_text(obj),
@@ -684,7 +762,9 @@ bool aidogui_font_covers(const char* screen, const char* widget) {
 /// 只能按对象取几何；取不到就用兜底坐标（验收不瞎点）。
 PanelPoint aidogui_tile_center(std::size_t index, int fallback_x, int fallback_y) {
   lv_obj_t* tile = embark::demo::launcher_tiles_tile(index);
-  if (tile == nullptr) { return PanelPoint{fallback_x, fallback_y, false}; }
+  if (tile == nullptr) {
+    return PanelPoint{fallback_x, fallback_y, false};
+  }
   lv_area_t area{};
   lv_obj_get_coords(tile, &area);
   return PanelPoint{(area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2, true};
@@ -702,7 +782,9 @@ bool aidogui_launcher_pages_check() {
   bool order_ok = tiles == 5;
   for (std::size_t i = 0; order_ok && i < tiles; ++i) {
     const char* got = embark::demo::launcher_tiles_app(i);
-    if (got == nullptr || (i < 5 && std::strcmp(got, expect_apps[i]) != 0)) { order_ok = false; }
+    if (got == nullptr || (i < 5 && std::strcmp(got, expect_apps[i]) != 0)) {
+      order_ok = false;
+    }
   }
   lv_obj_t* label4 = embark::demo::launcher_tiles_tile_label(4);
   const char* text4 = label4 != nullptr ? lv_label_get_text(label4) : nullptr;
@@ -710,7 +792,10 @@ bool aidogui_launcher_pages_check() {
   bool fonts_ok = true;
   for (std::size_t i = 0; i < tiles; ++i) {
     lv_obj_t* label = embark::demo::launcher_tiles_tile_label(i);
-    if (label == nullptr) { fonts_ok = false; continue; }
+    if (label == nullptr) {
+      fonts_ok = false;
+      continue;
+    }
     char where[48];
     std::snprintf(where, sizeof where, "主屏磁贴 %u", static_cast<unsigned>(i));
     if (!font_covers_text(lv_obj_get_style_text_font(label, LV_PART_MAIN), lv_label_get_text(label),
@@ -734,11 +819,12 @@ bool aidogui_launcher_pages_check() {
   const char* hint_text = hint != nullptr ? lv_label_get_text(hint) : nullptr;
   const bool hint_ok = hint_text != nullptr && std::strcmp(hint_text, "左右滑动翻页") == 0 &&
                        aidogui_font_covers("launcher", "L_Hint");
-  ELOG_INFO("主屏分页自检：磁贴 {}（期望 5）/ 页 {}（期望 2）/ 点 {}（期望 2）；顺序 {}；第 5 格 {}；"
-            "几何 {}（磁贴 x {}/{}，第 2 页 x {}，点 x {}/{}）；字形 {}；提示行 {}（\"{}\"）",
-            tiles, pages, dots, order_ok ? "对" : "错", album_ok ? "「相册」" : "<不是相册>",
-            geo_ok ? "对" : "错", x_t0, x_t1, x_p1, x_d0, x_d1, fonts_ok ? "全在" : "有缺字",
-            hint_ok ? "对" : "错", hint_text != nullptr ? hint_text : "<取不到>");
+  ELOG_INFO(
+      "主屏分页自检：磁贴 {}（期望 5）/ 页 {}（期望 2）/ 点 {}（期望 2）；顺序 {}；第 5 格 {}；"
+      "几何 {}（磁贴 x {}/{}，第 2 页 x {}，点 x {}/{}）；字形 {}；提示行 {}（\"{}\"）",
+      tiles, pages, dots, order_ok ? "对" : "错", album_ok ? "「相册」" : "<不是相册>",
+      geo_ok ? "对" : "错", x_t0, x_t1, x_p1, x_d0, x_d1, fonts_ok ? "全在" : "有缺字",
+      hint_ok ? "对" : "错", hint_text != nullptr ? hint_text : "<取不到>");
   return tiles == 5 && pages == 2 && dots == 2 && order_ok && album_ok && geo_ok && fonts_ok &&
          hint_ok;
 }
@@ -749,7 +835,8 @@ bool aidogui_launcher_page_check() {
   lv_obj_t* band = embark::demo::launcher_tiles_band();
   const int scroll_x = band != nullptr ? lv_obj_get_scroll_x(band) : 0;
   const int offset = scroll_x < 0 ? -scroll_x : scroll_x;
-  ELOG_INFO("主屏横向拖动后：停在第 {} 页（scroll_x={}，期望吸附到第 1 页 = 240px）", page, scroll_x);
+  ELOG_INFO("主屏横向拖动后：停在第 {} 页（scroll_x={}，期望吸附到第 1 页 = 240px）", page,
+            scroll_x);
   return page == 1 && offset == 240;
 }
 
@@ -778,10 +865,11 @@ bool aidogui_launcher_back_check() {
   const int scroll_x = band != nullptr ? lv_obj_get_scroll_x(band) : 0;
   const int offset = scroll_x < 0 ? -scroll_x : scroll_x;
   const bool page_kept = page == 1 && offset == 240;
-  ELOG_INFO("相册屏点「返回」后：当前屏 {}（launcher 已重建 {}，album 已释放 {}）；磁贴重新建出 {} 个；"
-            "视图留存 = 仍停在第 {} 页（scroll_x={}，期望第 2 页 = 240px，{}）",
-            current != nullptr ? current : "<null>", launcher_created ? "是" : "否",
-            album_gone ? "是" : "否", tiles, page + 1, scroll_x, page_kept ? "对" : "错");
+  ELOG_INFO(
+      "相册屏点「返回」后：当前屏 {}（launcher 已重建 {}，album 已释放 {}）；磁贴重新建出 {} 个；"
+      "视图留存 = 仍停在第 {} 页（scroll_x={}，期望第 2 页 = 240px，{}）",
+      current != nullptr ? current : "<null>", launcher_created ? "是" : "否",
+      album_gone ? "是" : "否", tiles, page + 1, scroll_x, page_kept ? "对" : "错");
   return current != nullptr && std::strcmp(current, "launcher") == 0 && launcher_created &&
          album_gone && tiles == 5 && page_kept;
 }
@@ -792,7 +880,8 @@ bool aidogui_launcher_page1_check() {
   lv_obj_t* band = embark::demo::launcher_tiles_band();
   const int scroll_x = band != nullptr ? lv_obj_get_scroll_x(band) : 0;
   const int offset = scroll_x < 0 ? -scroll_x : scroll_x;
-  ELOG_INFO("主屏反向拖动后：停在第 {} 页（scroll_x={}，期望吸附回第 1 页 = 0px）", page + 1, scroll_x);
+  ELOG_INFO("主屏反向拖动后：停在第 {} 页（scroll_x={}，期望吸附回第 1 页 = 0px）", page + 1,
+            scroll_x);
   return page == 0 && offset == 0;
 }
 
@@ -813,8 +902,8 @@ bool aidogui_launcher_settings_check() {
 /// 逻辑上"，而不是只画了个能按的壳。
 bool aidogui_launcher_bright_check(std::size_t before, std::size_t after) {
   const bool ok = after == (before + 1U) % 4U;
-  ELOG_INFO("设置屏点「亮度 +1」后：亮度档 {} → {}（期望 {}）{}", before, after,
-            (before + 1U) % 4U, ok ? "" : " ✘");
+  ELOG_INFO("设置屏点「亮度 +1」后：亮度档 {} → {}（期望 {}）{}", before, after, (before + 1U) % 4U,
+            ok ? "" : " ✘");
   return ok;
 }
 
@@ -845,29 +934,42 @@ bool aidogui_weather_screen_ok(std::size_t city) {
   for (std::size_t i = 0; i < embark::demo::kWeatherDayCount; ++i) {
     const embark::demo::WeatherDay& d = c.days[i];
     std::snprintf(widget, sizeof widget, "L_D%u_Dow", static_cast<unsigned>(i));
-    if (!eq(text_of(widget), d.dow)) { rows_ok = false; }
+    if (!eq(text_of(widget), d.dow)) {
+      rows_ok = false;
+    }
     std::snprintf(widget, sizeof widget, "L_D%u_Icon", static_cast<unsigned>(i));
-    if (!eq(text_of(widget), d.icon)) { rows_ok = false; }
+    if (!eq(text_of(widget), d.icon)) {
+      rows_ok = false;
+    }
     std::snprintf(widget, sizeof widget, "L_D%u_Desc", static_cast<unsigned>(i));
-    if (!eq(text_of(widget), d.desc)) { rows_ok = false; }
+    if (!eq(text_of(widget), d.desc)) {
+      rows_ok = false;
+    }
     std::snprintf(widget, sizeof widget, "L_D%u_Range", static_cast<unsigned>(i));
-    if (!eq(text_of(widget), d.range)) { rows_ok = false; }
+    if (!eq(text_of(widget), d.range)) {
+      rows_ok = false;
+    }
   }
   bool glyphs_ok = true;
   char check[32];
   for (const char* w : {"L_City", "L_NIcon", "L_NTemp", "L_NDesc"}) {
-    if (!aidogui_font_covers("weather", w)) { glyphs_ok = false; }
+    if (!aidogui_font_covers("weather", w)) {
+      glyphs_ok = false;
+    }
   }
   for (std::size_t i = 0; i < embark::demo::kWeatherDayCount; ++i) {
     for (const char* suffix : {"Dow", "Icon", "Desc", "Range"}) {
       std::snprintf(check, sizeof check, "L_D%u_%s", static_cast<unsigned>(i), suffix);
-      if (!aidogui_font_covers("weather", check)) { glyphs_ok = false; }
+      if (!aidogui_font_covers("weather", check)) {
+        glyphs_ok = false;
+      }
     }
   }
   const bool created = embark::demo::aidogui_ui_bridge_screen_created("weather");
   const int widgets = embark::demo::aidogui_ui_bridge_widget_count("weather");
   ELOG_INFO("ui-weather 天气屏：已创建 {}；控件 {} 个；城市 \"{}\"；现在 {} {}；5 天逐行{}；字形{}",
-            created ? "是" : "否", widgets, text_of("L_City") != nullptr ? text_of("L_City") : "<取不到>",
+            created ? "是" : "否", widgets,
+            text_of("L_City") != nullptr ? text_of("L_City") : "<取不到>",
             text_of("L_NTemp") != nullptr ? text_of("L_NTemp") : "<取不到>",
             text_of("L_NIcon") != nullptr ? text_of("L_NIcon") : "<取不到>",
             rows_ok ? "一致" : "不一致", glyphs_ok ? "齐全" : "有缺");
@@ -886,7 +988,9 @@ bool aidogui_weather_card_ok(std::size_t city) {
   const embark::demo::WeatherCity& c = embark::demo::weather_city(city);
   bool glyphs_ok = true;
   for (const char* w : {"L_WCity", "L_WTemp", "L_WIcon", "L_WDesc"}) {
-    if (!aidogui_font_covers("launcher", w)) { glyphs_ok = false; }
+    if (!aidogui_font_covers("launcher", w)) {
+      glyphs_ok = false;
+    }
   }
   // 图标盒要装得下"任何城市"的今日天气字：两字词（雷雨/多云/小雨…）在 22px 下约 44px，
   // 盒子窄了 LVGL 就折行、第二行被裁（2026-10-16 把 L_WIcon 从 30 加宽到 46 就是为这个）。
@@ -900,19 +1004,24 @@ bool aidogui_weather_card_ok(std::size_t city) {
     for (std::size_t i = 0; i < embark::demo::kWeatherCityCount; ++i) {
       const char* text = embark::demo::weather_city(i).days[0].icon;
       const lv_coord_t w = lv_txt_get_width(text, static_cast<std::uint32_t>(std::strlen(text)),
-                                             icon_font, 0, LV_TEXT_FLAG_NONE);
-      if (w > widest) { widest = w; widest_text = text; }
+                                            icon_font, 0, LV_TEXT_FLAG_NONE);
+      if (w > widest) {
+        widest = w;
+        widest_text = text;
+      }
     }
   }
   const lv_coord_t icon_box = icon != nullptr ? lv_obj_get_content_width(icon) : -1;
   const bool icon_fits = icon_box > 0 && widest > 0 && icon_box >= widest;
   const bool ok = eq(text_of("L_WCity"), c.name) && eq(text_of("L_WTemp"), c.temp) &&
-                  eq(text_of("L_WIcon"), c.days[0].icon) && eq(text_of("L_WDesc"), c.days[0].desc) &&
-                  glyphs_ok && icon_fits;
+                  eq(text_of("L_WIcon"), c.days[0].icon) &&
+                  eq(text_of("L_WDesc"), c.days[0].desc) && glyphs_ok && icon_fits;
   ELOG_INFO("ui-weather 主屏天气卡：\"{}\" {} {} {}（期望 \"{}\" {} {} {}）{}",
-            text_of("L_WCity") != nullptr ? text_of("L_WCity") : "?", text_of("L_WTemp") != nullptr ? text_of("L_WTemp") : "?",
-            text_of("L_WIcon") != nullptr ? text_of("L_WIcon") : "?", text_of("L_WDesc") != nullptr ? text_of("L_WDesc") : "",
-            c.name, c.temp, c.days[0].icon, c.days[0].desc, ok ? "" : " ✘");
+            text_of("L_WCity") != nullptr ? text_of("L_WCity") : "?",
+            text_of("L_WTemp") != nullptr ? text_of("L_WTemp") : "?",
+            text_of("L_WIcon") != nullptr ? text_of("L_WIcon") : "?",
+            text_of("L_WDesc") != nullptr ? text_of("L_WDesc") : "", c.name, c.temp, c.days[0].icon,
+            c.days[0].desc, ok ? "" : " ✘");
   ELOG_INFO("ui-weather 主屏天气卡图标盒：宽 {}，最长今日天气字 \"{}\" 量得 {}px（装得下：{}）",
             icon_box, widest_text, widest, icon_fits ? "是" : "否 ✘");
   return ok;
@@ -953,103 +1062,151 @@ void ui_main(void* argument) noexcept {
   // --- 按模式定帧数上限（0 = 一直跑到关窗）-----------------------------------
   int frames_limit = options->frames;
   if (frames_limit <= 0) {
-    if (options->launch) { frames_limit = launch_frames; }
-    else if (options->click) { frames_limit = click_frames; }
-    else if (options->drag) { frames_limit = drag_frames; }
-    else if (options->eez) { frames_limit = eez_frames; }
-    else if (options->ui) { frames_limit = aidogui_frames; }
-    else if (options->ui_nav) { frames_limit = uinav_frames; }
-    else if (options->ui_weather) { frames_limit = uiweather_frames; }
-    else if (options->ui_launcher_pages) { frames_limit = ulp_frames; }
+    if (options->launch) {
+      frames_limit = launch_frames;
+    } else if (options->click) {
+      frames_limit = click_frames;
+    } else if (options->drag) {
+      frames_limit = drag_frames;
+    } else if (options->eez) {
+      frames_limit = eez_frames;
+    } else if (options->ui) {
+      frames_limit = aidogui_frames;
+    } else if (options->ui_nav) {
+      frames_limit = uinav_frames;
+    } else if (options->ui_weather) {
+      frames_limit = uiweather_frames;
+    } else if (options->ui_launcher_pages) {
+      frames_limit = ulp_frames;
+    }
   }
 
   int frames_run = 0;
-  bool aidogui_ok = false;  // --ui：aidogui_acceptance() 的结论（帧 10 才写）
+  bool aidogui_ok = false;      // --ui：aidogui_acceptance() 的结论（帧 10 才写）
   bool uinav_clock_ok = false;  // --ui-nav：点磁贴后停在 clock 屏且数据上屏（帧 22）
-  bool uinav_back_ok = false;   // --ui-nav：点返回后回 launcher 且 clock 屏已释放（帧 40）
-  bool uinav_card_ok = false;   // --ui-nav：点时钟卡再进 clock + 记月历基准月（帧 62）
-  bool uinav_next_ok = false;   // --ui-nav：点「>」显示月 +1、标题同步（帧 80）
-  bool uinav_prev_ok = false;   // --ui-nav：点「<」显示月回到基准（帧 96）
-  int uinav_base_y = 0;         // --ui-nav：月历基准显示月（帧 62 记录）
+  bool uinav_back_ok = false;  // --ui-nav：点返回后回 launcher 且 clock 屏已释放（帧 40）
+  bool uinav_card_ok = false;  // --ui-nav：点时钟卡再进 clock + 记月历基准月（帧 62）
+  bool uinav_next_ok = false;  // --ui-nav：点「>」显示月 +1、标题同步（帧 80）
+  bool uinav_prev_ok = false;  // --ui-nav：点「<」显示月回到基准（帧 96）
+  int uinav_base_y = 0;        // --ui-nav：月历基准显示月（帧 62 记录）
   int uinav_base_m = 0;
-  bool uiweather_in_ok = false;    // --ui-weather：进天气屏后 5 天与数据桩一致（帧 22）
+  bool uiweather_in_ok = false;  // --ui-weather：进天气屏后 5 天与数据桩一致（帧 22）
   bool uiweather_next_ok = false;  // --ui-weather：点「>」换城市后屏上数据跟着换（帧 40）
   bool uiweather_card_ok = false;  // --ui-weather：回主屏后天气卡换成同一个城市（帧 58）
-  bool ulp_tiles_ok = false;   // --ui-launcher-pages：磁贴/页/点/几何/字形自检（帧 10）
-  bool ulp_page_ok = false;    // --ui-launcher-pages：拖到第 2 页并吸附住（帧 44）
-  bool ulp_album_ok = false;   // --ui-launcher-pages：点第 2 页的相册磁贴进相册屏（帧 64）
-  bool ulp_back_ok = false;    // --ui-launcher-pages：相册屏点「返回」回主屏 + 视图留存（帧 78）
-  bool ulp_page1_ok = false;   // --ui-launcher-pages：反向拖回第 1 页（帧 118）
+  bool ulp_tiles_ok = false;  // --ui-launcher-pages：磁贴/页/点/几何/字形自检（帧 10）
+  bool ulp_page_ok = false;   // --ui-launcher-pages：拖到第 2 页并吸附住（帧 44）
+  bool ulp_album_ok = false;  // --ui-launcher-pages：点第 2 页的相册磁贴进相册屏（帧 64）
+  bool ulp_back_ok = false;  // --ui-launcher-pages：相册屏点「返回」回主屏 + 视图留存（帧 78）
+  bool ulp_page1_ok = false;  // --ui-launcher-pages：反向拖回第 1 页（帧 118）
   bool ulp_settings_ok = false;  // --ui-launcher-pages：点「设置」磁贴进设置屏（帧 132）
-  bool ulp_bright_ok = false;    // --ui-launcher-pages：点设置屏「亮度 +1」→ 亮度档 +1（帧 144）
-  bool ulp_home_ok = false;      // --ui-launcher-pages：设置屏点「返回」回主屏（帧 160）
-  int ulp_tile_x = 0;          // --ui-launcher-pages：磁贴落点（按下/抬起同一个点）
+  bool ulp_bright_ok = false;  // --ui-launcher-pages：点设置屏「亮度 +1」→ 亮度档 +1（帧 144）
+  bool ulp_home_ok = false;  // --ui-launcher-pages：设置屏点「返回」回主屏（帧 160）
+  int ulp_tile_x = 0;        // --ui-launcher-pages：磁贴落点（按下/抬起同一个点）
   int ulp_tile_y = 0;
-  int ulp_back_x = 0;          // --ui-launcher-pages：「返回」按钮落点
+  int ulp_back_x = 0;  // --ui-launcher-pages：「返回」按钮落点
   int ulp_back_y = 0;
-  int ulp_bright_x = 0;        // --ui-launcher-pages：「亮度 +1」按钮落点
+  int ulp_bright_x = 0;  // --ui-launcher-pages：「亮度 +1」按钮落点
   int ulp_bright_y = 0;
-  int ulp_level_before = -1;   // --ui-launcher-pages：进设置屏时的亮度档（帧 132 记录）
+  int ulp_level_before = -1;  // --ui-launcher-pages：进设置屏时的亮度档（帧 132 记录）
   for (;;) {
     framework.step();
     ++frames_run;
-    if (framework.exit_requested()) { break; }
+    if (framework.exit_requested()) {
+      break;
+    }
 
     // --- 合成输入（帧号驱动，确定性）-----------------------------------------
     // 每帧重新读一次真实几何：屏会随前台切换换掉，坐标必须跟着走。
-    const PanelPoint clock_btn = widget_center(objects.obj0, clock_button_fallback_x, clock_button_fallback_y);
-    const PanelPoint alarm_row =
-        widget_center(objects.app_row_alarm, launcher_button_fallback_x, launcher_button_fallback_y);
+    const PanelPoint clock_btn =
+        widget_center(objects.obj0, clock_button_fallback_x, clock_button_fallback_y);
+    const PanelPoint alarm_row = widget_center(objects.app_row_alarm, launcher_button_fallback_x,
+                                               launcher_button_fallback_y);
 
     if (options->launch) {
       // 启动器已无手绘界面：先程序化请求切到 clock；随后的往返全是真点击 ——
       // 点 EEZ 屏按钮（屏名约定 → 切同名 App），回程同由 EEZ 屏按钮承担。
-      if (frames_run == launch_switch_frame) { (void)framework.request_switch("clock"); }
-      if (frames_run == launch_clock_back_frame) { push_motion_and_press(options->scale, clock_btn.x, clock_btn.y); }
-      if (frames_run == launch_clock_back_frame + click_release_delta) { push_release(options->scale, clock_btn.x, clock_btn.y); }
+      if (frames_run == launch_switch_frame) {
+        (void)framework.request_switch("clock");
+      }
+      if (frames_run == launch_clock_back_frame) {
+        push_motion_and_press(options->scale, clock_btn.x, clock_btn.y);
+      }
+      if (frames_run == launch_clock_back_frame + click_release_delta) {
+        push_release(options->scale, clock_btn.x, clock_btn.y);
+      }
       if (frames_run == launch_launcher_btn_frame) {
         scroll_into_view(objects.app_row_alarm);  // 闹钟行在屏外：先滚进视口再点
-        const PanelPoint row =
-            widget_center(objects.app_row_alarm, launcher_button_fallback_x, launcher_button_fallback_y);
+        const PanelPoint row = widget_center(objects.app_row_alarm, launcher_button_fallback_x,
+                                             launcher_button_fallback_y);
         push_motion_and_press(options->scale, row.x, row.y);
       }
-      if (frames_run == launch_launcher_btn_frame + click_release_delta) { push_release(options->scale, alarm_row.x, alarm_row.y); }
-      if (frames_run == launch_home_frame) { push_motion_and_press(options->scale, clock_btn.x, clock_btn.y); }
-      if (frames_run == launch_home_frame + click_release_delta) { push_release(options->scale, clock_btn.x, clock_btn.y); }
-      if (frames_run == launch_bump_frame) { static_cast<embark::demo::SettingsApp*>(framework.app(2))->bump_level(); }
-      if (frames_run == launch_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
+      if (frames_run == launch_launcher_btn_frame + click_release_delta) {
+        push_release(options->scale, alarm_row.x, alarm_row.y);
+      }
+      if (frames_run == launch_home_frame) {
+        push_motion_and_press(options->scale, clock_btn.x, clock_btn.y);
+      }
+      if (frames_run == launch_home_frame + click_release_delta) {
+        push_release(options->scale, clock_btn.x, clock_btn.y);
+      }
+      if (frames_run == launch_bump_frame) {
+        static_cast<embark::demo::SettingsApp*>(framework.app(2))->bump_level();
+      }
+      if (frames_run == launch_quit_frame) {
+        SDL_Event quit{};
+        quit.type = SDL_QUIT;
+        SDL_PushEvent(&quit);
+      }
     } else if (options->eez) {
       // 点 launcher 屏「闹钟」行：Flow SetPage 到 clock 屏 → 桥的屏观察者把这次切屏翻成
       // request_switch("clock")（帧 20 按下 → 帧 21/22 抬起 → 下次 tick 生效）。
       if (frames_run == eez_switch_frame) {
         scroll_into_view(objects.app_row_alarm);  // 同上：先滚进视口
-        const PanelPoint row =
-            widget_center(objects.app_row_alarm, launcher_button_fallback_x, launcher_button_fallback_y);
+        const PanelPoint row = widget_center(objects.app_row_alarm, launcher_button_fallback_x,
+                                             launcher_button_fallback_y);
         push_motion_and_press(options->scale, row.x, row.y);
       }
-      if (frames_run == eez_switch_frame + click_release_delta) { push_release(options->scale, alarm_row.x, alarm_row.y); }
+      if (frames_run == eez_switch_frame + click_release_delta) {
+        push_release(options->scale, alarm_row.x, alarm_row.y);
+      }
       // 回程：点 clock 屏按钮 → Flow SetPage 回 launcher 屏 →
       // 观察者 request_switch 回启动器（EEZ 屏内按钮承担返回，无导航壳）。
       // 回程点击放帧 70：首次切页动画 22–62 期间 LVGL 屏蔽输入（prev_scr）。
-      if (frames_run == eez_home_frame) { push_motion_and_press(options->scale, clock_btn.x, clock_btn.y); }
-      if (frames_run == eez_home_frame + click_release_delta) { push_release(options->scale, clock_btn.x, clock_btn.y); }
-      if (frames_run == eez_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
+      if (frames_run == eez_home_frame) {
+        push_motion_and_press(options->scale, clock_btn.x, clock_btn.y);
+      }
+      if (frames_run == eez_home_frame + click_release_delta) {
+        push_release(options->scale, clock_btn.x, clock_btn.y);
+      }
+      if (frames_run == eez_quit_frame) {
+        SDL_Event quit{};
+        quit.type = SDL_QUIT;
+        SDL_PushEvent(&quit);
+      }
     } else if (options->click) {
       if (frames_run == press_frame) {
         scroll_into_view(objects.app_row_alarm);
-        const PanelPoint row =
-            widget_center(objects.app_row_alarm, launcher_button_fallback_x, launcher_button_fallback_y);
+        const PanelPoint row = widget_center(objects.app_row_alarm, launcher_button_fallback_x,
+                                             launcher_button_fallback_y);
         push_motion_and_press(options->scale, row.x, row.y);
       }
       // 帧 20：点 launcher 屏「闹钟」行（切到 clock）；帧 70：在 clock 屏点 (X,Y)
       // （默认 = clock 屏按钮中心 → Flow SetPage 回 launcher 屏 → 回启动器；帧 70
       // 落在首次切页动画 22–62 之后，避开输入屏蔽）。
-      if (frames_run == press_frame + click_release_delta) { push_release(options->scale, alarm_row.x, alarm_row.y); }
-      if (frames_run == click_second_frame) { push_motion_and_press(options->scale, options->click_x, options->click_y); }
-      if (frames_run == click_second_frame + click_release_delta) { push_release(options->scale, options->click_x, options->click_y); }
+      if (frames_run == press_frame + click_release_delta) {
+        push_release(options->scale, alarm_row.x, alarm_row.y);
+      }
+      if (frames_run == click_second_frame) {
+        push_motion_and_press(options->scale, options->click_x, options->click_y);
+      }
+      if (frames_run == click_second_frame + click_release_delta) {
+        push_release(options->scale, options->click_x, options->click_y);
+      }
     } else if (options->drag) {
       // 按下 → 每帧推进一个插值点 → 抬起：模拟真手指的连续轨迹。
-      if (frames_run == drag_press_frame) { push_motion_and_press(options->scale, options->drag_x1, options->drag_y1); }
+      if (frames_run == drag_press_frame) {
+        push_motion_and_press(options->scale, options->drag_x1, options->drag_y1);
+      }
       if (frames_run > drag_press_frame && frames_run < drag_release_frame) {
         const int steps = drag_release_frame - drag_press_frame;
         const int t = frames_run - drag_press_frame;
@@ -1057,13 +1214,21 @@ void ui_main(void* argument) noexcept {
                     options->drag_x1 + (options->drag_x2 - options->drag_x1) * t / steps,
                     options->drag_y1 + (options->drag_y2 - options->drag_y1) * t / steps);
       }
-      if (frames_run == drag_release_frame) { push_release(options->scale, options->drag_x2, options->drag_y2); }
+      if (frames_run == drag_release_frame) {
+        push_release(options->scale, options->drag_x2, options->drag_y2);
+      }
     } else if (options->ui) {
       // AiDoGUI 验收：帧 10 同步跑完全部检查（无合成输入），帧 30 关窗。
 #if defined(EMBARK_AIDOGUI_UI)
-      if (frames_run == aidogui_check_frame) { aidogui_ok = aidogui_acceptance(); }
+      if (frames_run == aidogui_check_frame) {
+        aidogui_ok = aidogui_acceptance();
+      }
 #endif
-      if (frames_run == aidogui_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
+      if (frames_run == aidogui_quit_frame) {
+        SDL_Event quit{};
+        quit.type = SDL_QUIT;
+        SDL_PushEvent(&quit);
+      }
     } else if (options->ui_nav) {
       // AiDoGUI 双向导航 + 月历翻月：主屏运行时磁贴（第 0 个 = 时钟）→ clock → 返回
       // （设计器事件）→ launcher → 时钟卡（C++ bind_click）→ clock → 翻月键（C++ 回调）。
@@ -1072,55 +1237,107 @@ void ui_main(void* argument) noexcept {
       const PanelPoint tile = aidogui_tile_center(0, uinav_tile_fallback_x, uinav_tile_fallback_y);
       const PanelPoint back =
           aidogui_widget_center("clock", "Btn_Back", uinav_back_fallback_x, uinav_back_fallback_y);
-      const PanelPoint card =
-          aidogui_widget_center("launcher", "Card_Clock", uinav_card_fallback_x, uinav_card_fallback_y);
+      const PanelPoint card = aidogui_widget_center("launcher", "Card_Clock", uinav_card_fallback_x,
+                                                    uinav_card_fallback_y);
       const PanelPoint next_btn =
           aidogui_widget_center("clock", "Btn_Next", uinav_next_fallback_x, uinav_next_fallback_y);
       const PanelPoint prev_btn =
           aidogui_widget_center("clock", "Btn_Prev", uinav_prev_fallback_x, uinav_prev_fallback_y);
-      if (frames_run == uinav_tile_frame) { push_motion_and_press(options->scale, tile.x, tile.y); }
-      if (frames_run == uinav_tile_frame + click_release_delta) { push_release(options->scale, tile.x, tile.y); }
-      if (frames_run == uinav_clock_check_frame) { uinav_clock_ok = aidogui_clock_check(); }
-      if (frames_run == uinav_back_frame) { push_motion_and_press(options->scale, back.x, back.y); }
-      if (frames_run == uinav_back_frame + click_release_delta) { push_release(options->scale, back.x, back.y); }
-      if (frames_run == uinav_back_check_frame) { uinav_back_ok = aidogui_back_check(); }
-      if (frames_run == uinav_card_frame) { push_motion_and_press(options->scale, card.x, card.y); }
-      if (frames_run == uinav_card_frame + click_release_delta) { push_release(options->scale, card.x, card.y); }
-      if (frames_run == uinav_card_check_frame) { uinav_card_ok = aidogui_card_check(uinav_base_y, uinav_base_m); }
-      if (frames_run == uinav_next_frame) { push_motion_and_press(options->scale, next_btn.x, next_btn.y); }
-      if (frames_run == uinav_next_frame + click_release_delta) { push_release(options->scale, next_btn.x, next_btn.y); }
-      if (frames_run == uinav_next_check_frame) { uinav_next_ok = aidogui_next_check(uinav_base_y, uinav_base_m); }
-      if (frames_run == uinav_prev_frame) { push_motion_and_press(options->scale, prev_btn.x, prev_btn.y); }
-      if (frames_run == uinav_prev_frame + click_release_delta) { push_release(options->scale, prev_btn.x, prev_btn.y); }
-      if (frames_run == uinav_prev_check_frame) { uinav_prev_ok = aidogui_prev_check(uinav_base_y, uinav_base_m); }
+      if (frames_run == uinav_tile_frame) {
+        push_motion_and_press(options->scale, tile.x, tile.y);
+      }
+      if (frames_run == uinav_tile_frame + click_release_delta) {
+        push_release(options->scale, tile.x, tile.y);
+      }
+      if (frames_run == uinav_clock_check_frame) {
+        uinav_clock_ok = aidogui_clock_check();
+      }
+      if (frames_run == uinav_back_frame) {
+        push_motion_and_press(options->scale, back.x, back.y);
+      }
+      if (frames_run == uinav_back_frame + click_release_delta) {
+        push_release(options->scale, back.x, back.y);
+      }
+      if (frames_run == uinav_back_check_frame) {
+        uinav_back_ok = aidogui_back_check();
+      }
+      if (frames_run == uinav_card_frame) {
+        push_motion_and_press(options->scale, card.x, card.y);
+      }
+      if (frames_run == uinav_card_frame + click_release_delta) {
+        push_release(options->scale, card.x, card.y);
+      }
+      if (frames_run == uinav_card_check_frame) {
+        uinav_card_ok = aidogui_card_check(uinav_base_y, uinav_base_m);
+      }
+      if (frames_run == uinav_next_frame) {
+        push_motion_and_press(options->scale, next_btn.x, next_btn.y);
+      }
+      if (frames_run == uinav_next_frame + click_release_delta) {
+        push_release(options->scale, next_btn.x, next_btn.y);
+      }
+      if (frames_run == uinav_next_check_frame) {
+        uinav_next_ok = aidogui_next_check(uinav_base_y, uinav_base_m);
+      }
+      if (frames_run == uinav_prev_frame) {
+        push_motion_and_press(options->scale, prev_btn.x, prev_btn.y);
+      }
+      if (frames_run == uinav_prev_frame + click_release_delta) {
+        push_release(options->scale, prev_btn.x, prev_btn.y);
+      }
+      if (frames_run == uinav_prev_check_frame) {
+        uinav_prev_ok = aidogui_prev_check(uinav_base_y, uinav_base_m);
+      }
 #endif
-      if (frames_run == uinav_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
+      if (frames_run == uinav_quit_frame) {
+        SDL_Event quit{};
+        quit.type = SDL_QUIT;
+        SDL_PushEvent(&quit);
+      }
     } else if (options->ui_weather) {
       // 天气验收：点主屏天气卡（设计器事件）→ 天气屏对桩 → 点「>」切城市 → 点「返回」→
       // 主屏卡片同源。城市不写死，比的是"屏上的字 == 数据桩里那座城市的字"。
 #if defined(EMBARK_AIDOGUI_UI)
-      const PanelPoint wcard = aidogui_widget_center("launcher", "Card_Weather",
-                                                     uiweather_card_fallback_x, uiweather_card_fallback_y);
-      const PanelPoint wnext = aidogui_widget_center("weather", "Btn_CityNext",
-                                                     uiweather_next_fallback_x, uiweather_next_fallback_y);
-      const PanelPoint wback = aidogui_widget_center("weather", "Btn_Back",
-                                                     uiweather_back_fallback_x, uiweather_back_fallback_y);
-      if (frames_run == uiweather_card_frame) { push_motion_and_press(options->scale, wcard.x, wcard.y); }
-      if (frames_run == uiweather_card_frame + click_release_delta) { push_release(options->scale, wcard.x, wcard.y); }
-      if (frames_run == uiweather_in_frame) { uiweather_in_ok = aidogui_weather_screen_ok(weather->city_index()); }
-      if (frames_run == uiweather_next_frame) { push_motion_and_press(options->scale, wnext.x, wnext.y); }
-      if (frames_run == uiweather_next_frame + click_release_delta) { push_release(options->scale, wnext.x, wnext.y); }
+      const PanelPoint wcard = aidogui_widget_center(
+          "launcher", "Card_Weather", uiweather_card_fallback_x, uiweather_card_fallback_y);
+      const PanelPoint wnext = aidogui_widget_center(
+          "weather", "Btn_CityNext", uiweather_next_fallback_x, uiweather_next_fallback_y);
+      const PanelPoint wback = aidogui_widget_center(
+          "weather", "Btn_Back", uiweather_back_fallback_x, uiweather_back_fallback_y);
+      if (frames_run == uiweather_card_frame) {
+        push_motion_and_press(options->scale, wcard.x, wcard.y);
+      }
+      if (frames_run == uiweather_card_frame + click_release_delta) {
+        push_release(options->scale, wcard.x, wcard.y);
+      }
+      if (frames_run == uiweather_in_frame) {
+        uiweather_in_ok = aidogui_weather_screen_ok(weather->city_index());
+      }
+      if (frames_run == uiweather_next_frame) {
+        push_motion_and_press(options->scale, wnext.x, wnext.y);
+      }
+      if (frames_run == uiweather_next_frame + click_release_delta) {
+        push_release(options->scale, wnext.x, wnext.y);
+      }
       if (frames_run == uiweather_next_check_frame) {
         uiweather_next_ok =
             aidogui_weather_screen_ok(weather->city_index()) && weather->city_switches() == 1;
       }
-      if (frames_run == uiweather_back_frame) { push_motion_and_press(options->scale, wback.x, wback.y); }
-      if (frames_run == uiweather_back_frame + click_release_delta) { push_release(options->scale, wback.x, wback.y); }
+      if (frames_run == uiweather_back_frame) {
+        push_motion_and_press(options->scale, wback.x, wback.y);
+      }
+      if (frames_run == uiweather_back_frame + click_release_delta) {
+        push_release(options->scale, wback.x, wback.y);
+      }
       if (frames_run == uiweather_card_check_frame) {
         uiweather_card_ok = aidogui_weather_card_ok(weather->city_index());
       }
 #endif
-      if (frames_run == uiweather_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
+      if (frames_run == uiweather_quit_frame) {
+        SDL_Event quit{};
+        quit.type = SDL_QUIT;
+        SDL_PushEvent(&quit);
+      }
     } else if (options->ui_launcher_pages) {
       // 主屏分页验收：磁贴/页/页码点都是运行时按注册表建的 → 横向划到第 2 页 → 点只存在于
       // 第 2 页的「相册」→ 相册屏点「返回」回主屏 → 点第 1 页的「设置」磁贴进设置屏 →
@@ -1128,22 +1345,27 @@ void ui_main(void* argument) noexcept {
       //（上滑返回手势已去掉）。落点走"读真实几何 + 兜底"，以后挪设计稿也不会瞎点。
 #if defined(EMBARK_AIDOGUI_UI)
       auto* ulp_settings_app = static_cast<embark::demo::SettingsApp*>(framework.app(2));
-      if (frames_run == ulp_check_frame) { ulp_tiles_ok = aidogui_launcher_pages_check(); }
+      if (frames_run == ulp_check_frame) {
+        ulp_tiles_ok = aidogui_launcher_pages_check();
+      }
       if (frames_run == ulp_drag_press_frame) {
         push_motion_and_press(options->scale, ulp_drag_x_from, ulp_band_y);
       }
       if (frames_run > ulp_drag_press_frame && frames_run < ulp_drag_release_frame) {
         const int steps = ulp_drag_release_frame - ulp_drag_press_frame;
         const int t = frames_run - ulp_drag_press_frame;
-        push_motion(options->scale,
-                    ulp_drag_x_from + (ulp_drag_x_to - ulp_drag_x_from) * t / steps, ulp_band_y);
+        push_motion(options->scale, ulp_drag_x_from + (ulp_drag_x_to - ulp_drag_x_from) * t / steps,
+                    ulp_band_y);
       }
       if (frames_run == ulp_drag_release_frame) {
         push_release(options->scale, ulp_drag_x_to, ulp_band_y);
       }
-      if (frames_run == ulp_page_check_frame) { ulp_page_ok = aidogui_launcher_page_check(); }
+      if (frames_run == ulp_page_check_frame) {
+        ulp_page_ok = aidogui_launcher_page_check();
+      }
       if (frames_run == ulp_tile_click_frame) {
-        const PanelPoint album_tile = aidogui_tile_center(4, ulp_tile_fallback_x, ulp_tile_fallback_y);
+        const PanelPoint album_tile =
+            aidogui_tile_center(4, ulp_tile_fallback_x, ulp_tile_fallback_y);
         ulp_tile_x = album_tile.x;
         ulp_tile_y = album_tile.y;
         push_motion_and_press(options->scale, ulp_tile_x, ulp_tile_y);
@@ -1151,7 +1373,9 @@ void ui_main(void* argument) noexcept {
       if (frames_run == ulp_tile_click_frame + click_release_delta) {
         push_release(options->scale, ulp_tile_x, ulp_tile_y);
       }
-      if (frames_run == ulp_album_check_frame) { ulp_album_ok = aidogui_launcher_album_check(); }
+      if (frames_run == ulp_album_check_frame) {
+        ulp_album_ok = aidogui_launcher_album_check();
+      }
       // 相册屏「返回」→ 回主屏（组件事件 embark_ui_open_launcher）。
       if (frames_run == ulp_album_back_frame) {
         const PanelPoint back =
@@ -1163,7 +1387,9 @@ void ui_main(void* argument) noexcept {
       if (frames_run == ulp_album_back_frame + click_release_delta) {
         push_release(options->scale, ulp_back_x, ulp_back_y);
       }
-      if (frames_run == ulp_back_check_frame) { ulp_back_ok = aidogui_launcher_back_check(); }
+      if (frames_run == ulp_back_check_frame) {
+        ulp_back_ok = aidogui_launcher_back_check();
+      }
       // 留存断言过了（回来仍在第 2 页），验收脚本自己把页翻回第 1 页 —— 反向拖一遍。
       if (frames_run == ulp_back_drag_press_frame) {
         push_motion_and_press(options->scale, ulp_drag_x_to, ulp_band_y);
@@ -1171,13 +1397,15 @@ void ui_main(void* argument) noexcept {
       if (frames_run > ulp_back_drag_press_frame && frames_run < ulp_back_drag_release_frame) {
         const int steps = ulp_back_drag_release_frame - ulp_back_drag_press_frame;
         const int t = frames_run - ulp_back_drag_press_frame;
-        push_motion(options->scale,
-                    ulp_drag_x_to + (ulp_drag_x_from - ulp_drag_x_to) * t / steps, ulp_band_y);
+        push_motion(options->scale, ulp_drag_x_to + (ulp_drag_x_from - ulp_drag_x_to) * t / steps,
+                    ulp_band_y);
       }
       if (frames_run == ulp_back_drag_release_frame) {
         push_release(options->scale, ulp_drag_x_from, ulp_band_y);
       }
-      if (frames_run == ulp_page1_check_frame) { ulp_page1_ok = aidogui_launcher_page1_check(); }
+      if (frames_run == ulp_page1_check_frame) {
+        ulp_page1_ok = aidogui_launcher_page1_check();
+      }
       // 回到第 1 页之后，第 2 格就是「设置」。
       if (frames_run == ulp_settings_tile_frame) {
         const PanelPoint tile =
@@ -1191,12 +1419,14 @@ void ui_main(void* argument) noexcept {
       }
       if (frames_run == ulp_settings_check_frame) {
         ulp_settings_ok = aidogui_launcher_settings_check();
-        if (ulp_settings_app != nullptr) { ulp_level_before = static_cast<int>(ulp_settings_app->level()); }
+        if (ulp_settings_app != nullptr) {
+          ulp_level_before = static_cast<int>(ulp_settings_app->level());
+        }
       }
       // 设置屏「亮度 +1」：屏上没有组件事件，走 App 的 bind_action（aidogui_ui_nav_bind_action）。
       if (frames_run == ulp_bright_frame) {
-        const PanelPoint bright =
-            aidogui_widget_center("settings", "Btn_Bright", ulp_bright_fallback_x, ulp_bright_fallback_y);
+        const PanelPoint bright = aidogui_widget_center(
+            "settings", "Btn_Bright", ulp_bright_fallback_x, ulp_bright_fallback_y);
         ulp_bright_x = bright.x;
         ulp_bright_y = bright.y;
         push_motion_and_press(options->scale, ulp_bright_x, ulp_bright_y);
@@ -1219,15 +1449,25 @@ void ui_main(void* argument) noexcept {
       if (frames_run == ulp_settings_back_frame + click_release_delta) {
         push_release(options->scale, ulp_back_x, ulp_back_y);
       }
-      if (frames_run == ulp_home_check_frame) { ulp_home_ok = aidogui_launcher_home_check(); }
+      if (frames_run == ulp_home_check_frame) {
+        ulp_home_ok = aidogui_launcher_home_check();
+      }
 #endif
-      if (frames_run == ulp_quit_frame) { SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit); }
+      if (frames_run == ulp_quit_frame) {
+        SDL_Event quit{};
+        quit.type = SDL_QUIT;
+        SDL_PushEvent(&quit);
+      }
     }
     if (options->shot_path != nullptr && frames_run == options->shot_frame) {
-      if (!save_screenshot(display, options->shot_path)) { hp::exit_process(1); }
+      if (!save_screenshot(display, options->shot_path)) {
+        hp::exit_process(1);
+      }
     }
     if (options->quit_at > 0 && frames_run == options->quit_at) {
-      SDL_Event quit{}; quit.type = SDL_QUIT; SDL_PushEvent(&quit);
+      SDL_Event quit{};
+      quit.type = SDL_QUIT;
+      SDL_PushEvent(&quit);
     }
 
     if (frames_limit > 0 && frames_run >= frames_limit) {
@@ -1244,86 +1484,103 @@ void ui_main(void* argument) noexcept {
   const auto* clock = static_cast<const embark::demo::ClockApp*>(framework.app(1));
   auto* settings = static_cast<embark::demo::SettingsApp*>(framework.app(2));
 
-  ELOG_INFO("显示与前台：{} 帧；前台 {}；switches={}",
-            frames_run, framework.apps().at(framework.foreground())->name(), framework.switches());
+  ELOG_INFO("显示与前台：{} 帧；前台 {}；switches={}", frames_run,
+            framework.apps().at(framework.foreground())->name(), framework.switches());
   ELOG_INFO("启动器（屏名 launcher，界面来源见启动日志）：enters={} resumes={} 前台帧={}",
             launcher->enters(), launcher->resumes(), launcher->foreground_ticks());
-  ELOG_INFO("时钟（屏名 clock）：前台帧={} 亮度={} settings 档={}；LVGL 未回收 {} 字节（不申请后台，"
-            "时间只在进前台时推）",
-            clock->foreground_ticks(), clock->brightness(), settings->level(),
-            embark_lvgl_outstanding_bytes());
+  ELOG_INFO(
+      "时钟（屏名 clock）：前台帧={} 亮度={} settings 档={}；LVGL 未回收 {} 字节（不申请后台，"
+      "时间只在进前台时推）",
+      clock->foreground_ticks(), clock->brightness(), settings->level(),
+      embark_lvgl_outstanding_bytes());
   ELOG_INFO("天气（屏名 weather）：城市 {}（下标 {}）切城 {} 次；enters={} resumes={} 前台帧={}",
-            weather->city_name(), weather->city_index(), weather->city_switches(), weather->enters(),
-            weather->resumes(), weather->foreground_ticks());
+            weather->city_name(), weather->city_index(), weather->city_switches(),
+            weather->enters(), weather->resumes(), weather->foreground_ticks());
 
   int exit_code = 0;
   if (options->launch) {
     const char* last_screen = embark::demo::eez_ui_nav_last_screen();
-    const bool launched_ok = framework.switches() == 4 && launcher->enters() == 1 &&
-                             launcher->resumes() == 2 && launcher->foreground_ticks() > 0 &&
-                             clock->enters() == 1 && clock->resumes() == 1 &&
-                             clock->foreground_ticks() > 0 &&
-                             clock->brightness() == 1 &&
-                             embark::demo::eez_ui_nav_switch_requests() == 3 &&
-                             last_screen != nullptr && std::strcmp(last_screen, "launcher") == 0 &&
-                             embark::demo::eez_ui_bridge_current_screen() == 1 &&
-                             framework.foreground() == 0;
-    if (launched_ok) { ELOG_INFO("〔launch 验收通过〕"); } else { ELOG_INFO("〔launch 验收失败〕"); }
-    if (!launched_ok) { exit_code = 2; }
+    const bool launched_ok =
+        framework.switches() == 4 && launcher->enters() == 1 && launcher->resumes() == 2 &&
+        launcher->foreground_ticks() > 0 && clock->enters() == 1 && clock->resumes() == 1 &&
+        clock->foreground_ticks() > 0 && clock->brightness() == 1 &&
+        embark::demo::eez_ui_nav_switch_requests() == 3 && last_screen != nullptr &&
+        std::strcmp(last_screen, "launcher") == 0 &&
+        embark::demo::eez_ui_bridge_current_screen() == 1 && framework.foreground() == 0;
+    if (launched_ok) {
+      ELOG_INFO("〔launch 验收通过〕");
+    } else {
+      ELOG_INFO("〔launch 验收失败〕");
+    }
+    if (!launched_ok) {
+      exit_code = 2;
+    }
   }
   if (options->click) {
     // 点 launcher 屏按钮 → 切 clock（EEZ 驱动）→ 在 clock 屏点 (X,Y)（默认回启动器）。
     // 点击落点随前台切换走：同一套坐标只对当前屏的按钮有效，这正是薄壳切换的验收点。
     const char* last_screen = embark::demo::eez_ui_nav_last_screen();
-    const bool clicked_ok = framework.switches() == 2 && launcher->enters() == 1 &&
-                            launcher->resumes() == 1 && clock->enters() == 1 && clock->resumes() == 0 &&
-                            settings->enters() == 0 &&
-                            embark::demo::eez_ui_nav_switch_requests() == 2 &&
-                            last_screen != nullptr && std::strcmp(last_screen, "launcher") == 0 &&
-                            embark::demo::eez_ui_bridge_current_screen() == 1 &&
-                            framework.foreground() == 0;
-    if (clicked_ok) { ELOG_INFO("〔click 验收通过〕"); } else { ELOG_INFO("〔click 验收失败〕"); }
-    if (!clicked_ok) { exit_code = 2; }
+    const bool clicked_ok =
+        framework.switches() == 2 && launcher->enters() == 1 && launcher->resumes() == 1 &&
+        clock->enters() == 1 && clock->resumes() == 0 && settings->enters() == 0 &&
+        embark::demo::eez_ui_nav_switch_requests() == 2 && last_screen != nullptr &&
+        std::strcmp(last_screen, "launcher") == 0 &&
+        embark::demo::eez_ui_bridge_current_screen() == 1 && framework.foreground() == 0;
+    if (clicked_ok) {
+      ELOG_INFO("〔click 验收通过〕");
+    } else {
+      ELOG_INFO("〔click 验收失败〕");
+    }
+    if (!clicked_ok) {
+      exit_code = 2;
+    }
   }
   if (options->drag) {
     // EEZ 屏上没有可拖动的槽位了：拖动只走输入通路，不误触按钮、不切 App。
-    const bool dragged_ok = framework.switches() == 0 && launcher->enters() == 1 &&
-                            framework.foreground() == 0;
+    const bool dragged_ok =
+        framework.switches() == 0 && launcher->enters() == 1 && framework.foreground() == 0;
     ELOG_INFO("〔drag 验收{}〕：拖动 {}px，前台 {}，switches={}", dragged_ok ? "通过" : "失败",
-              options->drag_y2 - options->drag_y1, framework.apps().at(framework.foreground())->name(),
-              framework.switches());
-    if (!dragged_ok) { exit_code = 2; }
+              options->drag_y2 - options->drag_y1,
+              framework.apps().at(framework.foreground())->name(), framework.switches());
+    if (!dragged_ok) {
+      exit_code = 2;
+    }
   }
   if (options->ui) {
     // --ui 的检查在帧 10 就断完了（aidogui_acceptance 自己打每条证据行），这里只落结论。
     ELOG_INFO("〔aidogui 验收{}〕", aidogui_ok ? "通过" : "失败");
-    if (!aidogui_ok) { exit_code = 2; }
+    if (!aidogui_ok) {
+      exit_code = 2;
+    }
   }
   if (options->ui_nav) {
     // --ui-nav 的五段检查在帧 22/40/62/80/96 就断完了（各自打了证据行），这里只落结论。
     const bool uinav_ok =
         uinav_clock_ok && uinav_back_ok && uinav_card_ok && uinav_next_ok && uinav_prev_ok;
     ELOG_INFO("〔aidogui 导航验收{}〕（前台 {}，switches={}，导航命中 {} 次，月历基准 {}-{}）",
-              uinav_ok ? "通过" : "失败",
-              framework.apps().at(framework.foreground())->name(), framework.switches(),
-              embark::demo::aidogui_ui_nav_click_hits(), uinav_base_y, uinav_base_m);
-    if (!uinav_ok) { exit_code = 2; }
+              uinav_ok ? "通过" : "失败", framework.apps().at(framework.foreground())->name(),
+              framework.switches(), embark::demo::aidogui_ui_nav_click_hits(), uinav_base_y,
+              uinav_base_m);
+    if (!uinav_ok) {
+      exit_code = 2;
+    }
   }
   if (options->ui_weather) {
     // --ui-weather 的三段检查在帧 22/40/58 就断完了（各自打了证据行），这里只落结论。
     const bool uiweather_ok = uiweather_in_ok && uiweather_next_ok && uiweather_card_ok;
     ELOG_INFO("〔aidogui 天气验收{}〕（前台 {}，switches={}，切城 {} 次，导航命中 {} 次，城市 {}）",
-              uiweather_ok ? "通过" : "失败",
-              framework.apps().at(framework.foreground())->name(), framework.switches(),
-              weather->city_switches(), embark::demo::aidogui_ui_nav_click_hits(),
-              weather->city_name());
-    if (!uiweather_ok) { exit_code = 2; }
+              uiweather_ok ? "通过" : "失败", framework.apps().at(framework.foreground())->name(),
+              framework.switches(), weather->city_switches(),
+              embark::demo::aidogui_ui_nav_click_hits(), weather->city_name());
+    if (!uiweather_ok) {
+      exit_code = 2;
+    }
   }
   if (options->ui_launcher_pages) {
     // 八段检查在帧 10/44/64/78/108/122/134/150 就断完了（各自打了证据行），这里只落结论，
     // 外加两条全局不变量（ADR 0015）：① 没有任何 App 申请后台体；② 写控件值的屏都声明了重推。
-    const bool ulp_ok = ulp_tiles_ok && ulp_page_ok && ulp_album_ok && ulp_back_ok && ulp_page1_ok &&
-                        ulp_settings_ok && ulp_bright_ok && ulp_home_ok &&
+    const bool ulp_ok = ulp_tiles_ok && ulp_page_ok && ulp_album_ok && ulp_back_ok &&
+                        ulp_page1_ok && ulp_settings_ok && ulp_bright_ok && ulp_home_ok &&
                         framework.foreground() == 0 && framework.switches() == 4;
     bool no_background_ok = true;
     for (embark::AppId i = 0; i < framework.apps().size(); ++i) {
@@ -1331,25 +1588,31 @@ void ui_main(void* argument) noexcept {
       const bool suspended = app->settings().background == embark::BackgroundPolicy::suspend;
       ELOG_INFO("      槽 {} {} 的后台策略 = {}", i, app->name(),
                 suspended ? "suspend（没有后台体）" : "有后台体 ← 不该有");
-      if (!suspended) { no_background_ok = false; }
+      if (!suspended) {
+        no_background_ok = false;
+      }
     }
     bool repaint_ok = true;
 #if defined(EMBARK_AIDOGUI_UI)
     const int repaint_bindings = embark::demo::aidogui_ui_nav_repaint_bindings();
     const int repaint_calls = embark::demo::aidogui_ui_nav_repaint_calls();
     repaint_ok = repaint_bindings == 3 && repaint_calls >= 3;
-    ELOG_INFO("值重推：声明 {} 个屏（launcher / clock / weather，期望 3），屏装载后被调 {} 次（期望 ≥3）",
-              repaint_bindings, repaint_calls);
+    ELOG_INFO(
+        "值重推：声明 {} 个屏（launcher / clock / weather，期望 3），屏装载后被调 {} 次（期望 ≥3）",
+        repaint_bindings, repaint_calls);
 #endif
     const bool ulp_all_ok = ulp_ok && no_background_ok && repaint_ok;
-    ELOG_INFO("〔主屏分页验收{}〕（磁贴 {} / 页 {} / 点 {}；设置屏 {} 亮度档 {}→{}；"
-              "前台 {}，switches={}；无后台体 = {}，值重推 = {}）",
-              ulp_all_ok ? "通过" : "失败", embark::demo::launcher_tiles_count(),
-              embark::demo::launcher_tiles_page_count(), embark::demo::launcher_tiles_dot_count(),
-              ulp_settings_ok ? "已进" : "未进", ulp_level_before, settings->level(),
-              framework.apps().at(framework.foreground())->name(), framework.switches(),
-              no_background_ok ? "是" : "否", repaint_ok ? "对" : "错");
-    if (!ulp_all_ok) { exit_code = 2; }
+    ELOG_INFO(
+        "〔主屏分页验收{}〕（磁贴 {} / 页 {} / 点 {}；设置屏 {} 亮度档 {}→{}；"
+        "前台 {}，switches={}；无后台体 = {}，值重推 = {}）",
+        ulp_all_ok ? "通过" : "失败", embark::demo::launcher_tiles_count(),
+        embark::demo::launcher_tiles_page_count(), embark::demo::launcher_tiles_dot_count(),
+        ulp_settings_ok ? "已进" : "未进", ulp_level_before, settings->level(),
+        framework.apps().at(framework.foreground())->name(), framework.switches(),
+        no_background_ok ? "是" : "否", repaint_ok ? "对" : "错");
+    if (!ulp_all_ok) {
+      exit_code = 2;
+    }
   }
   if (options->eez) {
     // 故事线：点 launcher 屏按钮 → Flow SetPage 到 clock 屏 → 桥的屏观察者 →
@@ -1386,9 +1649,11 @@ void ui_main(void* argument) noexcept {
       const bool set_int = embark::demo::eez_ui_bridge_set_var_int("launcher_tap_count", 42);
       const bool get_int = embark::demo::eez_ui_bridge_get_var_int("launcher_tap_count", got_int);
       const bool set_float = embark::demo::eez_ui_bridge_set_var_float("launcher_tap_count", 3.5f);
-      const bool get_float = embark::demo::eez_ui_bridge_get_var_float("launcher_tap_count", got_float);
+      const bool get_float =
+          embark::demo::eez_ui_bridge_get_var_float("launcher_tap_count", got_float);
       const bool set_bool = embark::demo::eez_ui_bridge_set_var_bool("launcher_tap_count", true);
-      const bool get_bool = embark::demo::eez_ui_bridge_get_var_bool("launcher_tap_count", got_bool);
+      const bool get_bool =
+          embark::demo::eez_ui_bridge_get_var_bool("launcher_tap_count", got_bool);
       var_roundtrip_ok = set_int && get_int && got_int == 42 && set_float && get_float &&
                          got_float == 3.5f && set_bool && get_bool && got_bool;
       ELOG_INFO("变量读写往返：int {} -> {}（{}），float {} -> {}（{}），bool true -> {}（{}）",
@@ -1398,20 +1663,22 @@ void ui_main(void* argument) noexcept {
     } else {
       var_roundtrip_ok = false;
     }
-    const bool no_such_var_ok = embark::demo::eez_ui_bridge_var_index("no_such_var") ==
-                                embark::demo::kEezVarNone;
-    if (!no_such_var_ok) { var_roundtrip_ok = false; }
+    const bool no_such_var_ok =
+        embark::demo::eez_ui_bridge_var_index("no_such_var") == embark::demo::kEezVarNone;
+    if (!no_such_var_ok) {
+      var_roundtrip_ok = false;
+    }
     const char* last_screen = embark::demo::eez_ui_nav_last_screen();
-    const bool eez_ok = framework.switches() == 2 && launcher->enters() == 1 &&
-                        launcher->resumes() == 1 && launcher->foreground_ticks() > 0 &&
-                        clock->enters() == 1 && clock->resumes() == 0 &&
-                        embark::demo::eez_ui_nav_switch_requests() == 2 &&
-                        last_screen != nullptr && std::strcmp(last_screen, "launcher") == 0 &&
-                        embark::demo::eez_ui_bridge_current_screen() == 1 &&
-                        framework.foreground() == 0 && screen_table_ok && var_table_ok &&
-                        var_roundtrip_ok && no_such_var_ok;
+    const bool eez_ok =
+        framework.switches() == 2 && launcher->enters() == 1 && launcher->resumes() == 1 &&
+        launcher->foreground_ticks() > 0 && clock->enters() == 1 && clock->resumes() == 0 &&
+        embark::demo::eez_ui_nav_switch_requests() == 2 && last_screen != nullptr &&
+        std::strcmp(last_screen, "launcher") == 0 &&
+        embark::demo::eez_ui_bridge_current_screen() == 1 && framework.foreground() == 0 &&
+        screen_table_ok && var_table_ok && var_roundtrip_ok && no_such_var_ok;
     ELOG_INFO(
-        "eez: switches={} enters={} resumes={} ticks={} current_screen={} screens={} vars={} nav_requests={} last_screen={}",
+        "eez: switches={} enters={} resumes={} ticks={} current_screen={} screens={} vars={} "
+        "nav_requests={} last_screen={}",
         framework.switches(), launcher->enters(), launcher->resumes(), launcher->foreground_ticks(),
         embark::demo::eez_ui_bridge_current_screen(), screen_count, var_count,
         embark::demo::eez_ui_nav_switch_requests(),
@@ -1421,7 +1688,8 @@ void ui_main(void* argument) noexcept {
     } else if (kAidoguiOwnsAppLayer) {
       // AiDoGUI 已接管 App 层（本构建定义了 EMBARK_AIDOGUI_UI）：App 只会 attach aidogui
       // 的 nav，EEZ 屏也不再被装载，故切屏断言不成立 —— 这不是回归（ADR 0011）。
-      ELOG_INFO("〔eez 验收跳过〕AiDoGUI 已接管 App 层，EEZ nav 不再被 App attach；老 EEZ 屏未装载。");
+      ELOG_INFO(
+          "〔eez 验收跳过〕AiDoGUI 已接管 App 层，EEZ nav 不再被 App attach；老 EEZ 屏未装载。");
     } else {
       ELOG_INFO("〔eez 验收失败〕");
       exit_code = 2;

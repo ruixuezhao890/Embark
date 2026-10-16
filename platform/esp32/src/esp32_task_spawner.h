@@ -98,8 +98,8 @@ struct Esp32TaskKernel final {
     // IDF 的 ulStackDepth 是字节数：框架的字数按宿主字长折算成真机字节数（见 esp32_board.h）。
     TaskHandle_t handle = xTaskCreateStaticPinnedToCore(
         trampoline, name,
-        static_cast<std::uint32_t>(stack_words) * static_cast<std::uint32_t>(stack_word_bytes), task,
-        priority, task->stack, &task->tcb, embark::platform::esp32::own_task_core);
+        static_cast<std::uint32_t>(stack_words) * static_cast<std::uint32_t>(stack_word_bytes),
+        task, priority, task->stack, &task->tcb, embark::platform::esp32::own_task_core);
     if (handle == nullptr) {
       task->~Task();  // 静态创建理论不失败；真失败就把槽还原成未构造的样子
       return nullptr;

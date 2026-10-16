@@ -85,7 +85,7 @@ class LauncherApp final : public App {
   void refresh_weather();
 
   LauncherTile tiles_[launcher::max_tiles] = {};  // 磁贴元数据（字符串是静态字面量）
-  std::size_t tile_count_ = 0;                   // 本次重建写进 tiles_ 的条数（= 屏上磁贴数）
+  std::size_t tile_count_ = 0;  // 本次重建写进 tiles_ 的条数（= 屏上磁贴数）
   unsigned enters_ = 0;
   unsigned resumes_ = 0;
   unsigned foreground_ticks_ = 0;
@@ -93,8 +93,8 @@ class LauncherApp final : public App {
   // 上次刷新的分钟（同分钟不重写）；repaint_screen 会清成 0xFFFFFFFFU —— 屏是重建的，
   // label 已被打回设计稿初值，不清缓存就会一直停在那个初值上。
   std::uint32_t last_minute_ = 0xFFFFFFFFU;
-  std::uint8_t shown_city_ = 0xFFU;          // 上次画上卡片的城市（0xFF = 屏刚建、必须重画）
-  Framework* fw_ = nullptr;  // onCreate 记下；hal().time 是取墙钟的唯一入口
+  std::uint8_t shown_city_ = 0xFFU;  // 上次画上卡片的城市（0xFF = 屏刚建、必须重画）
+  Framework* fw_ = nullptr;          // onCreate 记下；hal().time 是取墙钟的唯一入口
 };
 
 }  // namespace embark::demo

@@ -30,8 +30,8 @@ using namespace embark::launcher;
 constexpr const char* kLauncherScreen = "launcher";
 constexpr const char* kBandWidget = "Band_Apps";
 constexpr const char* kDotsWidget = "Dots_Row";
-constexpr int kTileTextSize = 14;         // 与设计稿磁贴字同号（字号表里的 14px）
-constexpr lv_coord_t kTileTextY = 15;     // 设计稿：label 48×20 @ y=15
+constexpr int kTileTextSize = 14;      // 与设计稿磁贴字同号（字号表里的 14px）
+constexpr lv_coord_t kTileTextY = 15;  // 设计稿：label 48×20 @ y=15
 
 struct TileSlot {
   const char* app = nullptr;
@@ -127,7 +127,8 @@ void clear_bookkeeping() {
 
 std::size_t launcher_tiles_rebuild(const char* screen_name, const LauncherTile* tiles,
                                    std::size_t count) {
-  if (screen_name == nullptr || tiles == nullptr || std::strcmp(screen_name, kLauncherScreen) != 0) {
+  if (screen_name == nullptr || tiles == nullptr ||
+      std::strcmp(screen_name, kLauncherScreen) != 0) {
     return 0U;
   }
   lv_obj_t* band = aidogui_ui_bridge_widget(kLauncherScreen, kBandWidget);
@@ -192,8 +193,8 @@ std::size_t launcher_tiles_rebuild(const char* screen_name, const LauncherTile* 
     lv_obj_clear_flag(dot, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_radius(dot, static_cast<lv_coord_t>(dot_size / 2U), 0);
     lv_obj_set_style_bg_color(
-        dot, lv_color_hex(page == active ? design_tokens::page_dot_active : design_tokens::page_dot),
-        0);
+        dot,
+        lv_color_hex(page == active ? design_tokens::page_dot_active : design_tokens::page_dot), 0);
     lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
     g_dots[page] = dot;
   }
@@ -218,11 +219,21 @@ void launcher_tiles_show_page(std::size_t page) {
   ELOG_INFO("主屏磁贴：跳到第 {} 页（共 {} 页）", page + 1U, g_page_count);
 }
 
-std::size_t launcher_tiles_count() { return g_tile_count; }
-std::size_t launcher_tiles_page_count() { return g_page_count; }
-std::size_t launcher_tiles_dot_count() { return g_dot_count; }
-std::size_t launcher_tiles_current_page() { return page_from_scroll(); }
-lv_obj_t* launcher_tiles_band() { return g_band; }
+std::size_t launcher_tiles_count() {
+  return g_tile_count;
+}
+std::size_t launcher_tiles_page_count() {
+  return g_page_count;
+}
+std::size_t launcher_tiles_dot_count() {
+  return g_dot_count;
+}
+std::size_t launcher_tiles_current_page() {
+  return page_from_scroll();
+}
+lv_obj_t* launcher_tiles_band() {
+  return g_band;
+}
 
 lv_obj_t* launcher_tiles_page(std::size_t index) {
   return index < g_page_count ? g_pages[index] : nullptr;

@@ -62,12 +62,20 @@ constexpr std::size_t page_count(std::size_t tiles) noexcept {
 }
 
 /// 第 tile_index 个磁贴落在第几页 / 页内第几格。
-constexpr std::size_t page_of(std::size_t tile_index) noexcept { return tile_index / tiles_per_page; }
-constexpr std::size_t slot_of(std::size_t tile_index) noexcept { return tile_index % tiles_per_page; }
+constexpr std::size_t page_of(std::size_t tile_index) noexcept {
+  return tile_index / tiles_per_page;
+}
+constexpr std::size_t slot_of(std::size_t tile_index) noexcept {
+  return tile_index % tiles_per_page;
+}
 
 /// 页内第 slot 格的 x；第 page 页在磁贴带里的 x。
-constexpr std::size_t tile_x(std::size_t slot) noexcept { return tile_x0 + slot * tile_dx; }
-constexpr std::size_t page_x(std::size_t page) noexcept { return page * page_width; }
+constexpr std::size_t tile_x(std::size_t slot) noexcept {
+  return tile_x0 + slot * tile_dx;
+}
+constexpr std::size_t page_x(std::size_t page) noexcept {
+  return page * page_width;
+}
 
 /// 页码点整行宽度（n 个点 + n−1 个间距）。
 constexpr std::size_t dots_row_width(std::size_t pages) noexcept {

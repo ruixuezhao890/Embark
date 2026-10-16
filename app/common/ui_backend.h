@@ -40,7 +40,9 @@ inline void ui_backend_load_for_app(const char* app_name) {
   }
 }
 
-inline void ui_backend_tick() { aidogui_ui_bridge_tick(); }
+inline void ui_backend_tick() {
+  aidogui_ui_bridge_tick();
+}
 
 inline void ui_backend_bind_click(const char* screen_name, const char* widget_name,
                                   const char* app_name) {
@@ -53,8 +55,7 @@ inline void ui_backend_bind_click(const char* screen_name, const char* widget_na
 inline void ui_backend_bind_action(const char* screen_name, const char* widget_name,
                                    void (*action)()) {
   if (!aidogui_ui_nav_bind_action(screen_name, widget_name, action)) {
-    ELOG_ERROR("AiDoGUI 逻辑绑定登记失败（参数为空或表满）：屏 {} 的 {}", screen_name,
-               widget_name);
+    ELOG_ERROR("AiDoGUI 逻辑绑定登记失败（参数为空或表满）：屏 {} 的 {}", screen_name, widget_name);
   }
 }
 
@@ -85,7 +86,9 @@ inline void ui_backend_load_for_app(const char* app_name) {
   }
 }
 
-inline void ui_backend_tick() { eez_ui_bridge_tick(); }
+inline void ui_backend_tick() {
+  eez_ui_bridge_tick();
+}
 
 inline void ui_backend_bind_click(const char* screen_name, const char* widget_name,
                                   const char* app_name) {
@@ -118,8 +121,12 @@ namespace embark::demo {
 
 inline constexpr const char* kUiBackendName = "none";
 
-inline void ui_backend_attach_nav(Framework& framework) { (void)framework; }
-inline void ui_backend_load_for_app(const char* app_name) { (void)app_name; }
+inline void ui_backend_attach_nav(Framework& framework) {
+  (void)framework;
+}
+inline void ui_backend_load_for_app(const char* app_name) {
+  (void)app_name;
+}
 inline void ui_backend_tick() {}
 
 inline void ui_backend_bind_click(const char* screen_name, const char* widget_name,

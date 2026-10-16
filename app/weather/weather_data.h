@@ -40,8 +40,8 @@ struct WeatherDay {
 
 /// 一个城市：名字 + 当前温度（"现在"区用）+ 5 天（index 0 == 今天）。
 struct WeatherCity {
-  const char* name;   // 14px：北京 / 上海 / 广州 / 深圳
-  const char* temp;   // 28px：26°
+  const char* name;  // 14px：北京 / 上海 / 广州 / 深圳
+  const char* temp;  // 28px：26°
   WeatherDay days[5];
 };
 
@@ -54,25 +54,29 @@ inline constexpr const char* kWeatherCityKey = "wx.city";
 /// 城市表（函数内 static，避免头文件里的外部链接变量；inline 函数保证单一定义）。
 inline const WeatherCity* weather_cities() {
   static constexpr WeatherCity kCities[kWeatherCityCount] = {
-      {"北京", "26°",
+      {"北京",
+       "26°",
        {{"今天", "晴", "空气优", "18°/26°"},
         {"周六", "多云", "微风", "17°/25°"},
         {"周日", "阴", "有雨", "16°/23°"},
         {"周一", "小雨", "有雨", "15°/21°"},
         {"周二", "晴", "空气良", "16°/24°"}}},
-      {"上海", "23°",
+      {"上海",
+       "23°",
        {{"今天", "阴", "微风", "20°/25°"},
         {"周六", "小雨", "有雨", "19°/23°"},
         {"周日", "中雨", "有雨", "18°/22°"},
         {"周一", "多云", "空气良", "19°/24°"},
         {"周二", "晴", "空气优", "20°/26°"}}},
-      {"广州", "30°",
+      {"广州",
+       "30°",
        {{"今天", "雷雨", "闷热", "26°/33°"},
         {"周六", "大雨", "有雨", "25°/31°"},
         {"周日", "中雨", "有雨", "25°/30°"},
         {"周一", "多云", "闷热", "26°/32°"},
         {"周二", "晴", "闷热", "27°/34°"}}},
-      {"深圳", "29°",
+      {"深圳",
+       "29°",
        {{"今天", "多云", "闷热", "27°/32°"},
         {"周六", "雷雨", "有雨", "26°/31°"},
         {"周日", "大雨", "有雨", "25°/30°"},
@@ -91,7 +95,8 @@ inline const WeatherCity& weather_city(std::size_t index) {
 inline std::size_t weather_shift_city(std::size_t index, int delta) {
   const int n = static_cast<int>(kWeatherCityCount);
   int next = (static_cast<int>(index) + delta) % n;
-  if (next < 0) next += n;
+  if (next < 0)
+    next += n;
   return static_cast<std::size_t>(next);
 }
 
@@ -99,7 +104,8 @@ inline std::size_t weather_shift_city(std::size_t index, int delta) {
 inline std::size_t weather_load_city(embark::hal::IPersistence& storage) {
   std::uint8_t raw = 0U;
   const auto got = storage.read(kWeatherCityKey, etl::span<std::uint8_t>(&raw, 1U));
-  if (!got.has_value() || got.value() != 1U || raw >= kWeatherCityCount) return 0U;
+  if (!got.has_value() || got.value() != 1U || raw >= kWeatherCityCount)
+    return 0U;
   return static_cast<std::size_t>(raw);
 }
 

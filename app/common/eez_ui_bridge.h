@@ -87,7 +87,7 @@ bool eez_ui_bridge_enter_app_screen(const char* app_name);
 
 // Flow 全局变量（UI 显示数据的接口）：按名读写，索引由构建期变量表解析。
 int eez_ui_bridge_var_count();
-const char* eez_ui_bridge_var_name(int index);  // 越界返回 nullptr
+const char* eez_ui_bridge_var_name(int index);      // 越界返回 nullptr
 int eez_ui_bridge_var_index(const char* var_name);  // 未命中返回 kEezVarNone
 
 bool eez_ui_bridge_set_var_int(const char* var_name, std::int32_t value);

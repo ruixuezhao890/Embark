@@ -55,7 +55,6 @@ class IUiPort {
 
   /// 退出路径收尾（框架 shutdown 时调用；按需实现，不做强制语义）。
   virtual void shutdown() noexcept = 0;
-
 };
 
 }  // namespace embark

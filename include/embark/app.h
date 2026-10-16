@@ -48,7 +48,7 @@ E_FMT_DERIVE_ENUM(enum class BackgroundPolicy
 E_FMT_DERIVE_ENUM(enum class ArmPolicy
                   : std::uint8_t{
                       on_first_enter = 0,  ///< 第一次进过前台才武装（默认）
-                      at_boot = 1,         ///< boot 装配时就武装（不管有没有被打开过）
+                      at_boot = 1,  ///< boot 装配时就武装（不管有没有被打开过）
                   });
 
 /// 每 App 的后台配置（App::settings() 返回；默认 = 纯前台、后台不跑）。
@@ -75,12 +75,12 @@ class App {
   /// 后台配置（spec §5：per-App 策略，默认 Suspend）。
   [[nodiscard]] virtual AppSettings settings() const { return AppSettings{}; }
 
-// --- 展示元数据（issue 16；零堆、编译期常量）----------------------------------
+  // --- 展示元数据（issue 16；零堆、编译期常量）----------------------------------
   // 元数据走虚函数，而不是在注册表里再挂第二张表：注册表的表项仍是 App*
   // （app_registry.h 的宏形状一行不改），"表长 = App 数"由 App 表本身的
-// static_assert 保证。元数据由框架的扩展点读取，框架自身不解释它们。
+  // static_assert 保证。元数据由框架的扩展点读取，框架自身不解释它们。
 
-/// 展示标题（启动器槽位等用途）。默认取 name()：任何 App 都有可读标题；
+  /// 展示标题（启动器槽位等用途）。默认取 name()：任何 App 都有可读标题；
   /// 中文标题由 App 自己覆写（进静态子集字库，见 issue 17 的缺字审计）。
   [[nodiscard]] virtual const char* title() const { return name(); }
 

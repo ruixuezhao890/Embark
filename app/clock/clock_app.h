@@ -149,7 +149,7 @@ class ClockApp final : public App {
   std::uint32_t resumes_ = 0;
   std::uint32_t foreground_ticks_ = 0;
   std::uint32_t last_second_ = 0xFFFFFFFFU;  // 上次刷新的秒（同秒不重算）
-  bool clock_ready_ = false;                  // 墙钟可用（状态翻转时才打日志）
+  bool clock_ready_ = false;                 // 墙钟可用（状态翻转时才打日志）
 };
 
 }  // namespace embark::demo

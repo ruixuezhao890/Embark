@@ -15,8 +15,8 @@
 namespace embark::demo {
 namespace {
 
-Framework* g_framework = nullptr;    // 当前接线的框架（同一时刻只有一个 UI 框架）
-int g_switch_requests = 0;          // 观测：登记了几次切换请求
+Framework* g_framework = nullptr;  // 当前接线的框架（同一时刻只有一个 UI 框架）
+int g_switch_requests = 0;         // 观测：登记了几次切换请求
 const char* g_last_screen = nullptr;  // 观测：最近一次屏名（指向屏表静态字符串）
 
 void on_eez_screen_changed(const char* screen_name, void* user) {
@@ -57,8 +57,12 @@ void eez_ui_nav_detach() {
   g_framework = nullptr;
 }
 
-int eez_ui_nav_switch_requests() { return g_switch_requests; }
+int eez_ui_nav_switch_requests() {
+  return g_switch_requests;
+}
 
-const char* eez_ui_nav_last_screen() { return g_last_screen; }
+const char* eez_ui_nav_last_screen() {
+  return g_last_screen;
+}
 
 }  // namespace embark::demo

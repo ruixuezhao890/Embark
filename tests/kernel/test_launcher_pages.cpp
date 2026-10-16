@@ -28,7 +28,7 @@ TEST_CASE("磁贴数 = App 数 − 1（注册表第 0 项是主屏自己）") {
   CHECK(tile_count(3U) == 2U);
   CHECK(tile_count(4U) == 3U);
   CHECK(tile_count(5U) == 4U);
-  CHECK(tile_count(6U) == 5U);   // launcher + 时钟/设置/天气/音乐/相册
+  CHECK(tile_count(6U) == 5U);  // launcher + 时钟/设置/天气/音乐/相册
   CHECK(tile_count(11U) == 10U);
   CHECK(tile_count(12U) == 11U);
 }

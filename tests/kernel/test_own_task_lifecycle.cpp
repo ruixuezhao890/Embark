@@ -270,7 +270,8 @@ TEST_CASE("系统用例：own task 创建 → 跑完 → 回收 → 再创建（
 
   CHECK_FALSE(fw.background_armed(job_id));  // 还没被打开过 = 后台还没武装
 
-  std::printf("② boot：job 是默认前台 → 当场武装，own_task 在这里被创建（名字/栈/优先级原样交出去）\n");
+  std::printf(
+      "② boot：job 是默认前台 → 当场武装，own_task 在这里被创建（名字/栈/优先级原样交出去）\n");
   REQUIRE(fw.boot() == Error::none);
   CHECK(fw.background_armed(job_id));  // 默认前台：boot 里就算"进过前台"
   CHECK(fw.arm_failures() == 0U);

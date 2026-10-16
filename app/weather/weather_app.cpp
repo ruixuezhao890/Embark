@@ -32,7 +32,8 @@ constexpr const char* kBtnNext = "Btn_CityNext";
 void WeatherApp::onCreate(Framework& fw) {
   fw_ = &fw;
   city_ = weather_load_city(fw.hal().storage);  // 没有存过 → 0（北京）
-  ELOG_INFO("App {} onCreate（城市 = {}，下标 {}；不申请后台）", name(), weather_city(city_).name, city_);
+  ELOG_INFO("App {} onCreate（城市 = {}，下标 {}；不申请后台）", name(), weather_city(city_).name,
+            city_);
 #if defined(EMBARK_AIDOGUI_UI)
   // 屏装载后重推控件值（ADR 0015）：屏切走即 destroy、回来即 init（ADR 0011 决策②），新控件
   // 上是设计器初值 —— repaint_screen() 负责重挂箭头 + 重画 5 天。
@@ -90,13 +91,17 @@ void WeatherApp::onMessage(const Message& msg) {
   (void)msg;  // 天气数据是桩，不订阅任何消息
 }
 
-const char* WeatherApp::city_name() const noexcept { return weather_city(city_).name; }
+const char* WeatherApp::city_name() const noexcept {
+  return weather_city(city_).name;
+}
 
 void WeatherApp::shift_city(int delta) {
   city_ = weather_shift_city(city_, delta);
   ++city_switches_;
-  if (fw_ != nullptr) weather_save_city(fw_->hal().storage, city_);  // 下次启动还在这个城市
-  ELOG_INFO("天气切到城市 {}（下标 {}，第 {} 次切换）", weather_city(city_).name, city_, city_switches_);
+  if (fw_ != nullptr)
+    weather_save_city(fw_->hal().storage, city_);  // 下次启动还在这个城市
+  ELOG_INFO("天气切到城市 {}（下标 {}，第 {} 次切换）", weather_city(city_).name, city_,
+            city_switches_);
   refresh_display();
 }
 

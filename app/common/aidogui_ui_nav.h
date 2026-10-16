@@ -60,8 +60,7 @@ bool aidogui_ui_nav_bind_click(const char* screen_name, const char* widget_name,
 /// 声明一条**逻辑**点击：点控件 <widget_name> → 就地调 <action>（不切 App）。用于屏上
 /// "有个按钮要干点事"的场合（如设置的「亮度 +1」）；重挂时机与 bind_click 相同。
 /// 同一个控件先后声明两种绑定时，后写的生效（共用一张表）。返回 false = 参数为空或表已满。
-bool aidogui_ui_nav_bind_action(const char* screen_name, const char* widget_name,
-                                void (*action)());
+bool aidogui_ui_nav_bind_action(const char* screen_name, const char* widget_name, void (*action)());
 
 // --- 控件值重推（屏装载后 → App 的 repaint 钩子；与点击绑定对称）--------------
 /// 声明"屏 <screen_name> 装载好后 → 调 <repaint>"，让 App 把自己负责的**控件值**重推一遍。

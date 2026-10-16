@@ -13,8 +13,8 @@
 
 #include <embark/log.h>
 
-#include "embark_aidogui_ui_tables.h"
 #include "aidogui_res_fs.h"
+#include "embark_aidogui_ui_tables.h"
 
 namespace embark::demo {
 namespace {

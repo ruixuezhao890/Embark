@@ -90,8 +90,8 @@ void LauncherApp::onPause() {
 #if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
   page_ = launcher_tiles_current_page();
 #endif
-  ELOG_INFO("App {} 退到后台（enter {}, resume {}, 磁贴停在第 {} 页）", name(), enters_,
-            resumes_, page_ + 1U);
+  ELOG_INFO("App {} 退到后台（enter {}, resume {}, 磁贴停在第 {} 页）", name(), enters_, resumes_,
+            page_ + 1U);
 }
 
 void LauncherApp::onResume() {
@@ -100,7 +100,7 @@ void LauncherApp::onResume() {
 #if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
   ui_backend_load_for_app(name());  // 同 onEnter：屏装载后由桥回调 repaint_screen()
 #endif
-  refresh_clock();   // 兜底（同上）：屏没被重载时也能把时间推到最新
+  refresh_clock();  // 兜底（同上）：屏没被重载时也能把时间推到最新
   refresh_weather();
 }
 
@@ -154,23 +154,27 @@ void LauncherApp::rebuild_tiles() {
   }
 
   const std::size_t built = launcher_tiles_rebuild(name(), tiles_, tile_count_);
-  ELOG_INFO("主屏磁贴：注册表 {} 个 App → {} 个磁贴 → 建出 {} 个 / {} 页", apps.size(),
-            tile_count_, built, launcher_tiles_page_count());
+  ELOG_INFO("主屏磁贴：注册表 {} 个 App → {} 个磁贴 → 建出 {} 个 / {} 页", apps.size(), tile_count_,
+            built, launcher_tiles_page_count());
 #endif
 }
 
 void LauncherApp::refresh_clock() {
 #if defined(EMBARK_AIDOGUI_UI)
-  if (fw_ == nullptr) return;
+  if (fw_ == nullptr)
+    return;
   const auto epoch = fw_->hal().time.epoch_ms();
-  if (!epoch.has_value()) return;  // 没有 RTC / 没对时：留着设计器里的初值，不写
+  if (!epoch.has_value())
+    return;  // 没有 RTC / 没对时：留着设计器里的初值，不写
 
   // 本地时间（固定东八区，口径见 local_clock.h）。分钟粒度：同一分钟内不重写控件。
-  const std::int64_t local_s = static_cast<std::int64_t>(epoch.value() / 1000U) + kLocalOffsetSeconds;
+  const std::int64_t local_s =
+      static_cast<std::int64_t>(epoch.value() / 1000U) + kLocalOffsetSeconds;
   const std::int64_t days = local_s / kSecondsPerDay;
   const int sod = static_cast<int>(local_s - days * kSecondsPerDay);
   const std::uint32_t minute = static_cast<std::uint32_t>(sod / 60);
-  if (minute == last_minute_) return;
+  if (minute == last_minute_)
+    return;
   last_minute_ = minute;
 
   char buf[8];
@@ -185,14 +189,19 @@ void LauncherApp::refresh_clock() {
 
 void LauncherApp::refresh_weather() {
 #if defined(EMBARK_AIDOGUI_UI)
-  if (fw_ == nullptr) return;
+  if (fw_ == nullptr)
+    return;
   // 城市下标与天气屏共用同一个持久化键：谁改都对另一个生效。
   const std::size_t city = weather_load_city(fw_->hal().storage);
-  if (static_cast<std::uint8_t>(city) == shown_city_) return;  // 没换城市就不动控件
+  if (static_cast<std::uint8_t>(city) == shown_city_)
+    return;  // 没换城市就不动控件
   shown_city_ = static_cast<std::uint8_t>(city);
 
   const WeatherCity& w = weather_city(city);
-  struct { const char* widget; const char* text; } kCard[] = {
+  struct {
+    const char* widget;
+    const char* text;
+  } kCard[] = {
       {"L_WCity", w.name},
       {"L_WTemp", w.temp},
       {"L_WIcon", w.days[0].icon},

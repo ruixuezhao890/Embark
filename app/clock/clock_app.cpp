@@ -69,14 +69,14 @@ struct VarWidget {
 };
 
 constexpr VarWidget kClockWidgets[] = {
-    {"clock_time", "L_Time"}, {"clock_sw", "L_SW"},   {"clock_date", "L_Date"},
-    {"clock_mh", "L_MH"},     {"clock_doy", "L_Doy"}, {"clock_p1", "L_P1"},
-    {"clock_p2", "L_P2"},     {"clock_tm", "L_Tm"},   {"clock_tw", "L_Tw"},
-    {"clock_dim", "L_Dim"},   {"clock_fd", "L_Fd"},   {"clock_fw", "L_Fw"},
+    {"clock_time", "L_Time"},   {"clock_sw", "L_SW"},   {"clock_date", "L_Date"},
+    {"clock_mh", "L_MH"},       {"clock_doy", "L_Doy"}, {"clock_p1", "L_P1"},
+    {"clock_p2", "L_P2"},       {"clock_tm", "L_Tm"},   {"clock_tw", "L_Tw"},
+    {"clock_dim", "L_Dim"},     {"clock_fd", "L_Fd"},   {"clock_fw", "L_Fw"},
     {"clock_prog", "Bar_Prog"},
 };
 
-constexpr const char* kClockScreen = "clock";  // 屏名 == App 名（约定，见 GLOSSARY.md）
+constexpr const char* kClockScreen = "clock";   // 屏名 == App 名（约定，见 GLOSSARY.md）
 constexpr const char* kCalendarWidget = "Cal";  // 月历卡里的真 lv_calendar 控件
 
 /// 数据名 → 控件对象。屏没装载（还没进前台 / 已切走）时返回 nullptr。
@@ -98,12 +98,16 @@ constexpr const char* kBtnPrevWidget = "Btn_Prev";
 constexpr const char* kBtnNextWidget = "Btn_Next";
 #endif  // EMBARK_AIDOGUI_UI
 
-[[nodiscard]] bool is_leap(int y) noexcept { return (y % 4 == 0 && y % 100 != 0) || y % 400 == 0; }
+[[nodiscard]] bool is_leap(int y) noexcept {
+  return (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+}
 
 [[nodiscard]] int days_in_month(int y, int m) noexcept {
   static const int kDim[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-  if (m < 1 || m > 12) return 30;
-  if (m == 2 && is_leap(y)) return 29;
+  if (m < 1 || m > 12)
+    return 30;
+  if (m == 2 && is_leap(y))
+    return 29;
   return kDim[m - 1];
 }
 
@@ -125,11 +129,11 @@ constexpr const char* kBtnNextWidget = "Btn_Next";
 void civil_from_days(std::int64_t z, int& y, int& m, int& d) noexcept {
   z += 719468;
   const std::int64_t era = floor_div(z, 146097);
-  const std::int64_t doe = z - era * 146097;                                            // [0, 146096]
-  const std::int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;        // [0, 399]
+  const std::int64_t doe = z - era * 146097;                                       // [0, 146096]
+  const std::int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;  // [0, 399]
   const std::int64_t yy = yoe + era * 400;
-  const std::int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);                     // [0, 365]
-  const std::int64_t mp = (5 * doy + 2) / 153;                                          // [0, 11]
+  const std::int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);  // [0, 365]
+  const std::int64_t mp = (5 * doy + 2) / 153;                       // [0, 11]
   d = static_cast<int>(doy - (153 * mp + 2) / 5 + 1);
   m = static_cast<int>(mp + (mp < 10 ? 3 : -9));
   y = static_cast<int>(yy + (m <= 2 ? 1 : 0));
@@ -142,7 +146,8 @@ void civil_from_days(std::int64_t z, int& y, int& m, int& d) noexcept {
 
 [[nodiscard]] int day_of_year(int y, int m, int d) noexcept {
   int n = d;
-  for (int i = 1; i < m; ++i) n += days_in_month(y, i);
+  for (int i = 1; i < m; ++i)
+    n += days_in_month(y, i);
   return n;
 }
 
@@ -154,12 +159,16 @@ void civil_from_days(std::int64_t z, int& y, int& m, int& d) noexcept {
 }
 
 /// 该年 ISO 周数：12-28 恒属本年最后一周（这是 ISO 8601 的判据）。
-[[nodiscard]] int iso_weeks_in_year(int y) noexcept { return iso_week_raw(y, 12, 28); }
+[[nodiscard]] int iso_weeks_in_year(int y) noexcept {
+  return iso_week_raw(y, 12, 28);
+}
 
 [[nodiscard]] int iso_week(int y, int m, int d) noexcept {
   int w = iso_week_raw(y, m, d);
-  if (w < 1) w = iso_weeks_in_year(y - 1);
-  else if (w > iso_weeks_in_year(y)) w = 1;
+  if (w < 1)
+    w = iso_weeks_in_year(y - 1);
+  else if (w > iso_weeks_in_year(y))
+    w = 1;
   return w;
 }
 
@@ -271,7 +280,8 @@ void ClockApp::onMessage(const Message& msg) {
 }
 
 void ClockApp::push(const char* var_name, const char* value, char* cache, std::size_t cap) {
-  if (std::strcmp(cache, value) == 0) return;  // 相同值重写 = 白费一次 alloc/free
+  if (std::strcmp(cache, value) == 0)
+    return;  // 相同值重写 = 白费一次 alloc/free
   const std::size_t n = std::strlen(value);
   const std::size_t copy = (n < cap - 1) ? n : cap - 1;
   std::memcpy(cache, value, copy);
@@ -293,7 +303,8 @@ void ClockApp::push(const char* var_name, const char* value, char* cache, std::s
 }
 
 void ClockApp::push_int(const char* var_name, std::int32_t value, std::int32_t& cache) {
-  if (cache == value) return;
+  if (cache == value)
+    return;
   cache = value;
 #if defined(EMBARK_AIDOGUI_UI)
   if (lv_obj_t* widget = clock_widget_for(var_name); widget != nullptr) {
@@ -329,23 +340,27 @@ void ClockApp::write_placeholder() {
 
 void ClockApp::refresh_display(std::uint32_t now_ms) {
   (void)now_ms;
-  if (fw_ == nullptr) return;
+  if (fw_ == nullptr)
+    return;
 
   const auto epoch = fw_->hal().time.epoch_ms();
   if (!epoch.has_value()) {
     // 契约（include/embark/hal/time.h）：没有 RTC / 没对时返回 unsupported，不是致命
     // 错误，调用方必须自己处理。占位文案幂等 —— 值没变时 push 会自己跳过。
-    if (clock_ready_) ELOG_INFO("clock 墙钟不可用（{}），界面转占位文案", epoch.error());
+    if (clock_ready_)
+      ELOG_INFO("clock 墙钟不可用（{}），界面转占位文案", epoch.error());
     clock_ready_ = false;
     write_placeholder();
     return;
   }
 
-  const std::int64_t local_s = static_cast<std::int64_t>(epoch.value() / 1000U) + kLocalOffsetSeconds;
+  const std::int64_t local_s =
+      static_cast<std::int64_t>(epoch.value() / 1000U) + kLocalOffsetSeconds;
   const std::int64_t days = floor_div(local_s, kSecondsPerDay);
   const int sod = static_cast<int>(local_s - days * kSecondsPerDay);
   const int sec = sod % 60;
-  if (clock_ready_ && static_cast<std::uint32_t>(sec) == last_second_) return;  // 同一秒不重算
+  if (clock_ready_ && static_cast<std::uint32_t>(sec) == last_second_)
+    return;  // 同一秒不重算
   last_second_ = static_cast<std::uint32_t>(sec);
 
   int y = 0;
@@ -358,7 +373,8 @@ void ClockApp::refresh_display(std::uint32_t now_ms) {
   const int wd = weekday_sun0(days);
   const int dim = days_in_month(y, m);
 
-  if (!clock_ready_) ELOG_INFO("clock 拿到墙钟：{}-{}-{} {}:{}:{}", y, m, d, hh, mm, sec);
+  if (!clock_ready_)
+    ELOG_INFO("clock 拿到墙钟：{}-{}-{} {}:{}:{}", y, m, d, hh, mm, sec);
   clock_ready_ = true;
 
   char buf[64];
@@ -415,7 +431,6 @@ void ClockApp::refresh_display(std::uint32_t now_ms) {
   push("clock_fw", buf, shown_.fw, sizeof shown_.fw);
 }
 
-
 #if defined(EMBARK_AIDOGUI_UI)
 void ClockApp::push_calendar(int y, int m, int d) {
   // 显示月 = 视图月（用户翻过月就不跟今天走）；视图月成员是 0 = 跟随今天。
@@ -429,7 +444,8 @@ void ClockApp::push_calendar(int y, int m, int d) {
   }
 
   // y/m/d 为 0 = 墙钟不可用：只注入星期名，不推进「今天 / 显示月」（留着设计器初值）。
-  if (y <= 0 || m <= 0) return;
+  if (y <= 0 || m <= 0)
+    return;
 
   if (cal != nullptr) {
     // 今天只在跨天时动（高亮描边重算）；显示月单独按 (vy, vm) 推进 —— 用户翻月后
@@ -437,8 +453,8 @@ void ClockApp::push_calendar(int y, int m, int d) {
     const bool new_today = (y != cal_today_y_ || m != cal_today_m_ || d != cal_today_d_);
     const bool new_month = (vy != cal_shown_y_ || vm != cal_shown_m_);
     if (new_today) {
-      lv_calendar_set_today_date(cal, static_cast<std::uint32_t>(y),
-                                 static_cast<std::uint32_t>(m), static_cast<std::uint32_t>(d));
+      lv_calendar_set_today_date(cal, static_cast<std::uint32_t>(y), static_cast<std::uint32_t>(m),
+                                 static_cast<std::uint32_t>(d));
       cal_today_y_ = y;
       cal_today_m_ = m;
       cal_today_d_ = d;
@@ -472,9 +488,11 @@ void ClockApp::bind_calendar_buttons() {
 }
 
 void ClockApp::shift_calendar_month(int delta) {
-  if (fw_ == nullptr) return;
+  if (fw_ == nullptr)
+    return;
   const auto epoch = fw_->hal().time.epoch_ms();
-  if (!epoch.has_value()) return;  // 墙钟不可用：没有「今天」可参照，不翻
+  if (!epoch.has_value())
+    return;  // 墙钟不可用：没有「今天」可参照，不翻
 
   const std::int64_t local_s =
       static_cast<std::int64_t>(epoch.value() / 1000U) + kLocalOffsetSeconds;
@@ -509,12 +527,14 @@ void ClockApp::shift_calendar_month(int delta) {
 
 void ClockApp::on_calendar_prev(lv_event_t* event) {
   auto* self = static_cast<ClockApp*>(lv_event_get_user_data(event));
-  if (self != nullptr) self->shift_calendar_month(-1);
+  if (self != nullptr)
+    self->shift_calendar_month(-1);
 }
 
 void ClockApp::on_calendar_next(lv_event_t* event) {
   auto* self = static_cast<ClockApp*>(lv_event_get_user_data(event));
-  if (self != nullptr) self->shift_calendar_month(+1);
+  if (self != nullptr)
+    self->shift_calendar_month(+1);
 }
 #endif  // EMBARK_AIDOGUI_UI
 

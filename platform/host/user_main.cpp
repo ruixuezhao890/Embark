@@ -110,9 +110,9 @@ void ui_main(void* argument) noexcept {
   // --- 1) HAL 装配（显示/输入后端挂到唯一一份 HAL 上）------------
   // HAL = 平台后端抽象：真机上换成 esp32 的同一套接口（esp32_hal.cpp），
   // 程序主体（App 们）不用改。装配点只有这一处。
-  hp::HostHal& hal = hp::HostHal::instance();           // 全进程唯一实例（函数内静态）
-  hp::HostDisplay display(1, "Embark 用户程序");        // 1 = 240×320 1:1，不放大不糊
-  hp::HostInput input(hal.time(), display);             // 输入要借显示换算坐标 → 在显示之后挂
+  hp::HostHal& hal = hp::HostHal::instance();     // 全进程唯一实例（函数内静态）
+  hp::HostDisplay display(1, "Embark 用户程序");  // 1 = 240×320 1:1，不放大不糊
+  hp::HostInput input(hal.time(), display);  // 输入要借显示换算坐标 → 在显示之后挂
   hal.attach_display(display);
   hal.attach_input(input);
   // init() 的初始化顺序有讲究：log → storage → display → input（日志最先：
@@ -169,8 +169,8 @@ void ui_main(void* argument) noexcept {
   // 退出前打一行内存账（LVGL 记账来自 host_lvgl_mem 的钩子）：
   // 也让链接器把 host_lvgl_mem 的编译单元拉进来（它同时定义 LVGL 断言的钩子，
   // UI 库缺了它链不上 —— 不引用任何符号时归档成员不会被抽取）。
-  ELOG_INFO("停止模拟：LVGL 未回收 {} 字节（预算 {} 字节）",
-            hp::lvgl_outstanding_bytes(), embark::lvgl_alloc_budget_bytes);
+  ELOG_INFO("停止模拟：LVGL 未回收 {} 字节（预算 {} 字节）", hp::lvgl_outstanding_bytes(),
+            embark::lvgl_alloc_budget_bytes);
   hp::exit_process(0);
 }
 
@@ -183,8 +183,7 @@ int main(int argc, char** argv) {
 
   // UI 任务参数来自 config/embark_limits.h（真机同源）：栈大小/优先级/周期。
   // 这三个值在嵌入式端的 FreeRTOS 配置里也是同一处定义，模拟与真机行为一致。
-  ELOG_INFO("UI 任务启动：栈 {} 字（{} KB），优先级 {}，周期 {} ms",
-            embark::ui_task_stack_words,
+  ELOG_INFO("UI 任务启动：栈 {} 字（{} KB），优先级 {}，周期 {} ms", embark::ui_task_stack_words,
             embark::ui_task_stack_words * static_cast<int>(sizeof(StackType_t)) / 1024,
             static_cast<int>(embark::ui_task_priority), embark::ui_loop_period_ms);
 
