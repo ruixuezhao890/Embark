@@ -6,13 +6,15 @@
  * 因为有且只有一份，编译期就定死了（spec §8：后端在编译期按 CMake 目标选定）。
  *
  * 引用成员意味着 Context 不能默认构造、不能拷贝 —— 这是故意的：装配点在启动入口一处。
- * display / input 可空：v1 允许"无屏平台"（先跑通逻辑），因此是属性而非错误。
+ * display / input / filesystem 可空：v1 允许"无屏平台"（先跑通逻辑）、允许"没有盘"
+ * （真机的 SD 后端是后续 issue），因此是属性而非错误；用到的模块自己判空并返回 not_ready。
  */
 #ifndef EMBARK_HAL_CONTEXT_H
 #define EMBARK_HAL_CONTEXT_H
 
 #include <embark/hal/bus.h>
 #include <embark/hal/display.h>
+#include <embark/hal/filesystem.h>
 #include <embark/hal/input.h>
 #include <embark/hal/log_sink.h>
 #include <embark/hal/persistence.h>
@@ -29,6 +31,7 @@ struct Context {
   IBus& bus;
   IDisplay* display = nullptr;
   IInput* input = nullptr;
+  IFileSystem* filesystem = nullptr;
 };
 
 }  // namespace embark::hal

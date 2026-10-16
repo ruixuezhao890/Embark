@@ -1,10 +1,12 @@
 # Embark CI（issues/10）
 #
-# 三个 job：
+# 四个 job：
 #   1. host-build-test：ubuntu 上构建宿主工程 + ctest 全量单测（SDL2 用 apt 装）。
 #   2. esp32-build：espressif/idf:release-v5.4 容器里构建 ESP32-S3 固件（只编不烧）。
 #      issue 11 已落地，所以是真构建：同一个仓库、同一套源码，宿主与真机两个目标都必须过。
-#   3. format-check：clang-format --dry-run --Werror（版本 18，与本地开发机一致；
+#   3. font-audit：缺字审计（issue 17）——界面文案逐字符对照静态子集字库覆盖清单
+#      （tools/font/*.json），字库外字符就把构建卡红；先跑 --selftest 保证脚本本身没退化。
+#   4. format-check：clang-format --dry-run --Werror（版本 18，与本地开发机一致；
 #      .clang-format 里的注释说明：v1 阶段不强制本机格式化，CI 只作提示/卡漂移）。
 #
 # 排除不参与格式检查的文件（与本地 dry-run 口径一致）：
@@ -74,6 +76,19 @@ jobs:
           idf.py --version
           idf.py -C platform/esp32/project -B build-esp32 set-target esp32s3
           idf.py -C platform/esp32/project -B build-esp32 build
+
+  font-audit:
+    name: Font glyph audit (issue 17)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Audit script self-test
+        run: node tools/font/audit_glyphs.mjs --selftest
+      - name: Audit UI strings against font manifest
+        run: node tools/font/audit_glyphs.mjs
 
   format-check:
     name: clang-format check

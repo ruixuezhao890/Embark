@@ -51,7 +51,10 @@ class Esp32Hal {
 
  private:
   Esp32Hal() noexcept
-      : binder_(log_), context_{time_, storage_, log_, system_, bus_, &display_, &input_} {}
+      // filesystem = nullptr：真机还没有盘（SD 后端是 issue 17 之后的独立 issue，
+      // 前置门槛是 HAL 面与板子接线确认），运行时字库服务据此返回 not_ready。
+      : binder_(log_),
+        context_{time_, storage_, log_, system_, bus_, &display_, &input_, nullptr} {}
 
   Esp32Time time_;
   Esp32Persistence storage_;

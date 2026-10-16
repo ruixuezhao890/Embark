@@ -15,6 +15,7 @@
 #include <embark/log.h>
 
 #include "host_bus.h"
+#include "host_filesystem.h"
 #include "host_log_sink.h"
 #include "host_persistence.h"
 #include "host_system.h"
@@ -30,8 +31,8 @@ class HostHal {
   HostHal& operator=(const HostHal&) = delete;
 
   /// 依次初始化各后端并装好默认 logger。返回第一个失败项；none = 全部就绪。
-  /// 顺序：log → storage → display → input（日志最先：后面每一步失败都要有出口；
-  /// 输入在显示之后：宿主输入后端要借显示的窗口/渲染器换算坐标）。
+  /// 顺序：log → storage → filesystem → display → input（日志最先：后面每一步失败都要
+  /// 有出口；输入在显示之后：宿主输入后端要借显示的窗口/渲染器换算坐标）。
   [[nodiscard]] Error init() noexcept;
 
   /// 挂上显示/输入后端（issues/05）。必须在 init() 之前调用 —— 装配点在 host 入口一处，
@@ -47,15 +48,21 @@ class HostHal {
 
   [[nodiscard]] const char* storage_path() const noexcept { return storage_.path(); }
 
+  /// 文件系统后端（issue 17）：运行时字库服务（platform/common/font_service.cpp）用它读
+  /// 字库 .bin。真机侧还没有这个后端（Context 里是 nullptr），字库服务会返回 not_ready。
+  [[nodiscard]] HostFileSystem& filesystem() noexcept { return filesystem_; }
+
  private:
   HostHal() noexcept
-      : binder_(log_), context_{time_, storage_, log_, system_, bus_, nullptr, nullptr} {}
+      : binder_(log_),
+        context_{time_, storage_, log_, system_, bus_, nullptr, nullptr, &filesystem_} {}
 
   HostTime time_;
   HostPersistence storage_;
   HostLogSink log_;
   HostSystem system_;
   HostBus bus_;
+  HostFileSystem filesystem_;
   LogSinkBinder binder_;  // 必须活在 logger 之后：elog 里存的是它的指针
   hal::Context context_;
 

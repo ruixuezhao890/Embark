@@ -23,9 +23,13 @@ if(NOT TARGET embark_lvgl)
                       "（add_subdirectory(third_party) 必须在它之前）")
 endif()
 
+# font_service.cpp：运行时字库服务（issue 17）—— 把 LVGL 的 'F' 盘接到 hal::IFileSystem，
+# 用 FontLedger 记账。**只进宿主构建**：真机现在没有文件系统后端（Context::filesystem
+# == nullptr），本文件在真机上是死代码；等 SD 后端那个 issue 落地再进真机清单。
 add_library(embark_common_ui STATIC
         lvgl_port.cpp
-        lvgl_ui_port.cpp)
+        lvgl_ui_port.cpp
+        font_service.cpp)
 
 add_library(embark::common_ui ALIAS embark_common_ui)
 
@@ -38,14 +42,21 @@ target_include_directories(embark_zh_font PRIVATE
         "${PROJECT_SOURCE_DIR}/config"
         "${PROJECT_SOURCE_DIR}/third_party/lvgl")
 target_compile_definitions(embark_zh_font PRIVATE LV_CONF_INCLUDE_SIMPLE LV_LVGL_H_INCLUDE_SIMPLE)
-# 只参与最终链接：embark_common_ui 的所有消费者都会带上它。
-target_link_libraries(embark_common_ui PRIVATE embark_zh_font)
-
 # 使用者按 "lvgl_port.h" 引用：本目录必须在 include 路径上（宿主与真机都要）。
 target_include_directories(embark_common_ui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # embark::core 提供 IUiPort / hal::Context；embark_lvgl 提供 <lvgl.h>。
 target_link_libraries(embark_common_ui PUBLIC embark::core embark_lvgl)
+
+# 静态子集字库：只参与最终链接（embark_common_ui 的所有消费者都会带上它）。
+# 必须用 --whole-archive 包住：config/lv_conf.h 把默认字体设成 LV_FONT_DEFAULT ==
+# &embark_zh_14，于是 liblvgl.a 里的 lv_theme.c.obj / lv_draw_label.c.obj 会引用它，
+# 而 GNU ld 只在「扫描到该归档时该符号仍未定义」才把成员拉进来 —— 各目标的依赖链
+# 顺序不由我们决定（实测 liblvgl.a 排在字库归档之后，报 undefined reference to
+# `embark_zh_14'，2026-10-16）。whole-archive 让成员无条件进链接，与顺序无关；
+# 真机侧对应的是 idf_component_register(... WHOLE_ARCHIVE)。
+target_link_libraries(embark_common_ui PRIVATE
+        "-Wl,--whole-archive" embark_zh_font "-Wl,--no-whole-archive")
 
 
 # AiDoGUI 资源盘（ADR 0011）：AiDoGUI 生成代码把字体/图片路径写死成 S:/fonts/*.bin 与

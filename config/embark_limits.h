@@ -86,6 +86,22 @@ inline constexpr std::uint8_t ui_task_priority = 5;
 // 宿主墙钟约 2×（实测，见 spec §3），tick 语义不变。
 inline constexpr std::uint32_t ui_loop_period_ms = 5;
 
+// --- 文件系统与运行时字库（issue 17）------------------------------------------
+// 同时打开的文件数：v1 只有"读一个字库文件"这一条路径，4 是余量（LVGL 的 fs 驱动在
+// 加载期间会短暂持有句柄）；槽位是定长的，没有堆分配。
+inline constexpr std::size_t filesystem_max_open_files = 4;
+// 后端自己拼绝对路径时的路径缓冲上限（宿主 = 根目录 + 相对路径）。
+inline constexpr std::size_t filesystem_path_bytes = 128;
+
+// 运行时字库记账（issue 17）：字节预算 + 引用计数，独立于 LVGL 全局堆预算
+// （lvgl_alloc_budget_bytes）。100 KB 的来历：14px 4bpp 的中文子集字库（几百字）量级
+// 是十几 KB，预算卡的是"失控"而不是"装不下"；真机上字库缓冲走 PSRAM 显式分配，账目口径不变。
+inline constexpr std::size_t font_budget_bytes = 100 * 1024;
+// 同时驻留的字库数（引用计数表项数）。
+inline constexpr std::size_t font_max_loaded = 4;
+// 字库路径上限：引用计数的键就是路径字符串。
+inline constexpr std::size_t font_path_bytes = 64;
+
 // --- 测试替身的容量（tests/fakes/）-------------------------------------------
 // 只是替身的缓冲上限，真机后端不读它；集中放这里是为了"容量都查得到"这条规矩不破例。
 inline constexpr std::size_t fake_input_queue_depth = 8;

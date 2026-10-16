@@ -18,6 +18,7 @@
 add_library(embark_platform_host STATIC
         host_bus.cpp
         host_context.cpp
+        host_filesystem.cpp
         host_log_sink.cpp
         host_lvgl_mem.cpp
         host_persistence.cpp

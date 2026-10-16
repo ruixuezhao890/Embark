@@ -87,7 +87,17 @@
    字体：默认 14 号 + EEZ 生成代码用到的 5 个字号（issue 19 / ADR 0008）
  *========================================================================*/
 #define LV_FONT_MONTSERRAT_14 1
-#define LV_FONT_DEFAULT &lv_font_montserrat_14
+
+/* 默认字体 = 静态子集字库 embark_zh_14（2026-10-16 起）。
+ * 之前它只被编译、没有任何代码引用它，静态库成员在链接期被丢弃 —— 字库其实
+ * 没进固件镜像（build-esp32/embark_esp32.map 里搜不到该符号，固件大小也不随
+ * 字库扩容变化）。让它当 LVGL 默认字体后：未显式设置字体的文本（框架壳、
+ * bring-up 自检屏、宿主演示）有了 CJK 承载，缺字审计
+ * （tools/font/audit_glyphs.mjs）的运行期承载者也随之成立。
+ * 声明必须走 LV_FONT_CUSTOM_DECLARE：本文件被包含时 lv_font_t 还没定义，
+ * 直接写 extern const lv_font_t 编不过（宏在 lv_font.h:244 展开）。 */
+#define LV_FONT_CUSTOM_DECLARE LV_FONT_DECLARE(embark_zh_14)
+#define LV_FONT_DEFAULT &embark_zh_14
 /* EEZ Studio 导出页面（app/eez_ui/screens.c）引用的 Montserrat 字号：
  * 12/18/20/24/32/44/48。不开它们，EEZ 页面的文字全落到默认 14 号
  * （不是报错，只是字号不对）。12 与 44 是 2026-10-12 画 clock 屏时补的
@@ -111,8 +121,9 @@
  * 静态子集字库 embark_zh_14（tools/font/gen_font.mjs 生成，assets/fonts/embark_zh_14.c）
  * 是压缩位图（.bitmap_format = 1），必须开 LV_USE_FONT_COMPRESSED=1：
  * lv_font_fmt_txt.c:130-132 在未开启时对压缩字形只 LV_LOG_WARN 并返回 NULL 位图，
- * 结果就是"字全部不显示"。该字库原为导航壳使用（状态行/返回键）；导航壳已于
- * 2026-10-06 退役、启动器界面改由 EEZ Studio 提供，字库保留备用。 */
+ * 结果就是"字全部不显示"。该字库原为导航壳使用（状态行/返回键），导航壳已于
+ * 2026-10-06 退役；自 2026-10-16 起它顶上 LV_FONT_DEFAULT（见上方），不再只是
+ * "保留备用" —— 真机与宿主上没显式设字体的文本都由它渲染。 */
 #define LV_USE_FONT_COMPRESSED 1
 
 /*=========================================================================

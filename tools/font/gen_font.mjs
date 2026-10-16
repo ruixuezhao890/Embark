@@ -133,11 +133,18 @@ const ALPHA_GAIN = 2.4;
  * 实测输出 .range_start = 32, .range_length = 95（32+95-1 = 126 = 0x7E）。
  * LVGL 上游自己的 lv_font_montserrat_14.c 用的也是同一条 -r 0x20-0x7F，
  * 它同样只产出 0x20..0x7E 共 95 个字形。所以本字库的 ASCII 实际覆盖是 95 个，
- * 总字形数 95 + 14 + 5 = 114（见 EXPECTED_CODEPOINTS）。
+ * 总字形数 = 95 + UI_TEXT 字符数 + ICON_SYMBOLS 个数（见 EXPECTED_CODEPOINTS）。
  */
 const ASCII_RANGE = '0x20-0x7F';
-/** 界面文案（CJK，14 字）：启动器 / 时钟 / 设置 / 心跳 / 你好 / 悬 / 任务。 */
-const UI_TEXT = '启动器时钟设置心跳你好悬任务';
+/**
+ * 界面文案（CJK + 标点，与审计输出逐一对应）。
+ *
+ * 这份清单不是手写的，来源是缺字审计：node tools/font/audit_glyphs.mjs --print-required
+ * 会扫 app/ src/ platform/ 下所有会上屏的字符串，吐出「应该进清单的字符集」。
+ * 加了新界面文案 → 跑审计 → 把新字符补到这里 → 重跑本脚本生成字库，审计才会重新变绿。
+ */
+const UI_TEXT =
+  '°←一乐事二京亮今件优位余做健六共内册几前剩动北占右号启周器四回图地天屏左已年应度康提日时明星是晴月期末本机气没滑用界相看眼秒空第算置翻计记设起距过返还邮钟面音页首高，';
 /** FontAwesome 码点（5 个）：齿轮 / 房子 / 刷新 / 雪佛龙左 / 箭头右。 */
 const ICON_SYMBOLS = ['0xF013', '0xF015', '0xF021', '0xF053', '0xF079'];
 
@@ -472,8 +479,12 @@ function rleDecode(rd, bpp, w, h) {
  * RLE 编码（一 glyph，不做预滤波 XOR），rleDecode 的逆：
  * 首像素写 bpp 位；之后：与上一值相同 -> REPEATE 写 1 位，连续 11 个后
  * 剩余 run 写 6 位长计数（0 = 不启用，直接读新值）；
- * 不同 -> 写 0 位 + 新值 bpp 位。长 run（>12）靠计数段 0 位代价续写，
- * 解码端在计数段结束后必然回 SINGLE 读新值（可能 == 上一值 -> 再进 REPEATE）。
+ * 不同 -> 写 0 位 + 新值 bpp 位。长 run（>12）靠计数段 0 位代价续写。
+ *
+ * ⚠ 计数段有个必须照抄的坑：解码端（LVGL rle_next 的 COUNTER 分支）在计数段走完时
+ * 直接读一个新值并把状态置回 SINGLE，**不会**像 SINGLE 分支那样判断「新值 == 上一值」
+ * 从而进入 REPEATE。所以紧跟计数段之后的那一个像素只能按普通值写、不许进 REPEATE；
+ * 少这一步，编码端与解码端就会在长 run 之后整体错位（表现为回环断言在第一处不符的像素上报错）。
  */
 function rleEncode(values, bpp) {
   const bits = [];
@@ -484,14 +495,17 @@ function rleEncode(values, bpp) {
   let state = 'SINGLE';
   let prev = -1;
   let cnt = 0;
+  // 见函数头注释：计数器段结束后，解码端不判断「相同 -> REPEATE」，这里要跟着不判
+  let suppressEqualCheck = false;
   for (let i = 0; i < n; i++) {
     const v = values[i];
     if (state === 'SINGLE') {
       pushBits(v, bpp);
-      if (i !== 0 && v === prev) {
+      if (!suppressEqualCheck && i !== 0 && v === prev) {
         cnt = 0;
         state = 'REPEATE';
       } else prev = v;
+      suppressEqualCheck = false;
     } else {
       if (v === prev) {
         cnt += 1;
@@ -503,6 +517,8 @@ function rleEncode(values, bpp) {
           pushBits(c, 6);
           if (c > 1) i += c - 1;
           state = 'SINGLE';
+          // 计数器段覆盖的最后那个像素由解码端的 COUNTER 分支读出，那边不做相等判断
+          suppressEqualCheck = true;
         }
       } else {
         bits.push(0);

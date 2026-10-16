@@ -14,6 +14,7 @@ set(EMBARK_KERNEL_SOURCES
         "${EMBARK_ROOT}/src/embark/framework.cpp"
         "${EMBARK_ROOT}/src/embark/bus.cpp"
         "${EMBARK_ROOT}/src/embark/log.cpp"
+        "${EMBARK_ROOT}/src/embark/font_ledger.cpp"
         "${EMBARK_ROOT}/src/embark/version.cpp")
 
 # --- Demo App（与宿主同一批 App：launcher/clock/settings 三个；目录化后各占一目录，
@@ -26,6 +27,9 @@ set(EMBARK_APP_SOURCES
         "${EMBARK_ROOT}/app/settings/settings_app.cpp")
 
 # --- 宿主与真机共用的胶水：必须与 platform/common/CMakeLists.txt 的列表一致 ---
+# 唯一的例外是 platform/common/font_service.cpp（运行时字库服务）：它要一个真实的
+# 文件系统后端，而真机这边 Context::filesystem 还是 nullptr（SD 后端是 issue 17 之后
+# 的事）—— 现在编进来只是一份永远不会被调用的死代码，所以有意不进这个清单。
 set(EMBARK_COMMON_SOURCES
         "${EMBARK_ROOT}/platform/common/static_pool.cpp"
         "${EMBARK_ROOT}/platform/common/lvgl_port.cpp"

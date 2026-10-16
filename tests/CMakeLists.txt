@@ -37,7 +37,8 @@ add_executable(embark_tests
         kernel/test_static_pool.cpp
         kernel/test_pooled_task_spawner.cpp
         kernel/test_own_task_lifecycle.cpp
-        kernel/test_zero_alloc.cpp)
+        kernel/test_zero_alloc.cpp
+        kernel/test_font_ledger.cpp)
 
 # 测试内部用 "fakes/fakes.h" 这种从 tests/ 起算的相对包含。
 # app/ 与 app/common/ 也在搜索路径上：屏名解析（app/common/eez_ui_screen_names.h，
@@ -54,3 +55,26 @@ target_link_libraries(embark_tests PRIVATE
         doctest::doctest)
 
 add_test(NAME embark_tests COMMAND embark_tests)
+
+# --- 宿主平台后端的测试（链 embark_platform_host） ---------------------------
+# 与 embark_tests 相反：这里要的就是真后端。目前只有文件系统一个（issue 17 运行时字库
+# 的底座）：宿主的平台库不带 tests/fakes 的那套替身，单独一个可执行文件不会撞符号。
+add_executable(embark_host_tests
+        host/test_host_filesystem.cpp
+        host/test_font_service.cpp)
+
+target_include_directories(embark_host_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${PROJECT_SOURCE_DIR}/platform/host")
+
+target_link_libraries(embark_host_tests PRIVATE
+        embark::platform_host
+        embark::common_ui
+        doctest::doctest)
+
+# 端到端用到的真实字库文件（issue 17 的 fixture）：AiDoGUI 导出的 LVGL 字库 .bin。
+# 目录以绝对路径编进二进制，测试里直接当文件系统根用（不依赖 ctest 的工作目录）。
+target_compile_definitions(embark_host_tests PRIVATE
+        EMBARK_TEST_FONT_DIR="${PROJECT_SOURCE_DIR}/app/aidogui_ui/export/font")
+
+add_test(NAME embark_host_tests COMMAND embark_host_tests)

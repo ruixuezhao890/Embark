@@ -10,6 +10,7 @@ add_library(embark_core STATIC
         embark/framework.cpp
         embark/bus.cpp
         embark/log.cpp
+        embark/font_ledger.cpp
         embark/version.cpp)
 
 add_library(embark::core ALIAS embark_core)

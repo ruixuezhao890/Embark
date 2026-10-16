@@ -13,7 +13,13 @@ get_filename_component(EMBARK_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../.." AB
 
 # REQUIRES lvgl：拿 <lvgl.h> 与 LV_CONF_INCLUDE_SIMPLE / LV_LVGL_H_INCLUDE_SIMPLE
 # （lvgl 组件把它们定义成 PUBLIC，依赖方自动继承），这样 config/lv_conf.h 会被命中。
+# WHOLE_ARCHIVE（IDF 的 --whole-archive）：config/lv_conf.h 把默认字体设成
+# LV_FONT_DEFAULT == &embark_zh_14，liblvgl.a 里的 lv_draw_label.c.obj / lv_theme.c.obj
+# 会引用它；IDF 的组件归档顺序里 liblvgl.a 排在 embark_font 之后再被扫一遍（引用点到
+# 那时才出现），不整体收进链接就会报 undefined reference to `embark_zh_14'
+# （2026-10-16 实测）。宿主侧对应的是 -Wl,--whole-archive（platform/common/CMakeLists.txt）。
 idf_component_register(
         SRCS "${EMBARK_ROOT}/assets/fonts/embark_zh_14.c"
         INCLUDE_DIRS "${EMBARK_ROOT}/config"
+        WHOLE_ARCHIVE
         REQUIRES lvgl)

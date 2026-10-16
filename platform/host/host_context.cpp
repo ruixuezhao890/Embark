@@ -28,6 +28,12 @@ Error HostHal::init() noexcept {
     return storage_error;
   }
 
+  // 文件系统后端（issue 17）：根目录定下来就可以用；宿主路径自持，不依赖 LVGL 的 FS 驱动。
+  const Error filesystem_error = filesystem_.init();
+  if (filesystem_error != Error::none) {
+    return filesystem_error;
+  }
+
   // 显示与输入是可选的（issues/05）：没挂就没有，v1 允许无屏平台先跑逻辑。
   if (context_.display != nullptr) {
     const Error display_error = context_.display->init();
