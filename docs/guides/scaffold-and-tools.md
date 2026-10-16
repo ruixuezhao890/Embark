@@ -14,7 +14,7 @@
 
 | 脚本 | 作用 | 何时跑 | 会写什么 |
 | --- | --- | --- | --- |
-| `tools/scaffold_app.py` | 生成一个带 EEZ 界面的 **App 薄壳** | 加新 App 时 | `app/<名>/` 两个源文件 + `eez_vars.txt`；追加 `app/CMakeLists.txt` 与 `platform/host/ui_demo.cpp` 各一行 |
+| `tools/scaffold_app.py` | 生成一个带 EEZ 界面的 **App 薄壳** | 加新 App 时 | `app/<名>/` 两个源文件 + `eez_vars.txt`；追加 `cmake/embark_sources.cmake`（源清单，issue 20）与 `platform/host/ui_demo.cpp` 各一行 |
 | `tools/scaffold_app_test.py` | 上面那个脚本的**自测** | 改了 scaffold 之后 | 只写系统临时目录，退出码 0 = 全过 |
 | `tools/font/gen_font.mjs` | 生成 **LVGL 静态子集字库** | 界面要加汉字时 | `assets/fonts/embark_zh_14.c` + `tools/font/embark_zh_14.json` |
 
@@ -57,7 +57,8 @@ python tools/scaffold_app.py my --vars-check build/include/embark_eez_vars.h  # 
 
 1. 新建 `app/<名>/<名>_app.{h,cpp}` —— 薄壳模板（含 `name()` / `title()` / `settings()` / 八个钩子的骨架）
 2. 新建 `app/<名>/eez_vars.txt` —— **EEZ Studio 侧变量声明的粘贴清单**（见 §1.5）
-3. 追加一行到 `app/CMakeLists.txt` 的 `embark_demo_apps` 源列表（锚点：源列表尾行 `common/eez_ui_nav.cpp)`）
+3. 追加一行到 `cmake/embark_sources.cmake` 的 `EMBARK_APP_SOURCES`（锚点：列表尾的注释行 `# 新 App 登记锚点`；
+   宿主与真机共用这一份清单 —— issue 20）
 4. 追加一项到 `platform/host/ui_demo.cpp` 的 `EMBARK_APP_TABLE`（插在 `LauncherApp` 之后，**首位必须保持启动器**）
 
 > **只注册进 ui_demo.cpp**：仓库里还有另外三张 App 表（`platform/host/user_main.cpp`、`platform/host/ui_tour.cpp`、
@@ -69,7 +70,7 @@ python tools/scaffold_app.py my --vars-check build/include/embark_eez_vars.h  # 
 - **默认 dry-run**：不加 `--apply` 只打印蓝图与将改的行，一个字节都不写。
 - **幂等**：源文件已存在且内容与模板**完全一致** → 打印"已是最新（幂等跳过）"；
   **内容不一致 → 报错退出、不覆盖**（你手写的业务代码不会被模板冲掉）。
-- **锚点找不到就 `die`**：`app/CMakeLists.txt` 里找不到 `common/eez_ui_nav.cpp)`、
+- **锚点找不到就 `die`**：`cmake/embark_sources.cmake` 里找不到 `# 新 App 登记锚点`、
   或 `ui_demo.cpp` 里找不到 `EMBARK_APP_TABLE` 原文 → 报错退出并提示"文件结构变了，手工处理"。
 - **保留名**：`launcher` / `clock` / `settings` / `common` 菜单模式直接拒绝；同名目录已存在也拒绝。
 - 菜单模式的**后台策略**只有三档：`1) suspend`（默认，界面类 App 用它就够）、`2) tick 100ms`、`3) tick 500ms`。
@@ -113,7 +114,7 @@ my_visit_count    # int
 python tools/scaffold_app_test.py      # 退出码 0 = 全过
 ```
 
-它在系统临时目录里搭一个 **fake repo**（只有 `app/CMakeLists.txt` 与 `platform/host/ui_demo.cpp` 两个锚点文件），
+它在系统临时目录里搭一个 **fake repo**（只有 `cmake/embark_sources.cmake` 与 `platform/host/ui_demo.cpp` 两个锚点文件），
 然后跑 dry-run / apply / 幂等 / 变量核对 / 非法输入五组断言。**动了 `scaffold_app.py` 就要跑它**——
 真实仓库里跑 apply 会写文件，自测不会。
 

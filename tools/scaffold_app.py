@@ -14,7 +14,8 @@
 内容不一致 → 报错不覆盖）。EEZ 侧（画屏/绑变量/SetPage）是 Studio 二进制，**不可脚本化**，
 脚本只打印对应 checklist（见 docs/guides/new-app-guide.md §2）。剧本只改三处代码：
   - 新建       app/<name>/<name>_app.{h,cpp} + eez_vars.txt（薄壳模板，目录化形态）
-  - 追加一行   app/CMakeLists.txt（embark_demo_apps 源列表，锚点源行 common/eez_ui_nav.cpp 之后）
+  - 追加一行   cmake/embark_sources.cmake（EMBARK_APP_SOURCES，插在 "# 新 App 登记锚点" 那行之前；
+               宿主的 app/CMakeLists.txt 与真机 IDF 组件都从这份清单取 SRCS，issue 20）
   - 追加一项   platform/host/ui_demo.cpp（EMBARK_APP_TABLE，LauncherApp 之后）
 """
 from __future__ import annotations
@@ -33,7 +34,10 @@ except Exception:
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = "app"
-CMAKELISTS = Path("app") / "CMakeLists.txt"
+# 源清单的唯一事实来源（issue 20）：宿主的 app/CMakeLists.txt 与真机 IDF 组件都从这里
+# 取 SRCS。以前本脚本改的是 app/CMakeLists.txt，真机那份要人手抄，漏了就等到真机链接期
+# 才炸。现在两处共用 cmake/embark_sources.cmake，漏登还会被它的配置期审计拦住。
+MANIFEST = Path("cmake") / "embark_sources.cmake"
 UI_DEMO = Path("platform") / "host" / "ui_demo.cpp"
 VAR_FN = {"int": "set_var_int", "float": "set_var_float", "bool": "set_var_bool", "string": "set_var_string"}
 VAR_EXPR = {
@@ -213,7 +217,8 @@ def build_vars_txt(app_name: str, vars_: list[tuple[str, str]]) -> str:
     return "\n".join(lines) + "\n"
 
 def cmake_new_line(app_name: str) -> str:
-    return f"{app_name}/{app_name}_app.cpp"
+    # 清单里的条目一律是 ${EMBARK_ROOT}/... 形式（EMBARK_ROOT 由清单按自身位置推导）。
+    return f'"${{EMBARK_ROOT}}/app/{app_name}/{app_name}_app.cpp"'
 
 
 def app_table_entry(app_name: str, class_name: str) -> str:
@@ -232,12 +237,13 @@ def dry_run(app_name: str, class_name: str, title: str, vars_: list[tuple[str, s
     print("--- eez_vars.txt（EEZ Studio 粘贴清单）---")
     print(build_vars_txt(app_name, vars_))
     print("--- 将修改的两处 ---")
-    cm = repo / CMAKELISTS
+    cm = repo / MANIFEST
     text = cm.read_text(encoding="utf-8")
-    if f"{app_name}_app.cpp" in text:
-        print(f"  = {CMAKELISTS}：已含 {app_name}/{app_name}_app.cpp（幂等）")
+    src_line = cmake_new_line(app_name)
+    if src_line in text:
+        print(f"  = {MANIFEST}：EMBARK_APP_SOURCES 已含 {app_name}/{app_name}_app.cpp（幂等）")
     else:
-        print(f"  + {CMAKELISTS}：源列表追加 {app_name}/{app_name}_app.cpp")
+        print(f"  + {MANIFEST}：EMBARK_APP_SOURCES 追加 {src_line}")
     ui = repo / UI_DEMO
     utext = ui.read_text(encoding="utf-8")
     entry = app_table_entry(app_name, class_name)
@@ -293,17 +299,18 @@ def apply(app_name: str, class_name: str, title: str, vars_: list[tuple[str, str
         vf.write_text(vt, encoding="utf-8")
         print(f"  + {vf.relative_to(repo)} 已生成（EEZ Studio 粘贴清单）")
 
-    cm = repo / CMAKELISTS
+    cm = repo / MANIFEST
     ctext = cm.read_text(encoding="utf-8")
-    if f"{app_name}/{app_name}_app.cpp" in ctext:
-        print(f"  = {CMAKELISTS} 已含新源（幂等跳过）")
+    src_line = cmake_new_line(app_name)
+    if src_line in ctext:
+        print(f"  = {MANIFEST} 已含新源（幂等跳过）")
     else:
-        anchor = "common/eez_ui_nav.cpp)"
+        # 锚是清单里那行注释：新条目插在它之前，注释始终留在列表末尾。
+        anchor = "# 新 App 登记锚点"
         if anchor not in ctext:
-            die(f"{CMAKELISTS} 找不到锚 '{anchor}'（文件结构变了，手工处理）")
-        cm.write_text(ctext.replace(anchor, anchor + "\n" +
-                    "          " + cmake_new_line(app_name), 1), encoding="utf-8")
-        print(f"  + {CMAKELISTS} 源列表已加 {app_name}/{app_name}_app.cpp")
+            die(f"{MANIFEST} 找不到锚 '{anchor}'（文件结构变了，手工处理）")
+        cm.write_text(ctext.replace(anchor, "        " + src_line + "\n" + anchor, 1), encoding="utf-8")
+        print(f"  + {MANIFEST} EMBARK_APP_SOURCES 已加 {app_name}/{app_name}_app.cpp")
     ui = repo / UI_DEMO
     utext = ui.read_text(encoding="utf-8")
     entry = app_table_entry(app_name, class_name)
@@ -348,7 +355,7 @@ def interactive(repo: Path) -> None:
     print("=" * W)
     print("Embark · App 生成器（tools/scaffold_app.py）")
     print("生成 app/<名字>/ 薄壳 + 变量骨架 + eez_vars.txt（EEZ Studio 粘贴清单），")
-    print("并自动注册 app/CMakeLists.txt 源列表与 platform/host/ui_demo.cpp 启动表。")
+    print("并自动注册 cmake/embark_sources.cmake 源清单与 platform/host/ui_demo.cpp 启动表。")
     print("全程菜单问答，不需要命令行参数；参考 docs/guides/new-app-guide.md。")
     print("=" * W)
 
@@ -560,7 +567,7 @@ def main() -> None:
     vars_ = [parse_var(v) for v in args.var]
     class_name = pascal(app_name) + "App"
     repo = args.repo.resolve()
-    for rel in (CMAKELISTS, UI_DEMO):
+    for rel in (MANIFEST, UI_DEMO):
         if not (repo / rel).exists():
             die(f"--repo {repo} 下缺 {rel}（请指向仓库根，或用默认值）")
 

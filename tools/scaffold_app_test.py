@@ -32,13 +32,15 @@ def make_fake_repo() -> Path:
     tmp = Path(tempfile.mkdtemp(prefix="scaffold_test_"))
     (tmp / "app").mkdir()
     (tmp / "platform" / "host").mkdir(parents=True)
-    (tmp / "app" / "CMakeLists.txt").write_text(
-        "add_library(embark_demo_apps STATIC\n"
-        "        launcher/launcher_app.cpp\n"
-        "        clock/clock_app.cpp\n"
-        "        settings/settings_app.cpp\n"
-        "        common/eez_ui_bridge.cpp\n"
-        "        common/eez_ui_nav.cpp)\n",
+    (tmp / "cmake").mkdir()
+    # 真实形状（cmake/embark_sources.cmake 的 EMBARK_APP_SOURCES 尾部）：条目 + 锚注释 + 收尾括号。
+    (tmp / "cmake" / "embark_sources.cmake").write_text(
+        "set(EMBARK_APP_SOURCES\n"
+        '        "${EMBARK_ROOT}/app/launcher/launcher_app.cpp"\n'
+        '        "${EMBARK_ROOT}/app/clock/clock_app.cpp"\n'
+        '        "${EMBARK_ROOT}/app/common/aidogui_ui_nav.cpp"\n'
+        "        # 新 App 登记锚点（tools/scaffold_app.py 在这一行之前插一行）\n"
+        "        )\n",
         encoding="utf-8")
     # ui_demo.cpp 的注册表真实形状：加过 App 后是多行排版（锚只认表头，见 scaffold_app.py）
     (tmp / "platform" / "host" / "ui_demo.cpp").write_text(
@@ -75,9 +77,11 @@ def main() -> None:
     for f in (hp, cp, vf):
         if not f.exists():
             print(f"FAIL: {f} 未生成"); sys.exit(1)
-    cm = (repo / "app" / "CMakeLists.txt").read_text(encoding="utf-8")
-    if "demo_timer/demo_timer_app.cpp" not in cm:
-        print("FAIL: CMakeLists 未插入（缺目录化路径）"); sys.exit(1)
+    cm = (repo / "cmake" / "embark_sources.cmake").read_text(encoding="utf-8")
+    if "${EMBARK_ROOT}/app/demo_timer/demo_timer_app.cpp" not in cm:
+        print("FAIL: 清单未插入（缺 ${EMBARK_ROOT}/app/<name>/ 形式）"); sys.exit(1)
+    if cm.index("demo_timer_app.cpp") > cm.index("# 新 App 登记锚点"):
+        print("FAIL: 新条目应插在锚注释之前"); sys.exit(1)
     ui = (repo / "platform" / "host" / "ui_demo.cpp").read_text(encoding="utf-8")
     if "embark::demo::DemoTimerApp" not in ui:
         print("FAIL: 注册表未插入"); sys.exit(1)
@@ -95,7 +99,7 @@ def main() -> None:
             print(f"FAIL: eez_vars.txt 缺 {needle!r}"); sys.exit(1)
 
     # 3) 幂等：再 apply，哈希不变
-    files = (cp, hp, vf, repo / "app" / "CMakeLists.txt", repo / "platform" / "host" / "ui_demo.cpp")
+    files = (cp, hp, vf, repo / "cmake" / "embark_sources.cmake", repo / "platform" / "host" / "ui_demo.cpp")
     before = tuple(sha(f) for f in files)
     p2 = run(args + ["--apply"], repo)
     after = tuple(sha(f) for f in files)

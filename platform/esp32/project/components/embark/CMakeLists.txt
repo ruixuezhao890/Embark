@@ -5,67 +5,32 @@
 # 两条构建路径"）。组件目录在 <repo>/platform/esp32/project/components/embark，
 # 所以仓库根要上跳 5 级。
 
+# 只用于找到下面那份清单文件；仓库根 / 各目录的路径都在清单里定义。
 get_filename_component(EMBARK_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../.." ABSOLUTE)
 
-# --- 与宿主 src/CMakeLists.txt 的源列表保持一致（内核 4 个 TU） ----------------
-# issue 13 起没有 src/embark/error.cpp：错误码文本改由 <embark/error.h> 的
-# error_text() 内联提供，不再单独占一个 TU。
-set(EMBARK_KERNEL_SOURCES
-        "${EMBARK_ROOT}/src/embark/framework.cpp"
-        "${EMBARK_ROOT}/src/embark/bus.cpp"
-        "${EMBARK_ROOT}/src/embark/log.cpp"
-        "${EMBARK_ROOT}/src/embark/font_ledger.cpp"
-        "${EMBARK_ROOT}/src/embark/version.cpp")
-
-# --- Demo App（与宿主同一批 App：launcher/clock/settings 三个；目录化后各占一目录，
-#     真机清单与 app/CMakeLists.txt 的源列表一一对应 —— §14.5 换后端、App 一行不改）---
-# 桥调用在真机上 no-op（EMBARK_EEZ_UI_BRIDGE 未定义），真机接入 EEZ 后在此补编
-# common/eez_ui_bridge.cpp 与 common/eez_ui_nav.cpp 并打开开关即可。
-set(EMBARK_APP_SOURCES
-        "${EMBARK_ROOT}/app/launcher/launcher_app.cpp"
-        "${EMBARK_ROOT}/app/clock/clock_app.cpp"
-        "${EMBARK_ROOT}/app/settings/settings_app.cpp")
-
-# --- 宿主与真机共用的胶水：必须与 platform/common/CMakeLists.txt 的列表一致 ---
-# 唯一的例外是 platform/common/font_service.cpp（运行时字库服务）：它要一个真实的
-# 文件系统后端，而真机这边 Context::filesystem 还是 nullptr（SD 后端是 issue 17 之后
-# 的事）—— 现在编进来只是一份永远不会被调用的死代码，所以有意不进这个清单。
-set(EMBARK_COMMON_SOURCES
-        "${EMBARK_ROOT}/platform/common/static_pool.cpp"
-        "${EMBARK_ROOT}/platform/common/lvgl_port.cpp"
-        "${EMBARK_ROOT}/platform/common/lvgl_ui_port.cpp")
-
-# --- ESP32 后端（platform/esp32/src/）------------------------------------------
-set(EMBARK_ESP32_SOURCES
-        "${EMBARK_ROOT}/platform/esp32/src/esp32_time.cpp"
-        "${EMBARK_ROOT}/platform/esp32/src/esp32_log_sink.cpp"
-        "${EMBARK_ROOT}/platform/esp32/src/esp32_system.cpp"
-        "${EMBARK_ROOT}/platform/esp32/src/esp32_persistence.cpp"
-        "${EMBARK_ROOT}/platform/esp32/src/esp32_bus.cpp"
-        "${EMBARK_ROOT}/platform/esp32/src/esp32_display.cpp"
-        "${EMBARK_ROOT}/platform/esp32/src/esp32_input.cpp"
-        "${EMBARK_ROOT}/platform/esp32/src/esp32_ui_task.cpp"
-        "${EMBARK_ROOT}/platform/esp32/src/esp32_lvgl_mem.cpp"
-        "${EMBARK_ROOT}/platform/esp32/src/esp32_bringup.cpp"
-        "${EMBARK_ROOT}/platform/esp32/src/esp32_hal.cpp")
+# 源清单的唯一事实来源（issue 20 的结构性收口）：这个组件以前手抄了四份名单
+# （内核 / Demo App / 共用胶水 / ESP32 后端）+ 一份 App include 目录 —— issue 16 漏了
+# nav_shell.cpp 就在链接期 undefined reference，2026-10-16 漏了三个 App 目录就在编译期
+# No such file or directory。现在名单只有 cmake/embark_sources.cmake 一处：
+#   EMBARK_APP_SOURCES_DEVICE  真机要编的 App 子集（⊆ 宿主全量，审计会查）
+#   EMBARK_APP_INCLUDE_DIRS_DEVICE  由那子集推导（新 App 自动带上自己的目录）
+#   EMBARK_COMMON_SOURCES_DEVICE    共用胶水 − 显式声明的宿主专属（减法，不是手抄）
+# include 它同时会跑一次配置期审计，漏项在那里断。
+include("${EMBARK_ROOT}/cmake/embark_sources.cmake")
 
 idf_component_register(
         SRCS ${EMBARK_KERNEL_SOURCES}
-             ${EMBARK_APP_SOURCES}
-             ${EMBARK_COMMON_SOURCES}
+             ${EMBARK_APP_SOURCES_DEVICE}
+             ${EMBARK_COMMON_SOURCES_DEVICE}
              ${EMBARK_ESP32_SOURCES}
         INCLUDE_DIRS
              "${EMBARK_ROOT}/include"              # embark/*.h
              "${EMBARK_ROOT}/config"               # embark_config.h / embark_limits.h / lv_conf.h
-             "${EMBARK_ROOT}/app"                  # <app名>/ 各 App 的 {h,cpp}
-             "${EMBARK_ROOT}/app/launcher"         # launcher_app.h（2026-10-06 目录化后各 App 占一目录）
-             "${EMBARK_ROOT}/app/clock"            # clock_app.h
-             "${EMBARK_ROOT}/app/settings"         # settings_app.h
-             "${EMBARK_ROOT}/app/common"           # app_messages.h（薄桥待接入 EEZ）
              "${EMBARK_ROOT}/platform/common"      # lvgl_port.h / lvgl_ui_port.h / static_pool.h
              "${EMBARK_ROOT}/platform/esp32/src"   # esp32_*.h
              "${CMAKE_BINARY_DIR}/include"         # middleware 视图（<middleware/etl|efmt|elog/...>）
              "${EMBARK_ROOT}/third_party/etl/include"  # <etl/...>（ETL 是 header-only）
+             ${EMBARK_APP_INCLUDE_DIRS_DEVICE}     # app/、app/common/ 与各 App 目录（推导）
         REQUIRES lvgl embark_font nvs_flash esp_timer esp_lcd driver)
 
 # 内核与 App 的编译口径（与宿主 embark_kernel_flags 对齐：C++17、无异常、无 RTTI）。

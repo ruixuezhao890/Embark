@@ -132,13 +132,15 @@ void MyApp::onForegroundTick(std::uint32_t) { /* 有数据时在这里 ui_backen
 
 **注册（两处，别漏）**：
 
-1. `app/CMakeLists.txt` 的 `embark_demo_apps` 源列表加 `my/my_app.cpp`；
+1. `cmake/embark_sources.cmake` 的 `EMBARK_APP_SOURCES` 加
+   `"${EMBARK_ROOT}/app/my/my_app.cpp"`（宿主与真机共用这一份清单 —— issue 20）；
 2. `platform/host/ui_demo.cpp` 的 `EMBARK_APP_TABLE(...)` 加 `embark::demo::MyApp`。
 
 > **注册顺序就是主屏磁贴顺序**（第 0 个是主屏自己，不出磁贴），也是默认前台 App。
 > 排在后面 = 在第 2 页。`max_apps` 现在是 12（= 3 页），超了是编译期 `static_assert`。
-> 真机清单 `platform/esp32/project/components/embark/CMakeLists.txt` 在第三步（真机界面）之前
-> **不用动**；`platform/host/ui_tour.cpp` 与 `user_main.cpp` 是精简系统用例，也不必加。
+> 真机要编这个 App 时，把它同时加进清单的 `EMBARK_APP_SOURCES_DEVICE`（真机没有 UI 后端，
+> 现在只有 launcher/clock/settings 三个在里面）；App 的 include 目录由清单从源文件位置
+> 推导，不用手工补。`platform/host/ui_tour.cpp` 与 `user_main.cpp` 是精简系统用例，也不必加。
 
 **一键生成脚本的现状**：`tools/scaffold_app.py` 仍在，但它生成的是 **EEZ 时代的变量骨架**
 （AiDoGUI 没有变量层），生成出来的 App 不会挂屏、不该照抄。**现在照 `app/music/` 抄更快**；

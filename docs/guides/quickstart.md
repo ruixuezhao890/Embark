@@ -35,14 +35,14 @@
 python tools/scaffold_app.py     # 交互菜单：填 App 名/标题/后台策略/变量，先预览再确认
 ```
 
-一次做完：生成 `app/<名>/<名>_app.{h,cpp}`、追加进 `app/CMakeLists.txt` 与 `EMBARK_APP_TABLE`、
+一次做完：生成 `app/<名>/<名>_app.{h,cpp}`、追加进 `cmake/embark_sources.cmake`（`EMBARK_APP_SOURCES`）与 `EMBARK_APP_TABLE`、
 写出 `app/<名>/eez_vars.txt`（Studio 变量声明粘贴清单）。**生成后要加变量**：菜单选 `2`，
 或 `python tools/scaffold_app.py <名> --add-var count:int --apply`（不带 `--apply` 只预览）。
 
 **手工**（想理解结构就这么做）：
 
 1. 复制 `app/clock/` → `app/my_app/`，类名改 `MyApp`、`name()` 返回 `"my_app"`；
-2. `app/CMakeLists.txt`：`embark_demo_apps` 源列表加 `my_app/my_app.cpp`；
+2. `cmake/embark_sources.cmake`：`EMBARK_APP_SOURCES` 加 `"${EMBARK_ROOT}/app/my_app/my_app.cpp"`；
 3. `platform/host/ui_demo.cpp`：`EMBARK_APP_TABLE(...)` 加 `embark::demo::MyApp`
    （`LauncherApp` 之后，首位必须是启动器）；
 4. `cmake --build build` 重新构建，`--frames 90 --click` 验收仍绿；

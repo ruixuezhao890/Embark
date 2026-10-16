@@ -6,12 +6,7 @@
 # 错误码只有一份名字表：枚举声明本身（include/embark/error.h 里 E_FMT_DERIVE_ENUM）；
 # issue 13 起没有 error.cpp —— 打印交给 efmt，不再手抄一份 to_string。
 
-add_library(embark_core STATIC
-        embark/framework.cpp
-        embark/bus.cpp
-        embark/log.cpp
-        embark/font_ledger.cpp
-        embark/version.cpp)
+add_library(embark_core STATIC ${EMBARK_KERNEL_SOURCES})
 
 add_library(embark::core ALIAS embark_core)
 

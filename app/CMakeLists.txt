@@ -8,14 +8,15 @@
 #      LVGL，所以只在宿主 SDL2/LVGL 可用时构建（LVGL 由宿主分支带进来）。
 #      App 之间有"换后端不动 app/ 与 include/embark/"的验收（spec §14.5）：
 #      本目录只 include <embark/*>、<lvgl.h> 与 <middleware/etl/*>，
-#      不碰任何 platform/ 后端头；真机（issues/11）按下面的目录清单把
-#      各 App 的 .cpp 编进 IDF 组件即可（app/CMakeLists.txt 源列表即真机清单）。
+#      不碰任何 platform/ 后端头；真机（issues/11）按 cmake/embark_sources.cmake 的
+#      EMBARK_APP_SOURCES_DEVICE 子集把各 App 的 .cpp 编进 IDF 组件（issue 20 起
+#      两边共用同一份清单，不再手抄）。
 #
 #      目录布局（2026-10-06 目录化）：app/<app名>/ 放各 App 的 {h,cpp}；
 #      app/common/ 放跨 App 共用代码：EEZ 薄桥（eez_ui_bridge / eez_ui_nav /
 #      eez_ui_screen_names）与共享消息 app_messages.h。每个 App 独立成目录，
-#      新 App 用 tools/scaffold_app.py 一键生成（自动登记到本文件的源列表与
-#      EMBARK_APP_TABLE，见 docs/guides/quickstart.md）。
+#      新 App 用 tools/scaffold_app.py 一键生成（自动登记到 cmake/embark_sources.cmake
+#      的 EMBARK_APP_SOURCES 与 EMBARK_APP_TABLE，见 docs/guides/quickstart.md）。
 #
 # App 之间只通过框架消息通信，禁止互相 include（spec §4 / §7）。
 add_library(embark_apps INTERFACE)
@@ -34,27 +35,14 @@ add_subdirectory(eez_ui)
 # 那时把上面那行 add_subdirectory(eez_ui) 与本分支一起删）。
 add_subdirectory(aidogui_ui)
 
-# 真机（esp32，issues/11）组件清单与此源列表一一对应（components/embark/CMakeLists.txt）。
+# 源清单来自 cmake/embark_sources.cmake（宿主与真机共用，issue 20）：这里以前是手写的一份，
+# 真机组件另有一份，两边漂移的代价全落在真机链接期。加/删 App 改那份清单
+# （tools/scaffold_app.py 也会往那里追加），漏了会被它的配置期审计拦住。
 
 embark_find_sdl2(EMBARK_APP_SDL2_FOUND)
 
 if(EMBARK_APP_SDL2_FOUND)
-  # 三个 demo App 各占一个目录（2026-10-06 目录化）：app/launcher/、app/clock/、app/settings/；
-  # 公共件在 app/common/（薄桥 + app_messages.h）。新 App 用 tools/scaffold_app.py
-  # 生成：它把 <name>_app.cpp 追加进下面的源列表（锚点 # 真机清单锚点）。
-  # 真机清单锚点（scaffold_app.py 在这里追加新 App 的源文件）：
-  add_library(embark_demo_apps STATIC
-          launcher/launcher_app.cpp
-          launcher/launcher_tiles.cpp   # 主屏磁贴：按 App 注册表运行时分页生成（见该文件头）
-          clock/clock_app.cpp
-          settings/settings_app.cpp
-          weather/weather_app.cpp
-          music/music_app.cpp             # 占位 App：证明主屏磁贴能翻到第 2 页
-          album/album_app.cpp             # 占位 App：同上（磁贴数 5 → 2 页）
-          common/eez_ui_bridge.cpp
-          common/eez_ui_nav.cpp
-          common/aidogui_ui_bridge.cpp
-          common/aidogui_ui_nav.cpp)
+  add_library(embark_demo_apps STATIC ${EMBARK_APP_SOURCES})
   add_library(embark::demo_apps ALIAS embark_demo_apps)
 
   # PUBLIC：各 App 头公开 include <embark/app.h> 与 <lvgl.h>，使用方需要

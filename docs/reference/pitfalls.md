@@ -173,12 +173,17 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
 - **组件要自己补宿主 CMake 给过的东西**：`-include config/embark_config.h`、
   `third_party/etl/include`（ETL 是 header-only，宿主靠 `etl::etl` 的 INTERFACE
   目录）、`EMBARK_PLATFORM_NAME` / `EMBARK_VERSION_STRING`。
-- **内核源列表有两份，加/删 TU 必须一起改**：宿主是 `src/CMakeLists.txt`，真机是
-  `platform/esp32/project/components/embark/CMakeLists.txt` 的 `EMBARK_KERNEL_SOURCES`
-  （一份源码树、两条构建路径，spec §11）。删 `src/embark/error.cpp` 时只改了宿主那份，
-  宿主照样全绿、`cmake --build build-esp32` 却在 configure 阶段直接失败：
-  `Cannot find source file: .../src/embark/error.cpp` —— 显式列出的源文件不存在时
-  CMake 不会跳过，而是报错。改完记得两边都跑一遍构建。
+- **源清单只有一份：`cmake/embark_sources.cmake`（issue 20 的结构性收口）**：宿主与真机
+  都 `include` 它取 SRCS / INCLUDE_DIRS，加/删 TU 只改这一处。以前是四份手抄名单
+  （`src/CMakeLists.txt`、`app/CMakeLists.txt`、`platform/common/CMakeLists.txt`、真机组件的
+  `EMBARK_KERNEL_SOURCES` 等），一份源码树、多条构建路径（spec §11）：删
+  `src/embark/error.cpp` 时只改了宿主那份 ⇒ 宿主全绿、真机 configure 期直接失败
+  `Cannot find source file: .../src/embark/error.cpp`（显式列出的源文件不存在时 CMake
+  不跳过，直接报错）；2026-10-16 又漏了真机三个 App 的 include 目录 ⇒ 编译期
+  `clock_app.h: No such file or directory`。清单自带**配置期审计**（每次 cmake 配置跑一次）：
+  登记的路径不存在、归口目录里有 `.cpp` 没登记、真机 App 子集不在全量里、真机 main.cpp
+  的裸头名找不到 include 目录 —— 四条都在配置期 `FATAL_ERROR`，不再拖到真机链接期。
+  新加 `.cpp` 必须登记（`tools/scaffold_app.py` 会自动登记新 App）。
 - **组件的 `PUBLIC` 编译选项会漏到 IDF 生成的纯 C 文件上**：`PUBLIC` 选项会跟着
   组件传播给最终链接目标 `embark_esp32.elf`，而那个目标要编一个自动生成的
   `project_elf_src_esp32s3.c`（**纯 C**）。于是 `-include config/embark_config.h`

@@ -9,7 +9,7 @@
 # 本目录不定义 embark::assert_failed / embark::fatal —— 那是各平台后端的责任
 # （宿主 = platform/host/host_system.cpp，真机 = platform/esp32/src/esp32_system.cpp）。
 
-add_library(embark_static_pool STATIC static_pool.cpp)
+add_library(embark_static_pool STATIC ${EMBARK_COMMON_STATIC_POOL_SOURCES})
 
 add_library(embark::static_pool ALIAS embark_static_pool)
 
@@ -23,13 +23,14 @@ if(NOT TARGET embark_lvgl)
                       "（add_subdirectory(third_party) 必须在它之前）")
 endif()
 
-# font_service.cpp：运行时字库服务（issue 17）—— 把 LVGL 的 'F' 盘接到 hal::IFileSystem，
-# 用 FontLedger 记账。**只进宿主构建**：真机现在没有文件系统后端（Context::filesystem
-# == nullptr），本文件在真机上是死代码；等 SD 后端那个 issue 落地再进真机清单。
+# 源清单取自 cmake/embark_sources.cmake（宿主与真机共用，issue 20）。
+# EMBARK_COMMON_UI_SOURCES = 两侧都编（LVGL 端口 + UI 端口）；
+# EMBARK_COMMON_UI_HOST_ONLY_SOURCES = 只有宿主编 —— font_service.cpp（运行时字库服务，
+# issue 17）把 LVGL 的 'F' 盘接到 hal::IFileSystem，真机 Context::filesystem == nullptr
+# 时是死代码，等 SD 后端（issue 25）落地再从清单里挪到共用那一份。
 add_library(embark_common_ui STATIC
-        lvgl_port.cpp
-        lvgl_ui_port.cpp
-        font_service.cpp)
+        ${EMBARK_COMMON_UI_SOURCES}
+        ${EMBARK_COMMON_UI_HOST_ONLY_SOURCES})
 
 add_library(embark::common_ui ALIAS embark_common_ui)
 
@@ -37,7 +38,7 @@ add_library(embark::common_ui ALIAS embark_common_ui)
 # 中文字库：静态子集字库（lv_font_conv 生成；清单 tools/font/embark_zh_14.json）。
 # 单独成库、按纯 C 编译：embark_build_options 的强制 -include embark_config.h 会把
 # C++ 头（etl）塞进 C 编译（unknown type name namespace），而这个 TU 只需要 lvgl.h。
-add_library(embark_zh_font STATIC ${PROJECT_SOURCE_DIR}/assets/fonts/embark_zh_14.c)
+add_library(embark_zh_font STATIC ${EMBARK_FONT_SOURCES})
 target_include_directories(embark_zh_font PRIVATE
         "${PROJECT_SOURCE_DIR}/config"
         "${PROJECT_SOURCE_DIR}/third_party/lvgl")
@@ -65,7 +66,7 @@ target_link_libraries(embark_common_ui PRIVATE
 # 而宿主（仓库目录）与真机（SD 卡 / FATFS 挂载点）的根不同，开发期还要能临时换根。
 # 默认根 = 仓库里的 app/aidogui_ui/export，也就是 AiDoGUI 导出目录本身（运行时可用环境变量 EMBARK_AIDOGUI_RES
 # 覆盖；真机 step 3 指到 esp_vfs_fat 的挂载点即可，两边代码同一份）。
-add_library(embark_aidogui_res STATIC aidogui_res_fs.cpp)
+add_library(embark_aidogui_res STATIC ${EMBARK_COMMON_AIDOGUI_RES_SOURCES})
 add_library(embark::aidogui_res ALIAS embark_aidogui_res)
 target_include_directories(embark_aidogui_res PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(embark_aidogui_res PUBLIC embark_lvgl)

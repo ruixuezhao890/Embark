@@ -79,8 +79,11 @@ idf.py -C platform/esp32/project -B build-esp32 -p COM5 flash monitor
 本机（2026-10-04，IDF 5.4）已实测跑通：`set-target` + 全量 `build` 通过，产物
 `build-esp32/embark_esp32.bin` **0x89880 字节**（app 分区 3 MB，富余 82%），bootloader
 0x5210 字节（富余 36%）。App 目录化 + 屏内返回改动之后（2026-10-16）产物是
-**0xbf4e0 字节 = 783584 字节**（app 分区富余 75%），bootloader 仍是 0x5210（富余 36%）；
-真机侧的源列表在 `project/components/embark/CMakeLists.txt`，加文件务必同步那一份。`build` 结尾会把 esptool 直写命令打出来（不想用 `idf.py flash`
+**0xc01c0 字节 = 786880 字节**（自检屏那版；issue 17 把静态子集字库接成默认字体后是
+**0xbf8d0 字节 = 784592 字节**，app 分区富余 75%），bootloader 仍是 0x5210（富余 36%）。
+**源清单只有一份**：`project/components/embark/CMakeLists.txt` 现在只 `include` 仓库根的
+`cmake/embark_sources.cmake`（issue 20），加文件改那份；它的配置期审计会在路径写错、
+归口目录里有文件没登记、或 main.cpp 的裸头名找不到 include 目录时直接报错。`build` 结尾会把 esptool 直写命令打出来（不想用 `idf.py flash`
 时照抄即可）。
 
 仓库根 CMake 侧只提供一句提示（不接管真机构建）：

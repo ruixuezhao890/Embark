@@ -19,6 +19,9 @@ project(embark
         LANGUAGES C CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+# embark_sources：宿主与真机共用的源清单（唯一事实来源，issue 20 的结构性收口）。
+# include 时会跑一次配置期审计：清单里的路径不存在、归口目录里有源文件没登记 → FATAL_ERROR。
+include(embark_sources)
 include(embark_middleware)
 include(embark_sdl2)
 

@@ -48,8 +48,43 @@ Blocked by: 16, 17
   —— 说明 nav_shell.cpp 既被链接又被执行；中文字库由首屏绘制间接验证（issue 19 的 EEZ 界面）。
 - 复现方式（留档）：删掉上面两处再 build，在 Linking CXX executable embark_esp32.elf 处报 undefined reference。
 
+## 结构性收口（2026-10-16 补）
+
+上面那句「等下一次真的被咬再动」在 2026-10-16 被咬了第二次：App 目录化（2026-10-06 起各占
+`app/<App 名>/`）之后，真机组件的 INCLUDE_DIRS 没跟上，`main.cpp:20-22` 的
+`#include "clock_app.h"` 直接 `fatal error: clock_app.h: No such file or directory`。
+于是把备注里那条补上：**漏项现在是配置期错误，不再是链接期/编译期事故**。
+
+- **单一事实来源 = `cmake/embark_sources.cmake`**：宿主（顶层 `CMakeLists.txt` 的
+  `include(embark_sources)`，供 `src/`、`platform/common/`、`app/` 三处取 SRCS）与真机
+  （`platform/esp32/project/components/{embark,embark_font}/CMakeLists.txt` 各自 include）
+  读同一份。变量划分＝收口 A（内核 `EMBARK_KERNEL_SOURCES`）、B（共用胶水
+  `EMBARK_COMMON_*`）、C（App include 目录 `EMBARK_APP_INCLUDE_DIRS_DEVICE`，从源文件所在
+  目录推导 —— 2026-10-16 漏的正是这条）、D（字库 `EMBARK_FONT_SOURCES`）。真机 App 子集
+  `EMBARK_APP_SOURCES_DEVICE` ⊆ 宿主全量 `EMBARK_APP_SOURCES`；真机专用目录用**减法**得到
+  （`EMBARK_COMMON_SOURCES_DEVICE` = 定容池 + LVGL/UI 端口），宿主专属（`font_service.cpp`、
+  `aidogui_res_fs.cpp`）显式声明成 host-only —— 归口目录里任何没写进清单的 `.cpp` 都会踩下面审计。
+- **配置期审计（四条，全在 `FATAL_ERROR`）**：①登记的路径不存在（改名/删除没同步）；
+  ②归口目录（`src/embark`、`platform/common`、`app/*/`、`platform/esp32/src`、`assets/fonts`）里
+  有源文件没登记 —— 用 `file(GLOB ... CONFIGURE_DEPENDS)`，新增/删除文件会在下一次构建自动
+  触发重配，当场就断，不必等谁手工重新 cmake；③真机 App 子集不在宿主全量里；
+  ④真机 `main.cpp` 里 `#include "xxx_app.h"` 的头在某个 App 目录里存在、但推导出的 include
+  目录里没有（这条正是 2026-10-16 那次事故的形状：新 App 注册进真机 APP_TABLE 却忘了进子集）。
+  审计用 GLOBAL 属性保证一次配置只跑一遍（清单被多个组件 include）。
+- **负面验证（实测）**：往 `app/` 放一个没登记的 `.cpp` → `cmake -S . -B build` 报「发现没登记的
+  源文件」exit 1；把清单里 `app/album/album_app.cpp` 改成一个不存在的名字 → 报「EMBARK_APP_SOURCES
+  里登记的源文件不存在」exit 1；恢复后 configure exit 0。
+- **回归（实测，2026-10-16 晚）**：宿主 `cmake --build build` exit 0、`ctest` 2/2 通过、四条验收
+  （`--ui` / `--ui-nav` / `--ui-weather` / `--ui-launcher-pages`）全过；真机 `idf.py … build` exit 0、
+  `embark_esp32.bin` = **0xbf8d0 字节 = 784592 字节**（与收口前同一源集：map 里 `embark_zh_14` 命中
+  29 处、`lv_font_montserrat_14` 0 处，app 分区富余 75%）。
+- **工具链与文档同步**：`tools/scaffold_app.py` 改成往 `cmake/embark_sources.cmake` 的
+  `EMBARK_APP_SOURCES` 插行（锚点＝列表尾的注释 `# 新 App 登记锚点` 之前），
+  `tools/scaffold_app_test.py` 的 fake repo 同步（自测仍全过）；
+  `docs/reference/pitfalls.md`、`docs/guides/{new-app-guide,quickstart,scaffold-and-tools}.md`、
+  `platform/esp32/README.md` 里「两份清单/加文件务必同步那一份」的口径一并改掉。
+
 ## 备注
 
-- 现在仍是两份手抄清单 + 一条注释提醒。结构性收口（把宿主/真机两份列表抽成单一 CMake 变量或生成式
-  清单，让"漏项"变成 CMake 配置期错误）没有做 —— 记在这里，等下一次真的被咬再动。
+- ~~现在仍是两份手抄清单 + 一条注释提醒；结构性收口没有做。~~ → **2026-10-16 已做**（见上一节）。
 - 同一批 bring-up 缺陷还有 issue 21（任务栈口径）、issue 22（own task 里的 ELOG 栈预算）。
