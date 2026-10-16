@@ -203,19 +203,20 @@ App 契约的可选钩子 onForegroundTick(now_ms)：框架在 UI 任务每跳�
 _Avoid_: UI tick、渲染回调
 
 **Static subset font（静态子集字库）**：
-lv_font_conv 生成、编译进 flash 的 C 数组字库，只收录 UI 实际用到的字符（框架壳文本全走它）；覆盖范围由清单文件声明、构建期审计。
+lv_font_conv 生成、编译进 flash 的 C 数组字库，只收录 UI 实际用到的字符；覆盖范围由清单文件声明、构建期审计。
+当前唯一一份：`assets/fonts/embark_zh_14.c`（Noto Sans SC 子集，14 px / 4 bpp / 压缩位图，184 字形 = ASCII 95 + 界面文案 84 + 图标 5），清单 `tools/font/embark_zh_14.json`，生成脚本 `tools/font/gen_font.mjs`；已在 `config/lv_conf.h` 里接成 **LVGL 默认字体**（`LV_FONT_CUSTOM_DECLARE` + `LV_FONT_DEFAULT`），链接时要整体收进归档（宿主 `--whole-archive`、真机 `WHOLE_ARCHIVE`），否则成员会被丢弃、字库根本进不了镜像。
 _Avoid_: 全量字库、外挂字体文件
 
 **IFileSystem（文件服务）**：
-框架级字节流接口（open/read/seek/close）；宿主后端读可执行文件旁目录（与持久化同模式），真机 SD 后端待后续 issue（需先加 HAL 面，当前 `spi_transfer` 如实返回 `unsupported`）。
+框架级只读字节流接口（open/read/seek/close/size），句柄 `FileHandle = uint16_t`（0 = 无效）；宿主后端 `platform/host/host_filesystem.{h,cpp}` 读 `EMBARK_HOST_FS_ROOT`（默认可执行文件旁 `embark_host_fs/`，定长 4 槽，拒绝绝对路径 / `..` / 含 `:`），真机 SD 后端待后续 issue（`.scratch/embark-v1/issues/25-esp32-sd-filesystem.md`，需先加 HAL 面，当前 `spi_transfer` 如实返回 `unsupported`）。在 `hal::Context` 里它是**可空指针**（真机是 `nullptr`）—— 与 display/input 同类，因为真机还没有盘。
 _Avoid_: 文件系统、SD 驱动
 
 **Font ledger（字库记账）**：
-运行时字库的显式资源管理：字节预算 + 引用计数，包装 `lv_font_load` 与 `lv_font_free`，独立于 LVGL 全局堆预算；超预算返回 `no_space`。真机侧后续映射到 PSRAM 显式分配。
+运行时字库的显式资源管理：字节预算 + 引用计数，包装 `lv_font_load` 与 `lv_font_free`，独立于 LVGL 全局堆预算；超预算返回 `no_space`。已落地：内核层 `include/embark/font_ledger.h` + `src/embark/font_ledger.cpp`（零堆、定长表、不依赖 LVGL）+ 平台侧 `platform/common/font_service.{h,cpp}`（把 LVGL 的 `'F'` 盘注册到 `hal::IFileSystem`；同路径复用只 +1 引用，引用归零才 free）。容量见 `config/embark_limits.h`：`font_budget_bytes` 100 KB、`font_max_loaded` 4、`font_path_bytes` 64。真机侧后续映射到 PSRAM 显式分配。
 _Avoid_: 字体缓存、字库池
 
 **Coverage audit（缺字审计）**：
-构建期检查：扫描源码中的 UI 字符串，对照静态子集字库的覆盖清单，发现字库外字符即失败（CI 门禁），从源头防豆腐块。
+构建期检查：扫描源码中的 UI 字符串，对照静态子集字库的覆盖清单，发现字库外字符即失败（CI 门禁），从源头防豆腐块。已落地 `tools/font/audit_glyphs.mjs`（Node、零依赖：扫描 `app/` `src/` `platform/` 里所有会把字符串送上屏的 setter，缺字打印字符 + 文件:行号并 exit 1）；另有 `--print-required`（打印该进清单的字符集）与 `--selftest`（自造缺字夹具验证报错路径）；CI 里是 `font-audit` job。LVGL 图标区 `U+F000–U+F8FF` 默认豁免（内置字形，不进清单），`--include-symbols` 可关掉豁免。
 _Avoid_: 运行时缺字检查、字体检测
 
 **Weather App（天气 App）**：

@@ -148,7 +148,15 @@ node tools/font/gen_font.mjs      # 在仓库根执行
 产物两个，都在仓库内、可重复生成、幂等覆盖：
 
 - `assets/fonts/embark_zh_14.c` —— lv_font_conv 生成的 LVGL C 字体（`--lv-font-name embark_zh_14`）
-- `tools/font/embark_zh_14.json` —— **覆盖清单**，issue 17"缺字审计"的唯一依据
+- `tools/font/embark_zh_14.json` —— **覆盖清单**，"缺字审计"（见下）的唯一依据
+
+**它怎么被用上**：`config/lv_conf.h` 里 `#define LV_FONT_CUSTOM_DECLARE LV_FONT_DECLARE(embark_zh_14)` +
+`#define LV_FONT_DEFAULT &embark_zh_14` 把它接成 LVGL 的**默认字体**（没显式设字体的文本都走它）；
+因为默认字体被 `liblvgl.a` 里的 `lv_theme.c.obj` / `lv_draw_label.c.obj` 引用，而 GNU ld 只在「扫到某个归档时
+该符号仍未定义」才把成员拉进来、库顺序不由我们决定，所以字库归档必须**整体收进链接**：
+宿主 `-Wl,--whole-archive embark_zh_font -Wl,--no-whole-archive`（`platform/common/CMakeLists.txt`），
+真机 `idf_component_register(... WHOLE_ARCHIVE)`（`platform/esp32/project/components/embark_font/CMakeLists.txt`）。
+少了这一步的现象是**编译全过、字库根本没进镜像**（map 里搜不到 `embark_zh_14`），不是报错。
 
 参数口径（为什么是这些值，脚本头部注释里有完整推导）：
 
@@ -174,6 +182,24 @@ node tools/font/gen_font.mjs      # 在仓库根执行
 > （会按 GBK 解码 UTF-8 再写成带 BOM 的文件，中文全变乱码）。
 > 这个脚本是 Node，`.c` 由 lv_font_conv 自己写、`.json` 用 `fs.writeFileSync(..., 'utf8')` 写，
 > 末尾还会断言两个文件都**没有 BOM**。
+
+### 配套：`tools/font/audit_glyphs.mjs`（缺字审计，CI 门禁）
+
+```sh
+node tools/font/audit_glyphs.mjs                    # 审计 app/ src/ platform/，有字库外字符就 exit 1
+node tools/font/audit_glyphs.mjs --print-required   # 打印「应进清单」的字符集（改完 UI 文案照它更新 UI_TEXT）
+node tools/font/audit_glyphs.mjs --selftest         # 临时目录里自造缺字夹具，验证报错路径与行号
+```
+
+扫描所有会把字符串送上屏的 setter（`lv_label_set_text` / `_fmt` / `_static`、`lv_checkbox_set_text`、
+`lv_dropdown_set_options`、`lv_roller_set_options`、`lv_btnmatrix_set_map`、`lv_table_set_cell_value`…），
+逐字符对照 `tools/font/*.json` 的 `chars` 清单；缺字时打印字符（含 U+ 码点）+ `文件:行号` 并 `exit 1`。
+LVGL 图标区 `U+F000–U+F8FF` 默认豁免（内置字形，不进清单），`--include-symbols` 可关掉豁免。
+CI 里是独立的 `font-audit` job（`.github/workflows/ci.yml`）。
+
+工作流：**加了界面文案 → 跑审计拿缺字 → 补 `gen_font.mjs` 的 `UI_TEXT` → 重跑 `gen_font.mjs` → 再跑审计应为绿**。
+注意 `--print-required` 的输出依赖**当前**清单，整体替换 `UI_TEXT` 时要取并集 —— 否则旧清单已覆盖、
+而新文案也还在用的字会被漏掉（曾被咬过一次：「动启器时置设钟」六字随替换消失）。
 
 ---
 

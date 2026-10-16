@@ -1,6 +1,6 @@
 # 17 · 字体服务：静态子集 + 运行时加载接口 + 缺字审计
 
-Status: open
+Status: resolved
 Type: feature
 Blocked by: —
 来源: 用户设计问答（"在单片机上不可能说全部烧录到flash吧？可以从sd卡加载到psram中再进行引用吧？"）
@@ -57,3 +57,33 @@ Blocked by: —
 - 与 issue 16 依赖：启动器标题与壳文案进子集字库并过审计；LV_SYMBOL 图标码点是内置字形，
   不进字库范围。
 - spec 正文 v1 定稿不动，落地时并入 v1.x；ADR 0007 为本 issue 的决策记录。
+
+## 落地（2026-10-16）
+
+按上面的「已定契约」全部做完，宿主与真机两侧都实测过。实现细节集中在 ADR 0007 的「落地（2026-10-16，issue 17）」小节，
+这里只记验收与代价：
+
+- **交付物**：`include/embark/hal/filesystem.h`（IFileSystem，另加 `size`：记账要按文件字节数计费）、
+  `platform/host/host_filesystem.{h,cpp}`（宿主后端，4 槽，根 = `EMBARK_HOST_FS_ROOT` 否则 exe 旁 `embark_host_fs/`）、
+  `include/embark/font_ledger.h` + `src/embark/font_ledger.cpp`（内核层记账，零堆）、
+  `platform/common/font_service.{h,cpp}`（把 LVGL 的 `'F'` 盘注册到 IFileSystem）、
+  `tools/font/audit_glyphs.mjs`（审计脚本）、`.github/workflows/ci.yml` 的 `font-audit` job、
+  `config/embark_limits.h` 五个容量常量 + `docs/reference/limits.md` 同步。
+- **测试**：`tests/kernel/test_font_ledger.cpp`（复用计数 / 预算 / 表项 / 错误路径不泄漏）、
+  `tests/host/test_host_filesystem.cpp`（非法路径、EOF、seek、槽位耗尽）、`tests/host/test_font_service.cpp`
+  （端到端：加载真实 `app/aidogui_ui/export/font/ui_font_ui_heiti_14.bin` → 渲染出非黑像素 → 引用与额度归零 →
+  多释放 `not_found`；垃圾文件 `corrupt_data` 且不占额度）。`ctest` = 2/2 通过（`embark_tests` + 新目标 `embark_host_tests`）。
+- **审计**：清单 `tools/font/embark_zh_14.json` 按实测界面文案扩到 84 个非 ASCII 字符，字库重生成
+  （184 字形，15/15 自检通过，压缩位图 7582 B）；`node tools/font/audit_glyphs.mjs` 在 `app/` `src/` `platform/`
+  139 个源文件上 exit 0，`--selftest` 4 项 PASS。判决口径：审计收集的字符由 `--print-required` 得出，
+  **不要整体替换清单字符集时漏掉旧清单已覆盖的字**（本次踩过一次：77 字里丢了「动启器时置设钟」6 字）。
+- **字库真的进了 flash**（本 issue 的「静态子集烧 flash 是主路径」此前是空头支票）：原先没有任何代码引用
+  `embark_zh_14`，归档成员被 ld 丢弃。现在 `config/lv_conf.h` 用 `LV_FONT_CUSTOM_DECLARE` +
+  `LV_FONT_DEFAULT &embark_zh_14` 接成默认字体，两侧整体收进链接（宿主 `-Wl,--whole-archive`、真机 `WHOLE_ARCHIVE`）。
+  真机 map：`embark_zh_14` 29 处命中、`lv_font_montserrat_14` 0 处，固件 784592 B（比接线前还小 2288 B）。
+- **未做（按契约推迟）**：真机 SD 后端与 PSRAM 显式分配 → 新开 `.scratch/embark-v1/issues/25-esp32-sd-filesystem.md`；
+  FreeType 保持关闭；App 层 v1 不使用运行时字库（界面文案全在静态子集里，运行时加载目前只有宿主端到端用例在用）。
+
+## Comments
+
+- 2026-10-16：落地完成，`Status: open → resolved`。决策记录见 ADR 0007；真机 SD 部分拆到 issue 25。

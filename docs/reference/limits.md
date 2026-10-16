@@ -91,7 +91,23 @@
 
 ---
 
-## 6. 想加一个常量
+## 6. 文件系统与运行时字库（issue 17）
+
+| 常量 | 值 | 含义 | 改它意味着什么 |
+| --- | --- | --- | --- |
+| `filesystem_max_open_files` | `4` | 同时打开的句柄数（宿主后端的定长槽表） | 第 5 个 `open` → `Error::no_space`（不排队、不静默复用）。字库服务一次只开一个文件（open → size → close），所以 4 很宽松；真机 SD 后端若做目录遍历要重新算 |
+| `filesystem_path_bytes` | `128` | 文件路径长度上限（含结尾 `\0`） | 超长 → `Error::invalid_argument`（不截断）。宿主后端的根路径缓冲是它的 4 倍，给可执行文件目录留余量 |
+| `font_budget_bytes` | `100 * 1024` | 运行时字库的字节预算 | 记账层（[`include/embark/font_ledger.h`](../../include/embark/font_ledger.h)）在 `lv_font_load` **之前**扣账：已用 + 本次 > 预算 → `no_space`，字库根本不加载。这是**独立的一条线**，与 `lvgl_alloc_budget_bytes` 不是一笔账（真机将来走 PSRAM 显式分配） |
+| `font_max_loaded` | `4` | 同时驻留的运行时字库份数 | 定长表。同路径重复 load 只 +1 引用、不占新槽；超了 → `no_space`。v1 界面全用静态子集字库，这个值只是给将来的动态文本留的门 |
+| `font_path_bytes` | `64` | 字库路径长度上限（相对文件系统根，含 `\0`） | 超长 → `invalid_argument`；`FontService::load` 据此开 `font_path_bytes + 4` 的缓冲拼 LVGL 盘符路径（`F:/…`） |
+
+> 宿主文件系统后端的根：环境变量 `EMBARK_HOST_FS_ROOT` 优先，否则可执行文件旁的 `embark_host_fs/`。
+> 真机侧 `hal::Context::filesystem` 是 `nullptr`（还没有盘），`FontService::init()` 会返回 `not_ready`——
+> 真机 v1 用的是静态子集字库。SD 后端见 [issue 25](../../.scratch/embark-v1/issues/25-esp32-sd-filesystem.md)。
+
+---
+
+## 7. 想加一个常量
 
 1. 先问：**能不能复用一个已有的？** 多数情况能。
 2. 加在 `config/embark_limits.h`，**必须带一行注释说明它约束什么**（该文件的风格就是「每个数字都有理由」）。
