@@ -60,3 +60,10 @@
 [0011](0011-aidogui-ui-source.md)（界面来源与按需建屏）、[0006](0006-launcher-and-nav-shell.md)（导航壳退役）、
 `app/common/aidogui_ui_nav.{h,cpp}`（屏 ↔ App 导航桥）、`app/settings/settings_app.cpp`（逻辑动作的样板）、
 `app/aidogui_ui/README.md`（六块屏与事件表）、`docs/guides/new-app-guide.md`（加 App 手册）。
+---
+
+**后记（2026-10-18，[ADR 0018](0018-settings-truth-and-growth.md)）**：本 ADR 决策 3 里 settings 屏的落地形态已退役 ——
+「亮度 +1」单按钮与 0..3 四档循环被「亮度百分比 0..100、步进 10、两端钳位」取代（`IDisplay` 增加读数 `backlight()`），
+逻辑动作改由 App 侧 `lv_obj_add_event_cb` 挂（导航绑定表只有 8 槽、回调还拿不到 `this`），`BrightnessMessage` 的载荷
+从档位改为百分比，「关于」App 并入设置屏后退役。**仍然有效**：决策 1（屏内返回按钮是唯一回程）与决策 2
+（`bind_action` 这个机制本身 —— 今天没有消费者，保留为备用路径）。

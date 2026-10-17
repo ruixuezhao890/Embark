@@ -68,6 +68,24 @@ TEST_CASE("IDisplay：空/负区域与 >100 的背光都是 invalid_argument") {
   CHECK(display.backlight_calls == 0U);
 }
 
+TEST_CASE("IDisplay：背光写进去能读回来，越界不改变读数") {
+  FakeDisplay display;
+  REQUIRE(display.init() == Error::none);
+
+  // 刚起来是 0（= "没调过"），与 set_backlight 报 unsupported 的装配口径一致。
+  CHECK(display.backlight() == 0U);
+
+  CHECK(display.set_backlight(70U) == Error::none);
+  CHECK(display.backlight() == 70U);
+
+  CHECK(display.set_backlight(0U) == Error::none);
+  CHECK(display.backlight() == 0U);
+
+  CHECK(display.set_backlight(101U) == Error::invalid_argument);
+  CHECK(display.backlight() == 0U);  // 失败的写不许留下半截状态
+  CHECK(display.backlight_calls == 2U);
+}
+
 TEST_CASE("IDisplay：init 故障原样透传，且保持未就绪") {
   FakeDisplay display;
   display.init_error = Error::io_failure;

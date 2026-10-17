@@ -82,9 +82,21 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 | `weather` | 37（返回 / 城市栏 ◀ 城市 ▶ / 「现在」卡 / 5 天逐行 日期·天气字·一句话·温度） | `WeatherApp` 只在进屏/回屏/切城市时写（数据是桩，不会自己变）；城市存 `hal().storage` 的 `wx.city` | `Btn_Back` → launcher |
 | `music` | 7（返回 / 标题 / 占位卡 + 两行字） | 无（占位屏，App 侧只有薄壳） | `Btn_Back` → launcher |
 | `album` | 7（同上） | 无（占位屏） | `Btn_Back` → launcher |
-| `settings` | 8（返回 / 标题 / 亮度卡 `Card_Bright` + 「亮度 +1」`Btn_Bright`） | `SettingsApp::bump_level()` 就地 +1（档位 0..3 循环）并广播 `BrightnessMessage`（ClockApp 收） | `Btn_Back` → launcher；`Btn_Bright` 是**逻辑动作**（`ui_backend_bind_action`），不切屏 |
+| `settings` | **32**（固定头部 返回/标题 + **滚动页 `Body`** 里的三段：显示（`Card_Bright`：`Btn_Minus` / `L_BrightVal` / `Btn_Plus`）、时间（`Card_Time`：`L_TimeVal` / `L_TimeField` / `Btn_TimeMinus` / `Btn_TimePlus` / `Btn_TimeNext`）、关于本机（`Card_Info` 七行 `L_Platform`…`L_Clock`）） | `SettingsApp` 写亮度百分比、墙上钟字段与七行只读值；亮度落 KV `ui.bright`，其余各项即改即生效（[ADR 0018](../../docs/adr/0018-settings-truth-and-growth.md)） | `Btn_Back` → launcher；其余按钮全是 **App 侧回调**（`lv_obj_add_event_cb`），不切屏 |
 
-### 一条不在设计器里的导航 + 逻辑动作绑定
+### 滚动页：容器必须**既 SCROLLABLE 又 CLICKABLE**
+
+设置屏的 `Body` 在 .aid 里同时打开 `flags.scrollable` 与 `flags.clickable`，两者缺一不可：
+
+- LVGL 命中测试只认可点对象（`third_party/lvgl/src/core/lv_obj_pos.c:955`）；容器不可点时，按在卡片空白处 /
+  文字上会命中**屏本身**，而滚动链只从「当前按下的对象」往上爬（`third_party/lvgl/src/core/lv_indev_scroll.c:258`）——
+  从屏出发没有父级，容器就是拖不动的。设计器默认给每个控件 `clickable: false`，必须显式打开。
+- 被拖动的容器要够大且内容溢出（设置屏：视口 276 px、内容 422 px，剩余可滚 146 px），否则滚动条根本不出现。
+
+> 这条坑曾经骗过宿主验收：合成拖动的轨迹正好压在可点的 `Btn_TimePlus` 上，LVGL 边拖边重算命中对象，
+> 于是从按钮往上一层层爬到了 `Body`，验收全绿；真机按在卡片的空白处则完全不动。真机走查才发现。
+
+### 一条不在设计器里的导航 + 屏内交互
 
 - **主屏磁贴**：磁贴**不是设计稿里的控件** —— 设计稿只放一个空容器 `Band_Apps`，磁贴由
   `LauncherApp` 在每次屏装载后按注册表重建（顺序 = 注册顺序，跳过第 0 个 = 主屏自己），
@@ -92,11 +104,13 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
   不用动设计稿（超过 4 个自动多一页 + 多一个页码点）。分页几何是纯函数
   `app/launcher/launcher_pages.h`（每页 4 个 / 页数 / 页容器 x / 页码点 x），有 doctest 单测
   `tests/kernel/test_launcher_pages.cpp`。
-- **逻辑动作绑定**：屏上按钮要**就地干点事**（不切屏，如设置屏的「亮度 +1」）时，App 在
-  `onCreate` 里 `ui_backend_bind_action("屏名", "控件名", &回调)` 声明一次。它与 `bind_click` 共用
-  一张表（上限 8 条，同一控件先后声明两种绑定时后写生效），回调由桥在每次装载后统一重挂，
-  所以 App 里**不要**自己 `lv_obj_add_event_cb`（控件随屏 destroy 消失）。样板见
-  `app/settings/settings_app.cpp`（[ADR 0014](../../docs/adr/0014-in-screen-back.md) 决策 2）。
+- **屏内交互归 App**：屏上按钮要**就地干点事**（不切屏，如设置屏的「亮度 −/＋」）时，用
+  `lv_obj_add_event_cb` + `lv_event_get_user_data(this)` 挂回调，并在**每次屏装载后的重推里重挂**
+  （控件随屏 destroy 消失）。样板：`app/settings/settings_app.cpp` 的 `bind_sinks()`、
+  `app/weather/weather_app.cpp` 的 `bind_city_buttons()`。**设计器事件只用来切 App**，
+  屏内交互不进导航绑定表（[ADR 0018](../../docs/adr/0018-settings-truth-and-growth.md) 决策 3）。
+  历史路径 `ui_backend_bind_action("屏名", "控件名", &回调)` 仍然保留（与 `bind_click` 共用一张表、
+  上限 8 条），但它只收裸函数指针、回调拿不到 `this` —— 今天没有消费者。
 - **控件值重推**：屏每次装载都是**新建**的（控件值 = 设计稿初值），所以「值是谁写的」也要声明一次 ——
   App 在 `onCreate` 里 `ui_backend_bind_repaint("屏名", 回调)`，桥在**每次屏装载后**回调它，由它把控件值
   按 App 当前状态重写一遍（[ADR 0015](../../docs/adr/0015-app-retention-and-refresh.md)）。样板见
@@ -118,10 +132,9 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 | music | Btn_Back | 调用函数 | `embark_ui_open_launcher` |
 | album | Btn_Back | 调用函数 | `embark_ui_open_launcher` |
 | settings | Btn_Back | 调用函数 | `embark_ui_open_launcher` |
-| settings | Btn_Bright | （设计器里不挂事件） | App 侧 `ui_backend_bind_action("settings", "Btn_Bright", ...)` → `SettingsApp::bump_level()` |
 
-（磁贴不带设计器事件：它们是运行时建的，见上一节。设置屏的 `Btn_Bright` 也不挂设计器事件：
-它是本 App 的逻辑动作，由导航桥在装载后重挂。）
+（磁贴不带设计器事件：它们是运行时建的，见上一节。设置屏的 `Btn_Minus` / `Btn_Plus` / `Btn_Time*`
+同样**不挂**设计器事件 —— 它们是本 App 的屏内交互，由 App 在每次屏装载后自己重挂回调。）
 
 生成代码会吐一句裸调用（`embark_ui_open_clock();`），原型在
 `app/common/aidogui_ui_hooks.h`（该头由 `app/aidogui_ui/CMakeLists.txt` 用 `-include`

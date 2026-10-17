@@ -72,7 +72,7 @@ void MyApp::onForegroundTick(std::uint32_t) {
 ```
 
 真实样板：`app/launcher/launcher_app.cpp`（主屏 + 导航接线）、`app/clock/clock_app.cpp`（变量桥 + 收 `BrightnessMessage`）、
-`app/settings/settings_app.cpp`（suspend + `bump_level` 逻辑入口）。
+`app/settings/settings_app.cpp`（suspend + 屏内回调 + 设置项落 KV；2026-10-18 起它已不是「最小样板」，最小样板见 `app/album/album_app.cpp`）。
 
 ## 5. 数据怎么进 UI（Flow 全局变量）
 

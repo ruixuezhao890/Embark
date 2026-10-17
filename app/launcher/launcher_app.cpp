@@ -1,7 +1,7 @@
 /**
  * Embark · 启动器 App 实现（issue 16、ADR 0006；界面现由 AiDoGUI Designer 生成代码提供）
  *
- * 见 launcher_app.h 头注释。本文件与 clock_app.cpp / settings_app.cpp 同形：不手写任何
+ * 见 launcher_app.h 头注释。本文件与 clock_app.cpp / album_app.cpp 同形：不手写任何
  * 界面调用，只把界面生成代码里同名屏（"launcher"）挂上显示器，并把界面工具的切屏事件
  * 反向接到框架的 App 切换上（屏名约定 == App 名，解析在 eez_ui_screen_names.h）。
  *

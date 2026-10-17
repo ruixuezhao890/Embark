@@ -64,7 +64,6 @@ set(EMBARK_APP_SOURCES
         "${EMBARK_ROOT}/app/weather/weather_app.cpp"
         "${EMBARK_ROOT}/app/music/music_app.cpp"
         "${EMBARK_ROOT}/app/album/album_app.cpp"
-        "${EMBARK_ROOT}/app/about/about_app.cpp"
         "${EMBARK_ROOT}/app/common/eez_ui_bridge.cpp"
         "${EMBARK_ROOT}/app/common/eez_ui_nav.cpp"
         "${EMBARK_ROOT}/app/common/aidogui_ui_bridge.cpp"
@@ -86,7 +85,6 @@ set(EMBARK_APP_SOURCES_DEVICE
         "${EMBARK_ROOT}/app/weather/weather_app.cpp"
         "${EMBARK_ROOT}/app/music/music_app.cpp"
         "${EMBARK_ROOT}/app/album/album_app.cpp"
-        "${EMBARK_ROOT}/app/about/about_app.cpp"
         "${EMBARK_ROOT}/app/common/aidogui_ui_bridge.cpp"
         "${EMBARK_ROOT}/app/common/aidogui_ui_nav.cpp")
 

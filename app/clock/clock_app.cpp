@@ -1,7 +1,7 @@
 /**
  * Embark · 时钟 App 实现：见 clock_app.h 头注释。
  *
- * 薄壳纪律与 launcher_app.cpp / settings_app.cpp 完全一致：onCreate 只记下框架句柄 +
+ * 薄壳纪律与 launcher_app.cpp / album_app.cpp 完全一致：onCreate 只记下框架句柄 +
  * 声明"屏装载后重推控件值"；onEnter/onResume 只按屏名挂自己的界面屏；onForegroundTick
  * 读墙钟 → 算日历 → 把变化的文案写进界面控件，再泵一帧。没有后台节拍（ADR 0015）。
  *
@@ -244,8 +244,8 @@ void ClockApp::onMessage(const Message& msg) {
     // onForegroundTick → refresh_display 写控件完成）。需要“收消息即切状态”的 App，见
     // docs/guides/state-machine-and-messages.md。
     const auto& brightness = static_cast<const BrightnessMessage&>(msg);
-    level_ = brightness.level;
-    ELOG_INFO("clock 收到 BrightnessMessage：亮度档 -> {}", level_);
+    bright_percent_ = brightness.percent;
+    ELOG_INFO("clock 收到 BrightnessMessage：亮度 -> {}%", bright_percent_);
   }
 }
 

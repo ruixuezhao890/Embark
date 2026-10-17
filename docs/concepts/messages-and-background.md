@@ -250,6 +250,6 @@ const embark::Error err = fw.spawn_own_task(fw.id_of(*this));
 
 ## 演示对照
 `app/launcher/`（主屏 + 导航接线 + 视图留存 + 值重推）、`app/clock/`（前台节拍推进显示 + 月历视图留存 + 收 `BrightnessMessage`）、`app/settings/`
-（suspend + `publish` 亮度消息 + `bump_level` 逻辑入口）就是最小可读范本；`app/common/app_messages.h` 定义了
+（suspend + `publish` 亮度消息 + 屏内回调 + 设置项落 KV，见 [ADR 0018](../adr/0018-settings-truth-and-growth.md)）是最完整的范本；`app/common/app_messages.h` 定义了
 `BrightnessMessage`。**今天这三个 App 都不声明后台策略**（全仓也没有别的 App 声明）：`tick` 的历史样板是 clock 的 100 ms，已按 [ADR 0015](../adr/0015-app-retention-and-refresh.md) 退役；`own_task` 的
 完整系统用例在 `tests/kernel/test_own_task_lifecycle.cpp`（宿主演示 `ui_demo` 仍按这 3 个 App 注册）。

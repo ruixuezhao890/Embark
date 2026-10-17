@@ -12,7 +12,7 @@
  * （app/eez_ui/src/ui/；屏名约定 == App 名，子页 = <app名>_<编号>_sub，见
  * eez_ui_bridge.h / eez_ui_nav.h）：EEZ 屏上控件的 Flow SetPage 被桥翻成"切到
  * 同名 App"，所以点 EEZ 屏上的按钮 = 启动那个 App。手绘的扇形启动器与 demo App
- * 手绘按钮已全部下线（settings_app.cpp 的 bump_level() 接替 Level +1 的触发点）
+ * 手绘按钮已全部下线（亮度改由设置中心 SettingsApp::bump_brightness() 驱动，0..100 百分比）
  *
  * 验收开关分五档（全部由合成 SDL 输入 + 帧号驱动，确定性）：
  *   --click [X,Y]   点 EEZ launcher 屏的按钮（Flow SetPage → clock 屏 → 切 ClockApp），
@@ -23,7 +23,7 @@
  *                   move → release 全程不误触按钮、不切 App。
  *   --launch        完整故事线（无人值守验收主路径）：程序化 request_switch("clock")
  *                   → 点 clock 屏按钮回启动器 → 点 launcher 屏按钮再进 clock →
-*                   再点 clock 屏按钮回启动器 → settings->bump_level()（消息广播）；
+*                   再点 clock 屏按钮回启动器 → settings->bump_brightness(+10)（消息广播）；
  *                   断言 switches==4 与各 App 钩子序。
  *   --ui            AiDoGUI 验收（ADR 0011）：字体报告（期望 6/6）+ 屏表/控件表自检
  *                   （launcher 屏 23 个控件、按名取 L_Time 文本为 HH:MM 形状）→ 释放当前屏
@@ -53,13 +53,13 @@
 #include <embark/log.h>
 #include <embark_limits.h>
 
-#include "about/about_app.h"
 #include "album/album_app.h"
 #include "clock/clock_app.h"
 #include "eez_ui_bridge.h"
 #include "eez_ui_nav.h"
 #include "music/music_app.h"
 #include "settings/settings_app.h"
+#include "settings/settings_prefs.h"
 #include "weather/weather_app.h"
 #if defined(EMBARK_AIDOGUI_UI)
 #include "aidogui_res_fs.h"
@@ -108,7 +108,7 @@ constexpr int click_frames = 90;
 //   期间 LVGL 屏蔽输入（lv_indev.c prev_scr 非空），后续点击须等动画窗口结束再落帧）：
 //   帧 20 request_switch("clock")（程序化、无动画）；帧 40 点 clock 屏按钮 → 回启动器，
 //   动画 42–82；帧 90 点 launcher 屏按钮 → 再进 clock，动画 92–132；
-//   帧 84 settings->bump_level()（手绘 Level +1 的逻辑入口，消息广播到 clock）；
+//   帧 84 settings->bump_brightness(+10)（亮度的逻辑入口，BrightnessMessage 广播到 clock）；
 //   帧 140 再点 clock 屏按钮 → 回启动器（EEZ 屏内按钮承担返回，导航壳已退役）。
 constexpr int launch_switch_frame = 20;
 constexpr int launch_clock_back_frame = 40;
@@ -198,9 +198,10 @@ constexpr int uinav_next_fallback_y = 214;
 //   帧 70   点相册屏「返回」→ 帧 78 断言回到主屏，**且仍停在第 2 页**（视图留存，ADR 0015）
 //   帧 84→104 反向拖回第 1 页 → 帧 118 断言吸附到第 1 页
 //   帧 124  点第 2 个磁贴（「设置」，第 1 页上）→ 帧 132 断言进了设置屏
-//   帧 138  点设置屏「亮度 +1」→ 帧 144 断言亮度档 +1（屏上的按钮真接到了逻辑上）
-//   帧 150  点设置屏「返回」→ 帧 160 断言回到主屏
-//   帧 168  关窗
+//   帧 136→152 在设置屏正文上向上拖 → 帧 158 断言正文真的滚起来（Body 是滚动容器）
+//   帧 164  点设置屏「亮度 ＋」→ 帧 170 断言亮度百分比 +10（屏上的按钮真接到了逻辑上）
+//   帧 176  点设置屏「返回」→ 帧 186 断言回到主屏
+//   帧 194  关窗
 constexpr int ulp_check_frame = 10;
 constexpr int ulp_drag_press_frame = 14;
 constexpr int ulp_drag_release_frame = 34;
@@ -215,12 +216,15 @@ constexpr int ulp_page1_check_frame =
     118;  // 反向拖 release 在 104，留 14 帧等吸附（正向那次也隔了 10 帧）
 constexpr int ulp_settings_tile_frame = 124;
 constexpr int ulp_settings_check_frame = 132;
-constexpr int ulp_bright_frame = 138;
-constexpr int ulp_bright_check_frame = 144;
-constexpr int ulp_settings_back_frame = 150;
-constexpr int ulp_home_check_frame = 160;
-constexpr int ulp_quit_frame = 168;
-constexpr int ulp_frames = 174;
+constexpr int ulp_bright_frame = 136;  // 先点「亮度 ＋」再拖：滚到底后亮度卡已滚出视口
+constexpr int ulp_bright_check_frame = 142;
+constexpr int ulp_scroll_press_frame = 148;  // 设置屏正文向上拖（16 帧插值，一帧 10 px）
+constexpr int ulp_scroll_release_frame = 164;
+constexpr int ulp_scroll_check_frame = 170;
+constexpr int ulp_settings_back_frame = 176;
+constexpr int ulp_home_check_frame = 186;
+constexpr int ulp_quit_frame = 194;
+constexpr int ulp_frames = 200;
 
 // 磁贴带（Band_Apps）在屏上是 0,202 240×56：横向拖动走带子下沿 y=254（避开磁贴本身，
 // 免得"拖完"被当成"点磁贴"）。
@@ -234,12 +238,17 @@ constexpr int ulp_tile_fallback_x = 36;
 constexpr int ulp_tile_fallback_y = 226;
 constexpr int ulp_settings_tile_fallback_x = 92;
 constexpr int ulp_settings_tile_fallback_y = 226;
-// 屏上「返回」（8,4 64×28 → 中心 40,18）与设置屏「亮度 +1」（卡 14,84 + 卡内 140,12
-// 60×32 → 屏上 184,112）：真几何取不到时用这两个兜底。
+// 屏上「返回」（8,4 64×28 → 中心 40,18）与设置屏「亮度 ＋」（卡 14,18 + 卡内 162,12
+// 34×32 → 屏上 179,64；卡片装在 Body 里，Body 在屏上 0,36）：真几何取不到时用这两个兜底。
 constexpr int ulp_back_fallback_x = 40;
 constexpr int ulp_back_fallback_y = 18;
-constexpr int ulp_bright_fallback_x = 184;
-constexpr int ulp_bright_fallback_y = 112;
+constexpr int ulp_bright_fallback_x = 179;
+constexpr int ulp_bright_fallback_y = 64;
+// 设置屏正文（Body）在屏上 0,36 240×276：从正文下部 (120,250) 竖直划到上部 (120,90)。
+// 起点要落在"卡片空白处"而不是按钮上 —— 拖动的滚动链是从被按到的控件往上找滚动容器的。
+constexpr int ulp_scroll_x = 120;
+constexpr int ulp_scroll_y_from = 250;
+constexpr int ulp_scroll_y_to = 90;
 
 #if defined(EMBARK_AIDOGUI_UI)
 // App 层唯一的界面接缝（app/common/ui_backend.h）在定义本宏时选 AiDoGUI：EEZ 的 nav
@@ -290,7 +299,7 @@ void print_usage() {
       "clock 屏点 (X,Y)（默认按钮中心 %d,%d = 回启动器）\n"
       "  --drag X1,Y1,X2,Y2 合成拖动冒烟（帧 15 按下 → 每帧一个插值点 → 帧 40 抬起；默认 40,60 → "
       "100,140）\n"
-      "  --launch            完整验收故事（request_switch('clock')→点屏按钮往返→bump_level 消息）\n"
+      "  --launch            完整验收故事（request_switch('clock')→点屏按钮往返→bump_brightness 消息）\n"
       "  --ui                AiDoGUI 验收（ADR 0011）：字体 6/6 + 屏表/控件表 + "
       "切走即释放/回来即重建\n"
       "  --ui-nav            双向导航 + 月历翻月验收：点磁贴进 clock → 点返回回 launcher → "
@@ -405,11 +414,10 @@ namespace embark::platform::host {
 // AiDoGUI 设计工程（app/aidogui_ui/，屏名 == App 名）；启动器必须第一位。
 // 主屏磁贴就是按**这张表**运行时生成的（app/launcher/launcher_tiles.cpp）：
 // 加 App = 在这里加一项 + 在 AiDoGUI 里加同名屏，主屏的页数与页码点自己跟着变。
-// MusicApp/AlbumApp 是占位 App（屏上写着"界面还没做"）：磁贴数 5 → 主屏 2 页，
+// MusicApp/AlbumApp 是占位 App（屏上写着"界面还没做"）：6 个磁贴 → 主屏 2 页，
 // 正好用来验收"后面的 App 划得到"（--ui-launcher-pages）。
 EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp,
-                 embark::demo::WeatherApp, embark::demo::MusicApp, embark::demo::AlbumApp,
-                 embark::demo::AboutApp)
+                 embark::demo::WeatherApp, embark::demo::MusicApp, embark::demo::AlbumApp)
 
 }  // namespace embark::platform::host
 
@@ -936,14 +944,64 @@ bool aidogui_launcher_settings_check() {
   return current != nullptr && std::strcmp(current, "settings") == 0 && settings_created &&
          launcher_gone;
 }
+/// --ui-launcher-pages 帧 132（进屏之后）：屏上真填了值，不是只画了个壳。三条：
+///   ① 亮度显示的是 App 手里的百分比 —— 期望值由调用方传进来（KV 跨进程留存，不能写死 70）；
+///   ②「关于本机」首行是「键：值」的形状 —— 这七行从退役的「关于」App 搬进了设置屏；
+///   ③ Body 的内容比视口高（422 > 276）—— 它是滚动容器，不只是一张卡。
+bool aidogui_settings_panel_check(std::size_t expect_percent) {
+  lv_obj_t* bright = embark::demo::aidogui_ui_bridge_widget("settings", "L_BrightVal");
+  lv_obj_t* platform = embark::demo::aidogui_ui_bridge_widget("settings", "L_Platform");
+  lv_obj_t* body = embark::demo::aidogui_ui_bridge_widget("settings", "Body");
+  const char* bright_text = bright != nullptr ? lv_label_get_text(bright) : "";
+  const char* platform_text = platform != nullptr ? lv_label_get_text(platform) : "";
+  const int scroll_bottom = body != nullptr ? static_cast<int>(lv_obj_get_scroll_bottom(body)) : -1;
+  char expect_text[8] = {};
+  std::snprintf(expect_text, sizeof(expect_text), "%u%%", static_cast<unsigned>(expect_percent));
+  const bool bright_ok = std::strcmp(bright_text, expect_text) == 0;
+  const bool about_ok = platform_text[0] != '\0' && std::strstr(platform_text, "：") != nullptr;
+  const bool scroll_ok = scroll_bottom > 0;
+  ELOG_INFO(
+      "设置屏内容：亮度「{}」（期望 {}）{}；关于首行「{}」（非空且含「：」）{}；正文剩余可滚 {} px"
+      "（期望 > 0）{}",
+      bright_text, expect_text, bright_ok ? "" : " ✘", platform_text, about_ok ? "" : " ✘",
+      scroll_bottom, scroll_ok ? "" : " ✘");
+  return bright_ok && about_ok && scroll_ok;
+}
 
-/// --ui-launcher-pages 帧 104：设置屏的「亮度 +1」是 App 的逻辑动作（aidogui_ui_nav_bind_action
-/// → SettingsApp::bump_level），点一下亮度档就该 +1（0..3 循环）——验收"屏上的按钮真接到了
-/// 逻辑上"，而不是只画了个能按的壳。
+/// --ui-launcher-pages 帧 164：设置屏的「亮度 ＋」是屏内按钮（App 侧 dispatcher）→
+/// SettingsApp::bump_brightness(+10)，点一下亮度百分比就该 +10 —— 验收「屏上的按钮真接到了
+/// 逻辑上」，而不是只画了个能按的壳。
 bool aidogui_launcher_bright_check(std::size_t before, std::size_t after) {
-  const bool ok = after == (before + 1U) % 4U;
-  ELOG_INFO("设置屏点「亮度 +1」后：亮度档 {} → {}（期望 {}）{}", before, after, (before + 1U) % 4U,
+  const std::size_t expect =
+      embark::demo::clamp_percent(static_cast<int>(before) + embark::demo::kBrightStep);
+  const bool ok = after == expect;
+  ELOG_INFO("设置屏点「亮度 ＋」后：亮度百分比 {}% → {}%（期望 {}%）{}", before, after, expect,
             ok ? "" : " ✘");
+  return ok;
+}
+
+/// 两端钳位是纯函数行为，不用加帧就能验：100% 再 ＋ 还是 100%，0% 再 − 还是 0%
+/// （旧口径 0..3 四档是循环的，新口径是钳位的 —— 这两条断言就是在盯这个区别）。
+bool aidogui_launcher_bright_clamp_check() {
+  const std::size_t top = embark::demo::clamp_percent(100 + embark::demo::kBrightStep);
+  const std::size_t bottom = embark::demo::clamp_percent(0 - embark::demo::kBrightStep);
+  const bool ok = top == 100U && bottom == 0U;
+  ELOG_INFO("亮度钳位：100% ＋{} → {}%（期望 100），0% −{} → {}%（期望 0）{}",
+            embark::demo::kBrightStep, top, embark::demo::kBrightStep, bottom, ok ? "" : " ✘");
+  return ok;
+}
+
+/// --ui-launcher-pages 帧 158：在设置屏正文上向上拖，正文应该真的滚下去 —— 也就是
+/// "Body 这个滚动容器能被手指拖到"。断言滚过的距离够大（正文 422 px、视口 276 px，
+/// 全滚到头是 146 px），顺带把剩余可滚距离打出来（拖到底应为 0）。
+bool aidogui_settings_scroll_check(int scroll_before, int scroll_after) {
+  lv_obj_t* body = embark::demo::aidogui_ui_bridge_widget("settings", "Body");
+  const int before = scroll_before < 0 ? -scroll_before : scroll_before;
+  const int after = scroll_after < 0 ? -scroll_after : scroll_after;
+  const int remaining = body != nullptr ? lv_obj_get_scroll_bottom(body) : -1;
+  const bool ok = body != nullptr && after >= 100 && after > before;
+  ELOG_INFO("设置屏正文上拖后：滚动 {} px → {} px（期望 ≥100；剩余可滚 {} px）{}", before, after,
+            remaining, ok ? "" : " ✘");
   return ok;
 }
 
@@ -1140,7 +1198,11 @@ void ui_main(void* argument) noexcept {
   bool ulp_back_ok = false;  // --ui-launcher-pages：相册屏点「返回」回主屏 + 视图留存（帧 78）
   bool ulp_page1_ok = false;  // --ui-launcher-pages：反向拖回第 1 页（帧 118）
   bool ulp_settings_ok = false;  // --ui-launcher-pages：点「设置」磁贴进设置屏（帧 132）
-  bool ulp_bright_ok = false;  // --ui-launcher-pages：点设置屏「亮度 +1」→ 亮度档 +1（帧 144）
+  bool ulp_scroll_ok = false;    // --ui-launcher-pages：设置屏正文能拖起来（帧 158）
+  int ulp_scroll_before = 0;     //   拖动前的滚动位置（Body 的 scroll_y）
+  int ulp_scroll_after = 0;      //   拖动后的滚动位置
+  bool ulp_panel_ok = false;   // --ui-launcher-pages：设置屏真填了值 + 正文可滚（帧 132）
+  bool ulp_bright_ok = false;  // --ui-launcher-pages：点设置屏「亮度 ＋」→ 百分比 +10（帧 164）
   bool ulp_home_ok = false;  // --ui-launcher-pages：设置屏点「返回」回主屏（帧 160）
   int ulp_tile_x = 0;        // --ui-launcher-pages：磁贴落点（按下/抬起同一个点）
   int ulp_tile_y = 0;
@@ -1148,7 +1210,11 @@ void ui_main(void* argument) noexcept {
   int ulp_back_y = 0;
   int ulp_bright_x = 0;  // --ui-launcher-pages：「亮度 +1」按钮落点
   int ulp_bright_y = 0;
-  int ulp_level_before = -1;  // --ui-launcher-pages：进设置屏时的亮度档（帧 132 记录）
+  int ulp_bright_before = -1;  // --ui-launcher-pages：进设置屏时的亮度百分比（帧 132 记录）
+  int launch_bright_before = -1;  // --launch：bump 前的亮度百分比（KV 会跨进程留存，不能写死 70）
+  // --launch：按下点的落点要在抬起帧复用（屏可能在两帧之间切走，届时读不到控件）
+  PanelPoint launch_back_pt{0, 0, false};
+  PanelPoint launch_row_pt{0, 0, false};
   for (;;) {
     framework.step();
     ++frames_run;
@@ -1164,34 +1230,40 @@ void ui_main(void* argument) noexcept {
                                                launcher_button_fallback_y);
 
     if (options->launch) {
-      // 启动器已无手绘界面：先程序化请求切到 clock；随后的往返全是真点击 ——
-      // 点 EEZ 屏按钮（屏名约定 → 切同名 App），回程同由 EEZ 屏按钮承担。
+      // 启动器与各屏都是 AiDoGUI 生成的：往返点击的落点必须从 AiDoGUI 控件表读真几何
+      // （objects.* 是 EEZ 时代的空指针，退回兜底坐标会点到空白处 —— 这条故事曾因此静默失效）。
       if (frames_run == launch_switch_frame) {
         (void)framework.request_switch("clock");
       }
       if (frames_run == launch_clock_back_frame) {
-        push_motion_and_press(options->scale, clock_btn.x, clock_btn.y);
+        launch_back_pt =
+            aidogui_widget_center("clock", "Btn_Back", clock_button_fallback_x, clock_button_fallback_y);
+        push_motion_and_press(options->scale, launch_back_pt.x, launch_back_pt.y);
       }
       if (frames_run == launch_clock_back_frame + click_release_delta) {
-        push_release(options->scale, clock_btn.x, clock_btn.y);
+        push_release(options->scale, launch_back_pt.x, launch_back_pt.y);
       }
       if (frames_run == launch_launcher_btn_frame) {
-        scroll_into_view(objects.app_row_alarm);  // 闹钟行在屏外：先滚进视口再点
-        const PanelPoint row = widget_center(objects.app_row_alarm, launcher_button_fallback_x,
-                                             launcher_button_fallback_y);
-        push_motion_and_press(options->scale, row.x, row.y);
+        // 主屏上接到 clock 的控件是时间卡（磁贴由运行时建，不在控件表里）。
+        launch_row_pt = aidogui_widget_center("launcher", "Card_Clock", launcher_button_fallback_x,
+                                              launcher_button_fallback_y);
+        push_motion_and_press(options->scale, launch_row_pt.x, launch_row_pt.y);
       }
       if (frames_run == launch_launcher_btn_frame + click_release_delta) {
-        push_release(options->scale, alarm_row.x, alarm_row.y);
+        push_release(options->scale, launch_row_pt.x, launch_row_pt.y);
       }
       if (frames_run == launch_home_frame) {
-        push_motion_and_press(options->scale, clock_btn.x, clock_btn.y);
+        launch_back_pt =
+            aidogui_widget_center("clock", "Btn_Back", clock_button_fallback_x, clock_button_fallback_y);
+        push_motion_and_press(options->scale, launch_back_pt.x, launch_back_pt.y);
       }
       if (frames_run == launch_home_frame + click_release_delta) {
-        push_release(options->scale, clock_btn.x, clock_btn.y);
+        push_release(options->scale, launch_back_pt.x, launch_back_pt.y);
       }
       if (frames_run == launch_bump_frame) {
-        static_cast<embark::demo::SettingsApp*>(framework.app(2))->bump_level();
+        auto* settings_app = static_cast<embark::demo::SettingsApp*>(framework.app(2));
+        launch_bright_before = static_cast<int>(settings_app->brightness_percent());
+        settings_app->bump_brightness(embark::demo::kBrightStep);
       }
       if (frames_run == launch_quit_frame) {
         SDL_Event quit{};
@@ -1461,13 +1533,47 @@ void ui_main(void* argument) noexcept {
       if (frames_run == ulp_settings_check_frame) {
         ulp_settings_ok = aidogui_launcher_settings_check();
         if (ulp_settings_app != nullptr) {
-          ulp_level_before = static_cast<int>(ulp_settings_app->level());
+          // 亮度存在 KV 里、会跨进程留下来（真机上这是特性，验收里它是脏起点）：先把亮度
+          // 拨到 50%，让「点一下 +10」有确定起点，也不会把屏压到全黑。
+          ulp_settings_app->bump_brightness(
+              50 - static_cast<int>(ulp_settings_app->brightness_percent()));
+          ulp_bright_before = static_cast<int>(ulp_settings_app->brightness_percent());
+          ulp_panel_ok = aidogui_settings_panel_check(ulp_settings_app->brightness_percent());
         }
       }
-      // 设置屏「亮度 +1」：屏上没有组件事件，走 App 的 bind_action（aidogui_ui_nav_bind_action）。
+      // 设置屏正文（Body）上拖。正文 422 px、视口 276 px —— 但"能滚"不只是容器标了
+      // SCROLLABLE 就行：LVGL 的滚动链是从"被按到的控件"往上找滚动容器的
+      // （third_party/lvgl/src/core/lv_indev_scroll.c 的 find_scroll_obj），而
+      // lv_obj_pos.c:955 的 lv_obj_hit_test 第一行就要求 CLICKABLE —— 手指落在卡片的
+      // 空白处（卡片、标签都不可点）时 act_obj 直接是屏本身，滚动链没有起点，
+      // 容器再 scrollable 也不会动（真机"拖不动"就是这么来的）。所以 Body 自己必须
+      // CLICKABLE：今天 .aid 里 Body 的 flags.clickable = true，导出即
+      // lv_obj_add_flag(ui_settings_Body, LV_OBJ_FLAG_CLICKABLE)。
+      if (frames_run == ulp_scroll_press_frame) {
+        if (lv_obj_t* body = embark::demo::aidogui_ui_bridge_widget("settings", "Body")) {
+          ulp_scroll_before = lv_obj_get_scroll_y(body);
+        }
+        push_motion_and_press(options->scale, ulp_scroll_x, ulp_scroll_y_from);
+      }
+      if (frames_run > ulp_scroll_press_frame && frames_run < ulp_scroll_release_frame) {
+        const int steps = ulp_scroll_release_frame - ulp_scroll_press_frame;
+        const int t = frames_run - ulp_scroll_press_frame;
+        push_motion(options->scale, ulp_scroll_x,
+                    ulp_scroll_y_from + (ulp_scroll_y_to - ulp_scroll_y_from) * t / steps);
+      }
+      if (frames_run == ulp_scroll_release_frame) {
+        push_release(options->scale, ulp_scroll_x, ulp_scroll_y_to);
+      }
+      if (frames_run == ulp_scroll_check_frame) {
+        if (lv_obj_t* body = embark::demo::aidogui_ui_bridge_widget("settings", "Body")) {
+          ulp_scroll_after = lv_obj_get_scroll_y(body);
+        }
+        ulp_scroll_ok = aidogui_settings_scroll_check(ulp_scroll_before, ulp_scroll_after);
+      }
+      // 设置屏「亮度 ＋」：屏内按钮，事件由 App 自己在 repaint 钩子里挂（不进导航绑定表）。
       if (frames_run == ulp_bright_frame) {
         const PanelPoint bright = aidogui_widget_center(
-            "settings", "Btn_Bright", ulp_bright_fallback_x, ulp_bright_fallback_y);
+            "settings", "Btn_Plus", ulp_bright_fallback_x, ulp_bright_fallback_y);
         ulp_bright_x = bright.x;
         ulp_bright_y = bright.y;
         push_motion_and_press(options->scale, ulp_bright_x, ulp_bright_y);
@@ -1476,9 +1582,12 @@ void ui_main(void* argument) noexcept {
         push_release(options->scale, ulp_bright_x, ulp_bright_y);
       }
       if (frames_run == ulp_bright_check_frame) {
-        ulp_bright_ok = ulp_settings_app != nullptr && ulp_level_before >= 0 &&
-                        aidogui_launcher_bright_check(static_cast<std::size_t>(ulp_level_before),
-                                                      ulp_settings_app->level());
+        const bool moved = ulp_settings_app != nullptr && ulp_bright_before >= 0 &&
+                           aidogui_launcher_bright_check(
+                               static_cast<std::size_t>(ulp_bright_before),
+                               ulp_settings_app->brightness_percent());
+        const bool clamped = aidogui_launcher_bright_clamp_check();
+        ulp_bright_ok = moved && clamped;
       }
       if (frames_run == ulp_settings_back_frame) {
         const PanelPoint back =
@@ -1530,9 +1639,9 @@ void ui_main(void* argument) noexcept {
   ELOG_INFO("启动器（屏名 launcher，界面来源见启动日志）：enters={} resumes={} 前台帧={}",
             launcher->enters(), launcher->resumes(), launcher->foreground_ticks());
   ELOG_INFO(
-      "时钟（屏名 clock）：前台帧={} 亮度={} settings 档={}；LVGL 未回收 {} 字节（不申请后台，"
+      "时钟（屏名 clock）：前台帧={} 亮度={}%（设置页镜像={}%）；LVGL 未回收 {} 字节（不申请后台，"
       "时间只在进前台时推）",
-      clock->foreground_ticks(), clock->brightness(), settings->level(),
+      clock->foreground_ticks(), clock->brightness(), settings->brightness_percent(),
       embark_lvgl_outstanding_bytes());
   ELOG_INFO("天气（屏名 weather）：城市 {}（下标 {}）切城 {} 次；enters={} resumes={} 前台帧={}",
             weather->city_name(), weather->city_index(), weather->city_switches(),
@@ -1540,14 +1649,29 @@ void ui_main(void* argument) noexcept {
 
   int exit_code = 0;
   if (options->launch) {
-    const char* last_screen = embark::demo::eez_ui_nav_last_screen();
+    // 界面已是 AiDoGUI：观测也走 AiDoGUI 的账（EEZ 的 last_screen/current_screen 在本配置下
+    // 永远是空/未初始化，写进断言只会变成永远为假的死条件）。
+    const char* last_screen = embark::demo::aidogui_ui_nav_last_screen();
+    const char* current_screen = embark::demo::aidogui_ui_bridge_current_screen();
     const bool launched_ok =
         framework.switches() == 4 && launcher->enters() == 1 && launcher->resumes() == 2 &&
         launcher->foreground_ticks() > 0 && clock->enters() == 1 && clock->resumes() == 1 &&
-        clock->foreground_ticks() > 0 && clock->brightness() == 1 &&
-        embark::demo::eez_ui_nav_switch_requests() == 3 && last_screen != nullptr &&
-        std::strcmp(last_screen, "launcher") == 0 &&
-        embark::demo::eez_ui_bridge_current_screen() == 1 && framework.foreground() == 0;
+        clock->foreground_ticks() > 0 &&
+        // 亮度从「本进程 onCreate 读到的值」+10（钳位）—— 起点跨进程不固定，不写死 70。
+        clock->brightness() == embark::demo::clamp_percent(launch_bright_before +
+                                                           embark::demo::kBrightStep) &&
+        // 3 次点击各自登记一次导航请求（设计器事件走 request_app，钳在 click_hits 上；
+        // switch_requests 记的是「屏被换掉后按屏名切 App」，这条故事不经过那条路）。
+        embark::demo::aidogui_ui_nav_click_hits() == 3 && last_screen != nullptr &&
+        std::strcmp(last_screen, "launcher") == 0 && current_screen != nullptr &&
+        std::strcmp(current_screen, "launcher") == 0 && framework.foreground() == 0;
+    ELOG_INFO(
+        "launch 明细：switches={} launcher {}/{} clock {}/{} 亮度 {}%（起点 {}%）；导航命中 {}；"
+        "最后屏 {} 当前屏 {} 前台 {}",
+        framework.switches(), launcher->enters(), launcher->resumes(), clock->enters(),
+        clock->resumes(), clock->brightness(), launch_bright_before,
+        embark::demo::aidogui_ui_nav_click_hits(), last_screen != nullptr ? last_screen : "<null>",
+        current_screen != nullptr ? current_screen : "<null>", framework.foreground());
     if (launched_ok) {
       ELOG_INFO("〔launch 验收通过〕");
     } else {
@@ -1621,8 +1745,9 @@ void ui_main(void* argument) noexcept {
     // 八段检查在帧 10/44/64/78/108/122/134/150 就断完了（各自打了证据行），这里只落结论，
     // 外加两条全局不变量（ADR 0015）：① 没有任何 App 申请后台体；② 写控件值的屏都声明了重推。
     const bool ulp_ok = ulp_tiles_ok && ulp_page_ok && ulp_album_ok && ulp_back_ok &&
-                        ulp_page1_ok && ulp_settings_ok && ulp_bright_ok && ulp_home_ok &&
-                        framework.foreground() == 0 && framework.switches() == 4;
+                        ulp_page1_ok && ulp_settings_ok && ulp_panel_ok && ulp_scroll_ok &&
+                        ulp_bright_ok && ulp_home_ok && framework.foreground() == 0 &&
+                        framework.switches() == 4;
     bool no_background_ok = true;
     for (embark::AppId i = 0; i < framework.apps().size(); ++i) {
       const auto* app = framework.apps().at(i);
@@ -1648,11 +1773,13 @@ void ui_main(void* argument) noexcept {
 #endif
     const bool ulp_all_ok = ulp_ok && no_background_ok && repaint_ok;
     ELOG_INFO(
-        "〔主屏分页验收{}〕（磁贴 {} / 页 {} / 点 {}；设置屏 {} 亮度档 {}→{}；"
-        "前台 {}，switches={}；无后台体 = {}，值重推 = {}）",
+        "〔主屏分页验收{}〕（磁贴 {} / 页 {} / 点 {}；设置屏 {} / 正文滚动 {} px；"
+        "亮度百分比 {}%→{}%；前台 {}，switches={}；无后台体 = {}，值重推 = {}）",
         ulp_all_ok ? "通过" : "失败", embark::demo::launcher_tiles_count(),
         embark::demo::launcher_tiles_page_count(), embark::demo::launcher_tiles_dot_count(),
-        ulp_settings_ok ? "已进" : "未进", ulp_level_before, settings->level(),
+        ulp_settings_ok ? "已进" : "未进",
+        ulp_scroll_after < 0 ? -ulp_scroll_after : ulp_scroll_after, ulp_bright_before,
+        settings->brightness_percent(),
         framework.apps().at(framework.foreground())->name(), framework.switches(),
         no_background_ok ? "是" : "否", repaint_ok ? "对" : "错");
     if (!ulp_all_ok) {

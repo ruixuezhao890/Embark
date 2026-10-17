@@ -36,6 +36,13 @@ class IDisplay {
 
   /// 背光亮度 0..100（百分比）。> 100 → invalid_argument；不支持背光 → unsupported。
   virtual Error set_backlight(std::uint8_t percent) noexcept = 0;
+
+  /// 当前背光亮度 0..100（百分比）。
+  ///
+  /// 不支持背光的装配返回 0，且 set_backlight() 必须报 unsupported —— 两者口径要一致，
+  /// 别让上层读到 0 却以为"已经关屏"。读回的是**最后下发的值**，不是再量一次硬件：
+  /// 背光没有反馈回路，重新测量这条路不存在。
+  [[nodiscard]] virtual std::uint8_t backlight() const noexcept = 0;
 };
 
 }  // namespace embark::hal

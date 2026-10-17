@@ -251,6 +251,22 @@ _Avoid_: 排版 bug、换行问题
 构建期检查：扫描源码里所有会上屏的字符串，逐字符问**最终字体**认不认识，缺字即失败（CI 门禁），从源头防豆腐块。ADR 0017 之后对照物是**卡上那份 TTF 的 cmap**（`app/aidogui_ui/assets/font/ui_heiti.ttf`，脚本自己解 format 4/12），不再读子集清单 `tools/font/embark_zh_14.json`。已落地 `tools/font/audit_glyphs.mjs`（Node、零依赖）：扫 `app/` `src/` `platform/` 里 18 个会上屏的 setter（`UI_TEXT_SETTERS`），缺字打印字符 + 文件:行号并 exit 1；另有 `--print-required`（当前文案用到的全部字符）、`--selftest`、`--ttf`、`--include-symbols`、`--roots`。只换数据源不清白名单会把"没扫到"误报成全绿，所以脚本带 `SUSPECT_PATTERNS` 守卫：名字像 setter 却不在白名单的调用会被点名并 exit 1。CI 里是 `font-audit` job。LVGL 图标区 `U+F000–U+F8FF` 默认豁免（内置字形，不进 cmap），`--include-symbols` 可关掉豁免。
 _Avoid_: 运行时缺字检查、字体检测
 
+**Settings App（设置 App / 设置中心）**：
+设置中心的载体 App（屏名 `settings`），App 列表里的普通一员。它承载全部设置项，同时也是「关于本机」七行只读信息的所在地 —— 原「关于」App 已退役。设置项的共同形态是「标题 + 当前值 + 就地加减」：改一下立刻生效、立刻落 KV，**没有**「保存」按钮、没有草稿态、也没有设置服务层（[ADR 0018](docs/adr/0018-settings-truth-and-growth.md)）。首屏即滚动页（视口 276 px / 内容 422 px）。
+_Avoid_: 系统设置、偏好页、SettingsService
+
+**Setting row（设置项）**：
+设置屏上的一行可改项：一个标题 + 当前值 + 至多两个加减控件，值变了就生效。加一行有固定的三步：设计器里摆控件 → App 里加一个 `SinkKind` 与处理函数 → 宿主验收加一条断言。真值**不在 App 里**：能落到 HAL 的（亮度、墙上钟）以 HAL 为准，HAL 没有的才只存 KV。
+_Avoid_: 选项、开关项、配置条目
+
+**Brightness percent（亮度百分比）**：
+屏幕背光的亮度值，`0..100` 整数百分比，10 为一步、两端**钳位**（不是循环）。真值是 HAL：`IDisplay::set_backlight(percent)` 写、`backlight()` 读（[ADR 0018](docs/adr/0018-settings-truth-and-growth.md) 第 1 条）；设置 App 只是把同一个数转发给 HAL 并落进 KV 键 `ui.bright`，供下次开机恢复。`BrightnessMessage` 只报「值变了」这一事实（clock 记下自用），不携带真值。宿主后端**不是空操作**：它按百分比缩放每次 flush 的像素，所以 0% 是全黑。
+_Avoid_: 亮度档、背光等级、level 0..3
+
+**About this device（关于本机）**：
+设置屏底部的七行只读信息（平台 / 版本 / 可用堆 / 字库 / 栈水位 / 存盘 / 对时），值来自 HAL 与界面桥自报，量不到就显示占位（「量不了」「未挂载」「未对时」）而不是假装 0。它是**展示**不是设置项：没有可点控件、不进 KV、验收只断言首行是「键：值」的形状。
+_Avoid_: 关于页、设备信息页、系统信息
+
 **Weather App（天气 App）**：
 薄壳 App，界面 = AiDoGUI 屏 `weather`（屏名约定 == App 名）。数据来自编译期桩 `app/weather/weather_data.h`；城市选择存 `hal().storage` 的 `wx.city`（一个字节）。屏上 `L_City` / `L_NIcon` / `L_NTemp` / `L_NDesc` 与 `L_D{i}_{Dow,Icon,Desc,Range}`（i = 0..4，0 = 今天）由 App 按名写；`Btn_CityPrev` / `Btn_CityNext` 是 App 侧 `lv_obj_add_event_cb` 挂的回调 —— 设计器事件在本工程里只用来**切 App**，屏内交互归 App。
 _Avoid_: 天气组件、天气页

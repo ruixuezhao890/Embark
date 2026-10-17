@@ -13,11 +13,12 @@
 
 namespace embark::demo {
 
-/// 亮度档消息：SettingsApp 广播，ClockApp 的 onMessage 接收（收到即更新数据；需要
+/// 亮度百分比消息：SettingsApp 广播，ClockApp 的 onMessage 接收（收到即更新数据；需要
 /// “收消息即切状态”的 App 见 docs/guides/state-machine-and-messages.md）。
+/// 注意这里只是「告诉别人亮度变了」，真值在 HAL（IDisplay::backlight()）—— 见 ADR 0018。
 struct BrightnessMessage : public MessageT<0x21> {
-  constexpr BrightnessMessage(std::uint8_t level_value = 0) noexcept : level(level_value) {}
-  std::uint8_t level = 0;  // 0..3 共四档
+  constexpr BrightnessMessage(std::uint8_t percent_value = 0) noexcept : percent(percent_value) {}
+  std::uint8_t percent = 0;  // 0..100 百分比（旧口径 0..3 四档已退役）
 };
 
 }  // namespace embark::demo

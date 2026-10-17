@@ -9,6 +9,7 @@
 #define EMBARK_PLATFORM_HOST_TIME_H
 
 #include <chrono>
+#include <cstdint>
 
 #include <embark/hal/time.h>
 
@@ -24,8 +25,13 @@ class HostTime final : public hal::ITime {
 
   [[nodiscard]] etl::expected<std::uint64_t, Error> epoch_ms() const noexcept override;
 
+  /// 宿主没有 RTC，也不需要碰系统时间（那要管理员权限）：改成记一份偏移量，
+  /// epoch_ms() = 系统时间 + 偏移。于是"设表"只影响本进程看到的墙钟。
+  Error set_epoch_ms(std::uint64_t epoch_ms) noexcept override;
+
  private:
   std::chrono::steady_clock::time_point start_;
+  std::int64_t epoch_offset_ms_ = 0;
 };
 
 }  // namespace embark::platform::host

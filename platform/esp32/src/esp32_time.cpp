@@ -91,6 +91,40 @@ etl::expected<std::uint64_t, Error> Esp32Time::epoch_ms() const noexcept {
   return base_epoch_ms_ + elapsed_ms;
 }
 
+Error Esp32Time::set_epoch_ms(std::uint64_t epoch_ms) noexcept {
+  if (!rtc_.present()) {
+    // 没有可写的对象：如实报不可用，别让上层以为拨好了。
+    wall_note_ = "没有 RTC，无法设表";
+    return Error::unsupported;
+  }
+
+  const Error write_error = rtc_.write_epoch_seconds(epoch_ms / 1000ULL);
+  if (write_error != Error::none) {
+    wall_note_ = "手动设表失败";
+    ELOG_WARN("墙钟：手动设表写 RTC 失败（{}）", static_cast<int>(write_error));
+    return write_error;
+  }
+
+  // 用回读值锚定：芯片只有秒级精度，入参的毫秒部分本来就没写进去，
+  // 拿回读的秒当锚点，epoch_ms() 才不会比芯片快半秒地漂。
+  const auto readback = rtc_.read_epoch_seconds();
+  if (!readback.has_value()) {
+    wall_note_ = "手动设表后读不出时间";
+    ELOG_WARN("墙钟：手动设表写成功但回读失败（{}）", static_cast<int>(readback.error()));
+    return readback.error();
+  }
+
+  base_epoch_ms_ = readback.value() * 1000ULL;
+  base_now_ms_ = now_ms();
+  wall_ready_ = true;
+  wall_note_ = "手动设置";
+
+  char text[24] = {};
+  format_utc_epoch(readback.value(), text, sizeof(text));
+  ELOG_INFO("墙钟：手动设表完成，RTC 现为 {}（epoch {} 秒），已重锚", text, readback.value());
+  return Error::none;
+}
+
 void Esp32Time::seed_from_build_time() noexcept {
   if (!rtc_.present()) {
     return;  // 芯片都没应答，没有可写的对象；wall_note_ 保持 init 里那句"0x51 无应答"。

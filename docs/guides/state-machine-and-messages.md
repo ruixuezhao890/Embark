@@ -12,11 +12,11 @@
 ## 0. 先判断：要不要状态机
 
 状态机解决的是"**行为**随输入改变"，不是"**值**随输入改变"。
-`app/clock/` 收到 `BrightnessMessage` 只是把亮度档存进成员 —— 那是值，不该上状态机。
+`app/clock/` 收到 `BrightnessMessage` 只是把亮度百分比存进成员 —— 那是值，不该上状态机。
 
 | 需求 | 用什么 |
 | --- | --- |
-| 收消息只更新一个值（亮度档、传感器读数） | 直接存成员，别上状态机 |
+| 收消息只更新一个值（亮度百分比、传感器读数） | 直接存成员，别上状态机 |
 | 收消息要改变**行为 / 模式**（on/off、idle/running/error） | `etl::fsm`（本文） |
 | 周期性 / 时序行为（超时、闪烁、轮询节拍） | `etl::fsm` + `onBackgroundTick` 里喂事件（**今天没有 App 声明后台体**；只在看得见时才需要的时序行为改用 `onForegroundTick`，见 [ADR 0015](../adr/0015-app-retention-and-refresh.md)） |
 | 进入 / 退出某状态要做副作用（打日志、开定时器、推 UI 变量） | `etl::fsm` 的 `on_enter_state` / `on_exit_state` |

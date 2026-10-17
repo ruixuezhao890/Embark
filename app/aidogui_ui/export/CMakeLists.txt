@@ -10,7 +10,6 @@ SET(SOURCES
     screens/ui_music.c
     screens/ui_album.c
     screens/ui_settings.c
-    screens/ui_about.c
 )
 
 add_library(ui ${SOURCES})

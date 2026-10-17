@@ -49,6 +49,10 @@ class Esp32Display final : public hal::IDisplay {
   [[nodiscard]] hal::DisplayInfo info() const noexcept override;
   Error flush(const hal::Rect& area, etl::span<const std::uint8_t> data) noexcept override;
   Error set_backlight(std::uint8_t percent) noexcept override;
+  /// 背光没起来时返回 0，与 set_backlight() 报 unsupported 对齐（口径见 hal/display.h）。
+  [[nodiscard]] std::uint8_t backlight() const noexcept override {
+    return backlight_ready_ ? backlight_percent_ : 0U;
+  }
 
   // --- 观测（bring-up 与验收用；不属于 HAL 契约）-----------------------------
   /// 成功完成的刷新次数。

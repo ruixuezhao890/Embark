@@ -1,7 +1,7 @@
 /**
  * Embark · 相册 App 实现：见 album_app.h 头注释。
  *
- * 薄壳纪律与 settings_app.cpp 完全一致：onCreate 只记账；onEnter/onResume 只按屏名挂自己的屏
+ * 薄壳纪律与 music_app.cpp 完全一致：onCreate 只记账；onEnter/onResume 只按屏名挂自己的屏
  * （后端由 app/common/ui_backend.h 选：AiDoGUI 优先，EEZ 并存）；onForegroundTick 泵一帧。
  * 界面（占位屏）与导航（返回按钮 → embark_ui_open_launcher）都在 AiDoGUI 工程里，
  * C++ 侧不碰任何控件。

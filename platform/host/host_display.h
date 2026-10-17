@@ -46,6 +46,7 @@ class HostDisplay final : public hal::IDisplay {
   [[nodiscard]] Error flush(const hal::Rect& area,
                             etl::span<const std::uint8_t> data) noexcept override;
   [[nodiscard]] Error set_backlight(std::uint8_t percent) noexcept override;
+  [[nodiscard]] std::uint8_t backlight() const noexcept override { return backlight_; }
 
   /// 渲染器：宿主 UI 循环/截图要用（SDL_RenderReadPixels）。未初始化时是 nullptr。
   [[nodiscard]] SDL_Renderer* renderer() const noexcept { return renderer_; }

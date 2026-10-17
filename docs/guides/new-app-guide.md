@@ -19,7 +19,7 @@
 | **AiDoGUI Designer** | 画屏、排控件、配"点按钮切屏"、维护字体字符表 | 设计工程 `app/aidogui_ui/screen.aid`（**随仓库入库**，导出产物同样入库） |
 | **Embark App（C++）** | 业务逻辑：状态机、定时任务、消息、数据 | `app/<名字>/` 下两个文件，5 个钩子 |
 | **薄桥 `app/common/aidogui_ui_bridge.h`** | 生成代码 ↔ App 契约的唯一适配点（按屏名/控件名查找） | App 只调它，**不 include 生成代码头** |
-| **导航 `app/common/aidogui_ui_nav.{h,cpp}`** | 屏变化 → 切前台 App；屏上控件 → App / 逻辑动作的绑定 | App 只在 `onCreate` 里 `ui_backend_attach_nav(fw)`（要绑逻辑动作再加一句 `ui_backend_bind_action`；有控件值要重推再加一句 `ui_backend_bind_repaint`） |
+| **导航 `app/common/aidogui_ui_nav.{h,cpp}`** | 屏变化 → 切前台 App；屏上控件 → App / 逻辑动作的绑定 | App 只在 `onCreate` 里 `ui_backend_attach_nav(fw)`（有控件值要重推再加一句 `ui_backend_bind_repaint`；屏内按钮自己用 `lv_obj_add_event_cb` 挂，见下文） |
 
 铁的约定只有三条（[ADR 0011](../adr/0011-aidogui-ui-source.md)）：
 
@@ -38,9 +38,15 @@
 主屏。框架**没有**统一返回手势或返回键——早先的非主屏上滑返回已按用户要求撤回
 （[ADR 0014](../adr/0014-in-screen-back.md)）。
 
-屏上的按钮要**就地干点事**（不切屏，比如设置的「亮度 +1」）时，别自己给控件加事件回调：在
-`onCreate` 里声明一句 `ui_backend_bind_action("屏名", "控件名", &回调)`，回调由导航桥在每次装载后
-统一重挂（控件随屏销毁消失，自己挂会点一下就切两次；见 [ADR 0014](../adr/0014-in-screen-back.md) 决策 2）。
+屏上的按钮要**就地干点事**（不切屏，比如设置屏的「亮度 −/＋」）时，用 `lv_obj_add_event_cb` + 
+`lv_event_get_user_data(this)` 把回调挂在控件上，并在**每次屏装载后的重推里重挂**（控件随屏销毁消失）：
+样板见 `app/settings/settings_app.cpp` 的 `bind_sinks()`（从 `refresh_display()` 调用）与 `app/weather/weather_app.cpp`
+的 `bind_city_buttons()`。**不要**直接把 `lv_obj_add_event_cb` 写在 `onCreate` 里 —— 那时屏还不存在。
+
+> 历史上推荐过 `ui_backend_bind_action("屏名", "控件名", &回调)`（导航桥在每次装载后统一重挂）：机制仍在，
+> 但它只收**裸函数指针**、回调里拿不到 `this`，而且与 `bind_click` 共用 8 个槽（`kMaxClickBindings`）——
+> 设置屏 6 个设置项的按钮会把它打满。今天的口径是：**设计器事件只用来切 App，屏内交互归 App**
+> （[ADR 0018](../adr/0018-settings-truth-and-growth.md) 决策 3）。
 
 还有两条**默认就该照做**的约定（[ADR 0015](../adr/0015-app-retention-and-refresh.md)）：
 
@@ -79,7 +85,7 @@
     ./build/platform/host/embark_host_ui --ui-launcher-pages --delay 40  # 分页 + 设置屏三段 + 字形守卫 + 留存/重推不变量
     ./build/platform/host/embark_host_ui --ui-weather --delay 40       # 天气屏与主屏卡片同源
 
-每条都会打一行结论（例如 `〔主屏分页验收通过〕（磁贴 5 / 页 2 / 点 2；设置屏 已进 亮度档 0→1；…）`），
+每条都会打一行结论（例如 `〔主屏分页验收通过〕（磁贴 5 / 页 2 / 点 2；设置屏 已进 / 正文滚动 146 px；亮度百分比 50%→60%；…）`），
 退出码 0 = 通过、非 0 = 失败。
 
 ## 2. 敲起来（10 分钟，C++ 侧）

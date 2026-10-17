@@ -23,7 +23,7 @@
  * 才动界面。屏不在前台时一次都不算（没有后台节拍，也就没有"屏没了还在算"的空转）。
  *
  * 消息：收 SettingsApp 广播的 BrightnessMessage（id 0x21，定义在 app/common/app_messages.h）
- * 更新亮度档 —— 消息驱动，App 间不互相 include、不碰对方任何符号（spec §7）。
+ * 更新亮度百分比 —— 消息驱动，App 间不互相 include、不碰对方任何符号（spec §7）。
  *
  * 薄壳纪律（与 launcher_app / settings_app 完全一致，2026-10-06 目录化后各 App 独立成目录）：
  *   - App 不建屏、不 lv_scr_load；onCreate 只记账/启后台逻辑；
@@ -79,7 +79,7 @@ class ClockApp final : public App {
   void onMessage(const Message& msg) override;
 
   // --- 验收观测（本 App 无 own task，全部在 UI 任务里跑，非线程敏感）--------------
-  [[nodiscard]] std::uint32_t brightness() const noexcept { return level_; }
+  [[nodiscard]] std::uint32_t brightness() const noexcept { return bright_percent_; }
   [[nodiscard]] std::uint32_t enters() const noexcept { return enters_; }
   [[nodiscard]] std::uint32_t resumes() const noexcept { return resumes_; }
   [[nodiscard]] std::uint32_t foreground_ticks() const noexcept { return foreground_ticks_; }
@@ -91,7 +91,7 @@ class ClockApp final : public App {
   /// 清掉"上次画过什么"的全部缓存 → 重算一遍 → 重挂月历翻月按钮。
   /// **不清 cal_view_y_/cal_view_m_**：那是用户翻到的视图月，属于要留存的视图状态。
   void repaint_screen();
-  /// bind_repaint 收的是裸函数指针（不能捕获 this）：转发到当前实例（范式同 settings_app.cpp）。
+  /// bind_repaint 收的是裸函数指针（不能捕获 this）：转发到当前实例（见 ui_backend.h 的声明）。
   static void on_screen_reloaded();
   static ClockApp* g_for_ui;  // 当前接线的时钟实例（进程内只有一个）
 
@@ -144,7 +144,7 @@ class ClockApp final : public App {
   int cal_view_y_ = 0;
   int cal_view_m_ = 0;
   bool cal_names_ready_ = false;  // 中文星期名是否已注入当前控件
-  std::uint32_t level_ = 0;
+  std::uint32_t bright_percent_ = 0;  // 0..100，来自 BrightnessMessage
   std::uint32_t enters_ = 0;
   std::uint32_t resumes_ = 0;
   std::uint32_t foreground_ticks_ = 0;

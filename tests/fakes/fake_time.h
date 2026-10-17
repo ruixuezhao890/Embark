@@ -30,14 +30,27 @@ class FakeTime final : public hal::ITime {
     return epoch_value;
   }
 
+  /// 设表：改墙钟值并计数；epoch_write_error 非 none 时按那个错误失败（模拟"没有 RTC"）。
+  Error set_epoch_ms(std::uint64_t value) noexcept override {
+    ++epoch_write_calls;
+    if (epoch_write_error != Error::none) {
+      return epoch_write_error;
+    }
+    epoch_value = value;
+    return Error::none;
+  }
+
   void set_now_ms(std::uint32_t value) noexcept { clock_ms = value; }
-  void set_epoch_ms(std::uint64_t value) noexcept { epoch_value = value; }
+  void set_epoch_value(std::uint64_t value) noexcept { epoch_value = value; }
   void fail_epoch_ms(Error error) noexcept { epoch_error = error; }
+  void fail_set_epoch_ms(Error error) noexcept { epoch_write_error = error; }
 
   // 旋钮与观测点。
   std::uint32_t clock_ms = 0;
   std::uint64_t epoch_value = 1700000000000ULL;  // 2023-11-14T22:13:20Z
   Error epoch_error = Error::none;
+  Error epoch_write_error = Error::none;
+  std::size_t epoch_write_calls = 0;
   std::uint32_t last_delay_ms = 0;
   std::size_t delay_calls = 0;
 };

@@ -13,8 +13,8 @@
  *   ④ 启动器主屏：EEZ Studio 的 launcher 屏 —— 点屏上「闹钟」行（Flow SetPage → clock 屏）
  *   ⑤ 前台切换 #1：EEZ 屏按钮驱动 → clock 进场（onEnter；同帧走一遍武装时机，无后台体）
  *   ⑥ EEZ 屏往返 + App 间消息：点 clock 屏「← 返回」按钮回启动器（SetPage 回 launcher 屏，
- *       屏名约定驱动切回归）；settings->bump_level() 广播亮度消息 → clock 收到（手绘
- *       Level +1 按钮退役后的逻辑入口，界面提交给 EEZ 屏）
+ *       屏名约定驱动切回归）；settings->bump_brightness(+10) 广播亮度消息 → clock 收到
+ *       （亮度百分比，界面在 AiDoGUI 设置屏上，App 只留逻辑入口）
  *   ⑦ 回程交给 EEZ 屏按钮：无导航壳 —— 用例在 clock 收尾（SetPage 回程由 EEZ 屏承担）
  *   ⑧ 关窗退出：SDL_QUIT → framework.exit_requested() → 收尾统计 + LVGL 堆账
  *
@@ -59,6 +59,7 @@
 #include "own_task_spawner.h"
 #include "screens.h"  // EEZ 生成的对象表：合成点击按真实控件几何算（见 widget_center）
 #include "settings/settings_app.h"
+#include "settings/settings_prefs.h"
 #include "ui_task.h"
 
 namespace {
@@ -88,7 +89,7 @@ constexpr int tick_checkpoint_first = 28;  ///< 第一次看 clock 的后台节�
 constexpr int clock_back_frame =
     70;  ///< ⑥ 点 clock 屏「← 返回」：回 launcher 屏（→ 启动器）；16–56 动画结束后
 constexpr int tick_checkpoint_second = 82;  ///< 第二次看后台节拍（对比增长）
-constexpr int bump_level_frame = 80;        ///< ⑥ settings->bump_level()：广播亮度消息
+constexpr int bump_level_frame = 80;        ///< ⑥ settings->bump_brightness(+10)：广播亮度消息
 constexpr int launcher_reenter_frame =
     120;  ///< ⑦ 再点 launcher 屏「闹钟」行：进 clock（回程交给 EEZ 屏按钮）；72–112 后
 constexpr int screen_life_check_frame =
@@ -297,6 +298,7 @@ void ui_main(void* argument) noexcept {
   // 前台切换与亮度变化的解说跟踪
   std::uint32_t prev_switches = 0;
   std::uint32_t prev_brightness = 0;
+  int bump_before_percent = -1;  // bump 前的亮度百分比（KV 跨进程留存，期望值不能写死 70）
   bool clock_released_after_leave = false;  // ⑧ 离开 clock 后其对象被回收、launcher 仍常驻
   auto* launcher = static_cast<embark::demo::LauncherApp*>(framework.app(0));
   auto* clock = static_cast<embark::demo::ClockApp*>(framework.app(1));
@@ -339,7 +341,9 @@ void ui_main(void* argument) noexcept {
       push_release(options->scale, clock_btn.x, clock_btn.y);
     }
     if (frames_run == bump_level_frame) {
-      settings->bump_level();
+      // 亮度：逻辑入口是 bump_brightness(delta)，不再是「档位 +1」的 bump_level。
+      bump_before_percent = static_cast<int>(settings->brightness_percent());
+      settings->bump_brightness(embark::demo::kBrightStep);
     }
     if (frames_run == quit_frame) {
       SDL_Event quit{};
@@ -363,7 +367,7 @@ void ui_main(void* argument) noexcept {
     }
     if (clock->brightness() != prev_brightness) {
       prev_brightness = clock->brightness();
-      ELOG_INFO("◆ clock 收到了新的亮度档：{}（消息经总线广播，App 间不直接通信）",
+      ELOG_INFO("◆ clock 收到了新的亮度百分比：{}%（消息经总线广播，App 间不直接通信）",
                 clock->brightness());
     }
     if (frames_run == tick_checkpoint_first) {
@@ -435,11 +439,15 @@ void ui_main(void* argument) noexcept {
                   clock->enters() == 1 && clock->resumes() == 1,
                   static_cast<unsigned long>(clock->enters() * 10U + clock->resumes()), 11UL);
   checklist.check(
-      "settings 本剧本从未进入（它的屏由 --ui-launcher-pages 覆盖：进屏 / 亮度 +1 / 返回）",
+      "settings 本剧本从未进入（它的屏由 --ui-launcher-pages 覆盖：进屏 / 亮度 ＋ / 返回）",
       settings->enters() == 0 && settings->resumes() == 0,
       static_cast<unsigned long>(settings->enters() * 10U + settings->resumes()), 0UL);
-  checklist.check("亮度消息回流（clock.brightness==1）", clock->brightness() == 1,
-                  static_cast<unsigned long>(clock->brightness()), 1UL);
+  // 旧口径是 0..3 四档的 +1，已随 issue 03 退役；新期望 = 起点 +10 钳位到 0..100。
+  const std::uint32_t bump_expect = embark::demo::clamp_percent(
+      bump_before_percent + embark::demo::kBrightStep);
+  checklist.check("亮度消息回流（clock.brightness == 起点+10）", clock->brightness() == bump_expect,
+                  static_cast<unsigned long>(clock->brightness()),
+                  static_cast<unsigned long>(bump_expect));
   checklist.check("收件箱无溢出", framework.inbox_overflows() == 0,
                   static_cast<unsigned long>(framework.inbox_overflows()), 0UL);
   checklist.check("结尾前台 = clock（回程交给 EEZ 屏按钮，导航壳已退役）",

@@ -3383,8 +3383,7 @@
               }
             }
           },
-          "events": [
-          ],
+          "events": [],
           "flags": {
             "clickable": false,
             "scrollable": false
@@ -3517,28 +3516,100 @@
           "align": "TOP_LEFT"
         },
         {
-          "id": "settings_Card_Bright",
+          "id": "settings_Body",
           "parentId": "settings_Desk",
+          "type": "lv_obj",
+          "name": "Body",
+          "x": 0,
+          "y": 36,
+          "width": 240,
+          "height": 276,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#0b1020ff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 0
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": true,
+            "scrollable": true
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "VER",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "settings_L_SecDisplay",
+          "parentId": "settings_Body",
+          "type": "lv_label",
+          "name": "L_SecDisplay",
+          "x": 14,
+          "y": 0,
+          "width": 212,
+          "height": 16,
+          "text": "显示",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#7f8aa6ff",
+                "textFontSize": 11,
+                "textAlign": "LEFT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "settings_Card_Bright",
+          "parentId": "settings_Body",
           "type": "lv_obj",
           "name": "Card_Bright",
           "x": 14,
-          "y": 84,
+          "y": 18,
           "width": 212,
           "height": 56,
           "style": {
             "styles": {
               "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
                 "padLeft": 0,
                 "padRight": 0,
                 "padTop": 0,
                 "padBottom": 0,
-                "bgColor": "#18213aff",
                 "radius": 12
               }
             }
           },
-          "events": [
-          ],
+          "events": [],
           "flags": {
             "clickable": false,
             "scrollable": false
@@ -3559,7 +3630,7 @@
           "name": "L_BrightTitle",
           "x": 14,
           "y": 18,
-          "width": 110,
+          "width": 56,
           "height": 20,
           "text": "亮度",
           "style": {
@@ -3587,13 +3658,13 @@
           "align": "TOP_LEFT"
         },
         {
-          "id": "settings_Btn_Bright",
+          "id": "settings_Btn_Minus",
           "parentId": "settings_Card_Bright",
           "type": "lv_obj",
-          "name": "Btn_Bright",
-          "x": 140,
+          "name": "Btn_Minus",
+          "x": 72,
           "y": 12,
-          "width": 60,
+          "width": 34,
           "height": 32,
           "style": {
             "styles": {
@@ -3612,8 +3683,7 @@
               }
             }
           },
-          "events": [
-          ],
+          "events": [],
           "flags": {
             "clickable": true,
             "scrollable": false
@@ -3628,15 +3698,15 @@
           "align": "TOP_LEFT"
         },
         {
-          "id": "settings_Btn_Bright_L",
-          "parentId": "settings_Btn_Bright",
+          "id": "settings_Btn_Minus_L",
+          "parentId": "settings_Btn_Minus",
           "type": "lv_label",
-          "name": "Btn_Bright_L",
+          "name": "Btn_Minus_L",
           "x": 0,
           "y": 7,
-          "width": 60,
+          "width": 34,
           "height": 18,
-          "text": "+1",
+          "text": "-",
           "style": {
             "styles": {
               "DEFAULT__MAIN": {
@@ -3660,36 +3730,24 @@
             "scroll_snap_y": "NONE"
           },
           "align": "TOP_LEFT"
-        }
-      ],
-      "animations": []
-    },
-    {
-      "id": "about",
-      "name": "about",
-      "isDefault": false,
-      "style": {},
-      "widgets": [
+        },
         {
-          "id": "about_Desk",
-          "parentId": "about",
-          "type": "lv_obj",
-          "name": "Desk",
-          "x": 0,
-          "y": 0,
-          "width": 240,
-          "height": 320,
+          "id": "settings_L_BrightVal",
+          "parentId": "settings_Card_Bright",
+          "type": "lv_label",
+          "name": "L_BrightVal",
+          "x": 110,
+          "y": 19,
+          "width": 48,
+          "height": 20,
+          "text": "70%",
           "style": {
             "styles": {
               "DEFAULT__MAIN": {
-                "bgColor": "#0b1020ff",
-                "bgOpa": 255,
-                "borderWidth": 0,
-                "padLeft": 0,
-                "padRight": 0,
-                "padTop": 0,
-                "padBottom": 0,
-                "radius": 0
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
               }
             }
           },
@@ -3708,18 +3766,18 @@
           "align": "TOP_LEFT"
         },
         {
-          "id": "about_Btn_Back",
-          "parentId": "about_Desk",
+          "id": "settings_Btn_Plus",
+          "parentId": "settings_Card_Bright",
           "type": "lv_obj",
-          "name": "Btn_Back",
-          "x": 8,
-          "y": 4,
-          "width": 64,
-          "height": 28,
+          "name": "Btn_Plus",
+          "x": 162,
+          "y": 12,
+          "width": 34,
+          "height": 32,
           "style": {
             "styles": {
               "DEFAULT__MAIN": {
-                "bgColor": "#18213aff",
+                "bgColor": "#2a3550ff",
                 "bgOpa": 255,
                 "borderWidth": 0,
                 "padLeft": 0,
@@ -3729,21 +3787,11 @@
                 "radius": 8
               },
               "PRESSED__MAIN": {
-                "bgColor": "#2a3550ff"
+                "bgColor": "#3a4770ff"
               }
             }
           },
-          "events": [
-            {
-              "id": "event_about_back_clicked",
-              "eventType": "CLICKED",
-              "actionType": "CALL_FUNCTION",
-              "actionParams": {
-                "functionName": "embark_ui_open_launcher"
-              },
-              "enabled": true
-            }
-          ],
+          "events": [],
           "flags": {
             "clickable": true,
             "scrollable": false
@@ -3758,15 +3806,15 @@
           "align": "TOP_LEFT"
         },
         {
-          "id": "about_Btn_Back_L",
-          "parentId": "about_Btn_Back",
+          "id": "settings_Btn_Plus_L",
+          "parentId": "settings_Btn_Plus",
           "type": "lv_label",
-          "name": "Btn_Back_L",
+          "name": "Btn_Plus_L",
           "x": 0,
-          "y": 5,
-          "width": 64,
+          "y": 7,
+          "width": 34,
           "height": 18,
-          "text": "返回",
+          "text": "+",
           "style": {
             "styles": {
               "DEFAULT__MAIN": {
@@ -3792,22 +3840,22 @@
           "align": "TOP_LEFT"
         },
         {
-          "id": "about_L_Title",
-          "parentId": "about_Desk",
+          "id": "settings_L_SecTime",
+          "parentId": "settings_Body",
           "type": "lv_label",
-          "name": "L_Title",
-          "x": 84,
-          "y": 8,
-          "width": 72,
-          "height": 20,
-          "text": "关于",
+          "name": "L_SecTime",
+          "x": 14,
+          "y": 82,
+          "width": 212,
+          "height": 16,
+          "text": "时间",
           "style": {
             "styles": {
               "DEFAULT__MAIN": {
                 "textFont": "ui_heiti.ttf",
-                "textColor": "#c7d0e6ff",
-                "textFontSize": 14,
-                "textAlign": "CENTER"
+                "textColor": "#7f8aa6ff",
+                "textFontSize": 11,
+                "textAlign": "LEFT"
               }
             }
           },
@@ -3826,14 +3874,14 @@
           "align": "TOP_LEFT"
         },
         {
-          "id": "about_Card_Info",
-          "parentId": "about_Desk",
+          "id": "settings_Card_Time",
+          "parentId": "settings_Body",
           "type": "lv_obj",
-          "name": "Card_Info",
+          "name": "Card_Time",
           "x": 14,
-          "y": 44,
+          "y": 100,
           "width": 212,
-          "height": 236,
+          "height": 84,
           "style": {
             "styles": {
               "DEFAULT__MAIN": {
@@ -3863,12 +3911,373 @@
           "align": "TOP_LEFT"
         },
         {
-          "id": "about_L_Platform",
-          "parentId": "about_Card_Info",
+          "id": "settings_L_TimeVal",
+          "parentId": "settings_Card_Time",
+          "type": "lv_label",
+          "name": "L_TimeVal",
+          "x": 12,
+          "y": 10,
+          "width": 188,
+          "height": 24,
+          "text": "2026-10-17 06:21",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "settings_L_TimeField",
+          "parentId": "settings_Card_Time",
+          "type": "lv_label",
+          "name": "L_TimeField",
+          "x": 12,
+          "y": 44,
+          "width": 40,
+          "height": 18,
+          "text": "年",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "settings_Btn_TimeMinus",
+          "parentId": "settings_Card_Time",
+          "type": "lv_obj",
+          "name": "Btn_TimeMinus",
+          "x": 56,
+          "y": 40,
+          "width": 34,
+          "height": 26,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#2a3550ff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 8
+              },
+              "PRESSED__MAIN": {
+                "bgColor": "#3a4770ff"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "settings_Btn_TimeMinus_L",
+          "parentId": "settings_Btn_TimeMinus",
+          "type": "lv_label",
+          "name": "Btn_TimeMinus_L",
+          "x": 0,
+          "y": 4,
+          "width": 34,
+          "height": 18,
+          "text": "-",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "settings_Btn_TimePlus",
+          "parentId": "settings_Card_Time",
+          "type": "lv_obj",
+          "name": "Btn_TimePlus",
+          "x": 94,
+          "y": 40,
+          "width": 34,
+          "height": 26,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#2a3550ff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 8
+              },
+              "PRESSED__MAIN": {
+                "bgColor": "#3a4770ff"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "settings_Btn_TimePlus_L",
+          "parentId": "settings_Btn_TimePlus",
+          "type": "lv_label",
+          "name": "Btn_TimePlus_L",
+          "x": 0,
+          "y": 4,
+          "width": 34,
+          "height": 18,
+          "text": "+",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "settings_Btn_TimeNext",
+          "parentId": "settings_Card_Time",
+          "type": "lv_obj",
+          "name": "Btn_TimeNext",
+          "x": 134,
+          "y": 40,
+          "width": 66,
+          "height": 26,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#2a3550ff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 8
+              },
+              "PRESSED__MAIN": {
+                "bgColor": "#3a4770ff"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "settings_Btn_TimeNext_L",
+          "parentId": "settings_Btn_TimeNext",
+          "type": "lv_label",
+          "name": "Btn_TimeNext_L",
+          "x": 0,
+          "y": 4,
+          "width": 66,
+          "height": 18,
+          "text": "下一字段",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "settings_L_SecAbout",
+          "parentId": "settings_Body",
+          "type": "lv_label",
+          "name": "L_SecAbout",
+          "x": 14,
+          "y": 192,
+          "width": 212,
+          "height": 16,
+          "text": "关于本机",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#7f8aa6ff",
+                "textFontSize": 11,
+                "textAlign": "LEFT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "settings_Card_Info",
+          "parentId": "settings_Body",
+          "type": "lv_obj",
+          "name": "Card_Info",
+          "x": 14,
+          "y": 210,
+          "width": 212,
+          "height": 212,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 12
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "settings_L_Platform",
+          "parentId": "settings_Card_Info",
           "type": "lv_label",
           "name": "L_Platform",
           "x": 12,
-          "y": 14,
+          "y": 10,
           "width": 188,
           "height": 18,
           "text": "平台：host",
@@ -3897,12 +4306,12 @@
           "align": "TOP_LEFT"
         },
         {
-          "id": "about_L_Version",
-          "parentId": "about_Card_Info",
+          "id": "settings_L_Version",
+          "parentId": "settings_Card_Info",
           "type": "lv_label",
           "name": "L_Version",
           "x": 12,
-          "y": 44,
+          "y": 40,
           "width": 188,
           "height": 18,
           "text": "版本：0.1.0",
@@ -3931,12 +4340,12 @@
           "align": "TOP_LEFT"
         },
         {
-          "id": "about_L_Heap",
-          "parentId": "about_Card_Info",
+          "id": "settings_L_Heap",
+          "parentId": "settings_Card_Info",
           "type": "lv_label",
           "name": "L_Heap",
           "x": 12,
-          "y": 74,
+          "y": 70,
           "width": 188,
           "height": 18,
           "text": "可用堆：-- KB",
@@ -3965,12 +4374,12 @@
           "align": "TOP_LEFT"
         },
         {
-          "id": "about_L_Font",
-          "parentId": "about_Card_Info",
+          "id": "settings_L_Font",
+          "parentId": "settings_Card_Info",
           "type": "lv_label",
           "name": "L_Font",
           "x": 12,
-          "y": 104,
+          "y": 100,
           "width": 188,
           "height": 18,
           "text": "字库：--/-- 份",
@@ -3999,12 +4408,12 @@
           "align": "TOP_LEFT"
         },
         {
-          "id": "about_L_Stack",
-          "parentId": "about_Card_Info",
+          "id": "settings_L_Stack",
+          "parentId": "settings_Card_Info",
           "type": "lv_label",
           "name": "L_Stack",
           "x": 12,
-          "y": 134,
+          "y": 130,
           "width": 188,
           "height": 18,
           "text": "栈水位：-- KB",
@@ -4033,12 +4442,12 @@
           "align": "TOP_LEFT"
         },
         {
-          "id": "about_L_Disk",
-          "parentId": "about_Card_Info",
+          "id": "settings_L_Disk",
+          "parentId": "settings_Card_Info",
           "type": "lv_label",
           "name": "L_Disk",
           "x": 12,
-          "y": 164,
+          "y": 160,
           "width": 188,
           "height": 18,
           "text": "存盘：未挂载",
@@ -4067,12 +4476,12 @@
           "align": "TOP_LEFT"
         },
         {
-          "id": "about_L_Clock",
-          "parentId": "about_Card_Info",
+          "id": "settings_L_Clock",
+          "parentId": "settings_Card_Info",
           "type": "lv_label",
           "name": "L_Clock",
           "x": 12,
-          "y": 194,
+          "y": 190,
           "width": 188,
           "height": 18,
           "text": "对时：未对时",

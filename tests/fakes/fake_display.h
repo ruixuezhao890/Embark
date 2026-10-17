@@ -60,6 +60,8 @@ class FakeDisplay final : public hal::IDisplay {
     return Error::none;
   }
 
+  [[nodiscard]] std::uint8_t backlight() const noexcept override { return backlight_percent; }
+
   // 旋钮与观测点。
   Error init_error = Error::none;
   // 默认面板尺寸直接引用框架的编译期常量：改分辨率只需要动 config/embark_limits.h。

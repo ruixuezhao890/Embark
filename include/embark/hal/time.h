@@ -27,6 +27,15 @@ class ITime {
 
   /// 墙上时间（epoch 毫秒）。没有 RTC / 没对时 → Error::unsupported（不是致命错误）。
   [[nodiscard]] virtual etl::expected<std::uint64_t, Error> epoch_ms() const noexcept = 0;
+
+  /// 把墙上钟设为 epoch 毫秒（UTC）。
+  ///
+  /// 成功之后 epoch_ms() 必须立刻反映新值；没有可写的时钟源（没有 RTC 的装配）→
+  /// Error::unsupported，写不进去（总线 NACK、回读不符）→ 具体错误。
+  /// **不许静默丢弃**：上层要能据此显示"没设成功"，而不是以为拨好了。
+  ///
+  /// 精度由后端决定：真机 RTC 只有秒级，传入的毫秒会被截到秒再回读锚定。
+  virtual Error set_epoch_ms(std::uint64_t epoch_ms) noexcept = 0;
 };
 
 }  // namespace embark::hal

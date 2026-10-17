@@ -49,6 +49,17 @@ class Esp32Time final : public hal::ITime {
   void delay_ms(std::uint32_t ms) noexcept override;
   [[nodiscard]] etl::expected<std::uint64_t, Error> epoch_ms() const noexcept override;
 
+  /**
+   * 手动设表：写板载 RTC（PCF85063）再重锚，成功后 epoch_ms() 立刻反映新值。
+   *
+   * 三条边界：
+   *   * 芯片没应答（没有 RTC 的装配）→ unsupported，**不写**任何东西；
+   *   * 芯片只有秒级精度：毫秒被截到秒，锚点用**回读**的秒（芯片真认下的值），不用入参；
+   *   * 写失败/回读不符 → 原样返回驱动给的错误，wall_note_ 改成"手动设置失败"。
+   * 不碰 0x02 的 offset 校准寄存器（这块板没有温度参考，动了只会引入人为偏差）。
+   */
+  Error set_epoch_ms(std::uint64_t epoch_ms) noexcept override;
+
   // --- 诊断（日志与心跳用；不参与 HAL 契约）-----------------------------------
   /// 墙钟可用吗（= 开机时 RTC 探到了、OS 位为 0、BCD 合法）。
   [[nodiscard]] bool wall_clock_ready() const noexcept { return wall_ready_; }

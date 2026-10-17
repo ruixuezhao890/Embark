@@ -21,7 +21,6 @@
 #include <embark/version.h>
 #include <middleware/elog/elog.hpp>
 
-#include "about_app.h"
 #include "album_app.h"
 #include "clock_app.h"
 #include "launcher_app.h"
@@ -50,9 +49,9 @@ namespace embark::platform::esp32 {
 
 // 整个固件只出现一次的 App 注册表 —— 2026-10-17 起与宿主演示**完全一致**（六个 App）：
 // LauncherApp 首位 = 默认前台（界面来自 AiDoGUI 生成代码，见 ADR 0011 / aidogui_ui_bridge）；
-// ClockApp 后台 tick 100ms（节拍推进计数 + 消息驱动亮度档）；SettingsApp suspend（bump_level
-// 逻辑入口）；WeatherApp 读本地桩数据重推天气卡；MusicApp/AlbumApp 是占位 App（屏上写着
-// "界面还没做"）。
+// ClockApp 走前台节拍推进显示、收 BrightnessMessage 记亮度百分比；SettingsApp suspend（设置中心：
+// 亮度 / 墙上钟 / 关于本机七行，见 ADR 0018）；WeatherApp 读本地桩数据重推天气卡；MusicApp/AlbumApp
+// 是最薄的占位 App（屏上写着"界面还没做"）。
 //
 // 为什么之前只有三个：weather/music/album 三个 .cpp 没进真机源清单，屏能画出来但点磁贴
 // 切前台时框架找不到 App 会安静忽略 —— 于是真机主屏只有 2 个磁贴 1 页，模拟器是 4 磁贴 2 页，
@@ -60,8 +59,7 @@ namespace embark::platform::esp32 {
 // 平台后端，2026-10-17 一并放进 cmake/embark_sources.cmake 的 EMBARK_APP_SOURCES_DEVICE。
 // 注册顺序 = 主屏磁贴顺序（launcher 自己不算磁贴），要与 platform/host/ui_demo.cpp:406 同序。
 EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp,
-                 embark::demo::WeatherApp, embark::demo::MusicApp, embark::demo::AlbumApp,
-                 embark::demo::AboutApp)
+                 embark::demo::WeatherApp, embark::demo::MusicApp, embark::demo::AlbumApp)
 
 }  // namespace embark::platform::esp32
 

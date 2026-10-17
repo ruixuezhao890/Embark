@@ -67,7 +67,7 @@ class LauncherApp final : public App {
   /// 顺序 = 清缓存 → 重推值 → 重建磁贴 → 恢复页（磁贴是控件来源，最后恢复页最稳）。
   void repaint_screen();
 
-  /// bind_repaint 收的是裸函数指针（不能捕获 this）：转发到当前实例（范式同 settings_app.cpp）。
+  /// bind_repaint 收的是裸函数指针（不能捕获 this）：转发到当前实例（见 ui_backend.h 的声明）。
   static void on_screen_reloaded();
 
   static LauncherApp* g_for_ui;  // 当前接线的启动器实例（进程内只有一个）
