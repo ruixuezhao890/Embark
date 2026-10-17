@@ -25,8 +25,8 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 
 # --- SD card ------------------------------------------------------------------
-# Runtime fonts and images are read from the SD card under the names the export
-# pipeline generates (fonts/ui_font_ui_heiti_14.bin) -- i.e. long file names.
+# Runtime assets are read from the SD card under the names the export pipeline and
+# the app expect (fonts/ui_heiti.ttf, images/<widget>.bin) -- i.e. long file names.
 # IDF defaults to CONFIG_FATFS_LFN_NONE, where FATFS only sees the 8.3 aliases,
 # so every such fopen() fails with not_found: the bringup font self-test printed
 # "error 3" on real hardware until this was switched on (issue 25).

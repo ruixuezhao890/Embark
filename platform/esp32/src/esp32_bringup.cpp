@@ -6,15 +6,10 @@
 
 #include <lvgl.h>
 
-#include <cstddef>
-
-#include <embark/font_ledger.h>
 #include <middleware/elog/elog.hpp>
 
 #include "esp32_board.h"
 #include "esp32_hal.h"
-#include "font_alloc_scope.h"
-#include "font_service.h"
 
 namespace embark::platform::esp32::bringup {
 namespace {
@@ -110,85 +105,8 @@ void pump_touch() {
   g_pressed_before = pressed;
 }
 
-bool check_sd_font() {
-  Esp32Hal& hal = Esp32Hal::instance();
-  hal::Context& context = hal.context();
-  if (context.filesystem == nullptr) {
-    ELOG_WARN("BRINGUP SD：文件系统未挂载（板级没配卡座引脚，或没插卡）—— 这一项没过");
-    return false;
-  }
-  ELOG_INFO("BRINGUP SD：{}（{}）已挂载，开始运行时字库自检", hal.sd().mount_point(),
-            hal.sd().info());
-
-  // 真机接了 AiDoGUI UI 后端之后，App 屏那 7 个 BIN 字库是常驻的（每个屏都要用），
-  // 所以"释放后字库池归零"这个断言不再成立。这里改成看**增量**：探针字库从加载到释放
-  // 必须把池子还回本函数进来时的水位，多一个字节都不行。
-  const std::size_t outstanding_baseline = font_alloc_outstanding_bytes();
-
-  // 账本与服务都是"一个进程一份"的对象：函数内静态，绕开静态初始化顺序。
-  static FontLedger ledger;
-  static FontService service(*context.filesystem, ledger);
-  if (const Error prepared = service.init(); prepared != Error::none) {
-    ELOG_WARN("BRINGUP SD：字库服务没起来（错误码 {}）—— 这一项没过", static_cast<int>(prepared));
-    return false;
-  }
-
-  etl::expected<lv_font_t*, Error> loaded = service.load(sd_font_probe_file);
-  if (!loaded) {
-    ELOG_WARN("BRINGUP SD：{} 加载失败（错误码 {}）—— 卡上有这个文件吗？这一项没过", sd_font_probe_file,
-              static_cast<int>(loaded.error()));
-    return false;
-  }
-  lv_font_t* font = *loaded;
-
-  // 量一次尺寸：走得通说明 cmap 与字形描述都解析出来了。
-  lv_point_t measured{};
-  lv_txt_get_size(&measured, sd_font_probe_text, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-
-  // 尺寸窗口（口径见 esp32_board.h 的 sd_font_probe_size）：落在窗口外说明卡上那份不是 _14
-  // 这份字库（把别的字号改名成 _14 就会落在这里），算没过。
-  const bool size_ok = measured.x > 0 && measured.y >= sd_font_probe_size &&
-                       measured.y <= sd_font_probe_size + sd_font_probe_height_slack;
-
-  // 真渲染一个字形：放进 label，立刻同步刷一次屏（不等 UI 循环），再删掉 label ——
-  // 删完才 release，否则屏上会留着指向已释放字库的指针。
-  lv_disp_t* display = lv_disp_get_default();
-  if (display != nullptr) {
-    lv_obj_t* label = lv_label_create(lv_scr_act());
-    lv_obj_set_style_text_font(label, font, 0);
-    lv_obj_set_style_text_color(label, lv_color_hex(0xFFFF00), 0);
-    lv_label_set_text(label, sd_font_probe_text);
-    lv_obj_align(label, LV_ALIGN_BOTTOM_MID, 0, -8);
-    lv_refr_now(display);
-    lv_obj_del(label);
-  }
-
-  const auto refs = ledger.refs(sd_font_probe_file);
-  ELOG_INFO(
-      "BRINGUP SD：字库已加载并渲染；{} 的 {} 量得 {}×{} px（期望 {}-{} px：{}）；记账 {} / {} "
-      "字节，引用 {} 次，字库池在用 {} / {} 字节",
-      sd_font_probe_file, sd_font_probe_text, static_cast<int>(measured.x),
-      static_cast<int>(measured.y), sd_font_probe_size,
-      sd_font_probe_size + sd_font_probe_height_slack, size_ok ? "符合" : "不符合",
-      static_cast<unsigned>(ledger.used_bytes()),
-      static_cast<unsigned>(ledger.budget_bytes()),
-      refs.has_value() ? static_cast<unsigned>(*refs) : 0U,
-      static_cast<unsigned>(font_alloc_outstanding_bytes()),
-      static_cast<unsigned>(font_alloc_pool_bytes()));
-
-  const Error released = service.release(sd_font_probe_file);
-  if (released != Error::none) {
-    ELOG_WARN("BRINGUP SD：释放失败（错误码 {}）—— 这一项没过", static_cast<int>(released));
-    return false;
-  }
-  const bool zeroed = ledger.used_bytes() == 0 && ledger.loaded() == 0 &&
-                      font_alloc_outstanding_bytes() == outstanding_baseline;
-  ELOG_INFO("BRINGUP SD：释放后记账 {} 字节、在册 {} 个、字库池在用 {} 字节（进来时 {}，"
-            "应回到基线：{}）",
-            static_cast<unsigned>(ledger.used_bytes()), static_cast<unsigned>(ledger.loaded()),
-            static_cast<unsigned>(font_alloc_outstanding_bytes()),
-            static_cast<unsigned>(outstanding_baseline), zeroed);
-  return size_ok && zeroed;
-}
+// 运行时字库自检（check_sd_font，issue 25）已在 issue 04 退役：字体改由 AiDoGUI 桥在
+// framework.boot() 里读卡上的 ui_heiti.ttf 建 7 档字号（ADR 0017），判据搬到了 main.cpp
+// 直接看桥的字体报告 —— 在这里再读一份 3.85 MB 会顶爆 PSRAM。
 
 }  // namespace embark::platform::esp32::bringup

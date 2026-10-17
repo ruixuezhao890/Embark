@@ -14,10 +14,14 @@
  *   2) **没有 tick**：EEZ 每帧刷变量到控件（ui_tick）；AiDoGUI 生成代码没有变量层，
  *      控件值由 App 直接写（aidogui_ui_bridge_widget 拿到 lv_obj_t* 后用 LVGL API）。
  *      aidogui_ui_bridge_tick() 保留成 no-op 只是为了 App 契约形状不变。
- *   3) **字体是外部文件**：字体在工程里选了 BIN 输出，生成代码写死
- *      lv_font_load("S:/fonts/<name>.bin")，'S' 盘由 platform/common/aidogui_res_fs
- *      挂载（宿主 = 仓库 app/aidogui_ui/export；真机 = SD 卡挂载点）。
- *      字体加载失败只记警告并降级（该字号退回 LVGL 内置字体），**不让整屏失效**。
+ *   3) **字体是 SD 卡上的整份 TTF**（ADR 0017）：生成代码里 7 个字号的全局槽
+ *      （ui_font_ui_heiti_<字号>，屏内共 75 处引用）照旧由设计器导出，但本桥不再
+ *      lv_font_load 它们 —— 它把卡上的 ui_heiti.ttf 一次读进 PSRAM，用 lv_tiny_ttf 为每个
+ *      字号建一个运行期栅格化字体，塞进同一个槽：生成代码与屏内引用一行不改。
+ *      'S' 盘由 platform/common/aidogui_res_fs 挂载（宿主 = 仓库 app/aidogui_ui/export；
+ *      真机 = SD 卡挂载点 /sdcard）。拿不到 TTF 时槽留空，界面退回 flash 里的静态子集
+ *      embark_zh_14（无卡兜底）；单字号建不出来只记警告（该字号退回内置字体），
+ *      **不让整屏失效**。BIN 字库那条路已在 issue 03 删除。
  *
  * 二、屏（屏名约定不变：screen 名 == App 名；子页 <app名>_<编号>_sub）
  *   - aidogui_ui_bridge_screen_count() / _screen_name(i)：遍历生成代码里的屏表；
@@ -51,14 +55,16 @@
 #ifndef EMBARK_APP_AIDOGUI_UI_BRIDGE_H
 #define EMBARK_APP_AIDOGUI_UI_BRIDGE_H
 
+#include <cstdint>
+
 #include <lvgl.h>
 
 namespace embark::demo {
 
 /// 字体加载报告（验收探针：期望 total == loaded == 工程里用到的字体数）。
 struct AidoguiFontReport {
-  int total;   // 生成代码里声明的字体（字体文件 × 字号）
-  int loaded;  // lv_font_load 成功的个数
+  int total;   // 生成代码里的字号槽个数（7）
+  int loaded;  // 真正建出来的 tiny_ttf 字体个数
 };
 
 /// 一次性初始化（幂等）：挂 'S' 盘、注册 LV_EVENT_GET_COMP_CHILD、加载字体。
@@ -70,23 +76,39 @@ void aidogui_ui_bridge_destroy();
 
 bool aidogui_ui_bridge_ready();
 
+/// 启动自检行（ADR 0017 的启动占位屏）：读卡上 TTF 那九秒里逐行翻绿 [OK]，一秒一行。
+/// 事实由平台入口给（flash / PSRAM / 显示 / 触摸 / 卡 / 字库区），桥只负责节奏与上色；
+/// 不调用就用桥自己知道的三行（display / font pool / sd card）—— 宿主就是这样。
+/// 约束：最多 6 行（再多挤爆 320 px 的屏）；label/detail 只能是 ASCII（这一刻能用的只有
+/// flash 里那 184 个字形，中文画成方框，桥会告警）；指针要活到 init 结束。
+struct AidoguiBootCheck {
+  const char* label;   // 短标签，如 "flash"
+  const char* detail;  // 值，如 "16 MB"
+  bool ok;             // false ⇒ 打红 [!!]，不假装绿
+};
+/// 单调毫秒时钟（可选但真机必须给）：读卡那九秒里没有任何帧，LVGL 的 lv_tick 是冻住的
+/// （platform/common/lvgl_port.cpp 的 tick() 只在 UI 循环里推进），一秒一行的节奏与屏上
+/// 毫秒数只能问平台要时间。不给就退回 lv_tick_get()（宿主读数很快，够用）。
+using AidoguiBootClock = std::uint32_t (*)(void* user);
+
+/// 必须在 aidogui_ui_bridge_init() 之前调用（占位屏在 init 里就上屏了）。
+void aidogui_ui_bridge_set_boot_checks(const AidoguiBootCheck* checks, int count,
+                                       AidoguiBootClock clock = nullptr,
+                                       void* clock_user = nullptr);
+
 /// 字体报告（未 init 时两项都是 0）。
 AidoguiFontReport aidogui_ui_bridge_font_report();
 
-/// 按字号取已加载的字体：AiDoGUI 的字体 BIN 文件名以 "_<字号>.bin" 结尾
-/// （如 ui_font_ui_heiti_14.bin），没有该字号或它加载失败时返回 nullptr
-/// （调用方保持 LVGL 内置字体即可）。运行时新建的控件（启动器磁贴）要用设计器同款字体，
+/// 按字号取已加载的字体：字号来自生成代码的槽名（ui_font_ui_heiti_<字号>），
+/// 没有该字号或它加载失败时返回 nullptr（调用方保持 LVGL 内置字体即可）。
+/// 运行时新建的控件（启动器磁贴）要用设计器同款字体，
 /// 只能走这里 —— 生成代码的 ui_font_* 符号不泄进 App 编译面（见本文件头）。
 lv_font_t* aidogui_ui_bridge_font(int size);
 
-/// 字库分配作用域钩子（可选，平台在第一次装载屏之前登记一次；不登记 = 直接走 LVGL 的堆）。
-/// 为什么需要：BIN 字契是运行时 lv_font_load() 出来的，7 个字号合计 57 KB，全落 LVGL 池会把
-/// 48 KB 的静态池撞穿。真机的字库单独走一块 PSRAM 池（platform/common/font_alloc_scope.h），
-/// 但那是平台头，桥是平台中立层 —— 于是只留两个"进/出"回调，由 main.cpp 转发过去。
-/// 桥只在「加载 BIN 字体」那一段里成对调用 begin/end；释放（lv_font_free）不需要作用域：
-/// 真机的池按地址判归属，谁的指针回谁的池。
-using AidoguiFontScopeHook = void (*)();
-void aidogui_ui_bridge_set_font_scope(AidoguiFontScopeHook begin, AidoguiFontScopeHook end);
+/// 槽表的只读遍历（探针与诊断用）：工程里一共几个字号槽、第 index 个是多少 px。
+/// 字号的唯一事实来源因此仍是生成代码，调用方不必自己抄一份 7 档清单。
+int aidogui_ui_bridge_font_size_count();
+int aidogui_ui_bridge_font_size(int index);
 
 // --- 屏表 -------------------------------------------------------------------
 int aidogui_ui_bridge_screen_count();

@@ -1,0 +1,1125 @@
+I (123) esp_image: segment 1: paddr=00037510 vaddr=3fc97b00 sizeESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0x2b (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4037a6ea
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0x15a0
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xd20
+load:0x403cb700,len:0x2ee4
+entry 0x403c8928
+I (26) boot: ESP-IDF v5.4 2nd stage bootloader
+I (27) boot: compile time Oct 17 2026 14:29:51
+I (27) boot: Multicore bootloader
+I (27) boot: chip revision: v0.2
+I (30) boot: efuse block revision: v1.3
+I (33) boot.esp32s3: Boot SPI Speed : 80MHz
+I (37) boot.esp32s3: SPI Mode       : DIO
+I (41) boot.esp32s3: SPI Flash Size : 16MB
+I (45) boot: Enabling RNG early entropy source...
+I (49) boot: Partition Table:
+I (52) boot: ## Label            Usage          Type ST Offset   Length
+I (58) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (65) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (71) boot:  2 factory          factory app      00 00 00010000 00300000
+I (78) boot:  3 fonts            Unknown data     01 40 00310000 00400000
+I (84) boot: End of partition table
+I (87) esp_image: segment 0: paddr=00010020 vaddr=3c0b0020 size=274e8h (161000) map
+I (123) esp_image: segment 1: paddr=00037510 vaddr=3fc97b00 size=03678h ( 13944) load
+I (127) esp_image: segment 2: paddr=0003ab90 vaddr=40374000 size=05488h ( 21640) load
+I (132) esp_image: segment 3: paddr=00040020 vaddr=42000020 size=aab80h (699264) map
+I (258) esp_image: segment 4: paddr=000eaba8 vaddr=40379488 size=0e63ch ( 58940) load
+I (271) esp_image: segment 5: paddr=000f91ec vaddr=600fe100 size=0001ch (    28) load
+I (279) boot: Loaded app from partition at offset 0x10000
+I (279) boot: Disabling RNG early entropy source...
+I (290) octal_psram: vendor id    : 0x0d (AP)
+I (290) octal_psram: dev id       : 0x02 (generation 3)
+I (290) octal_psram: density      : 0x03 (64 Mbit)
+I (292) octal_psram: good-die     : 0x01 (Pass)
+I (296) octal_psram: Latency      : 0x01 (Fixed)
+I (300) octal_psram: VCC          : 0x01 (3V)
+I (305) octal_psram: SRF          : 0x01 (Fast Refresh)
+I (309) octal_psram: BurstType    : 0x01 (Hybrid Wrap)
+I (314) octal_psram: BurstLen     : 0x01 (32 Byte)
+I (319) octal_psram: Readlatency  : 0x02 (10 cycles@Fixed)
+I (324) octal_psram: DriveStrength: 0x00 (1/1)
+I (329) MSPI Timing: PSRAM timing tuning index: 5
+I (333) esp_psram: Found 8MB PSRAM device
+I (336) esp_psram: Speed: 80MHz
+I (339) cpu_start: Multicore app
+I (775) esp_psram: SPI SRAM memory test OK
+I (784) cpu_start: Pro cpu start user code
+I (784) cpu_start: cpu freq: 240000000 Hz
+I (784) app_init: Application information:
+I (784) app_init: Project name:     embark_esp32
+I (788) app_init: App version:      issue25-20261017-1-gf069a26-dir
+I (794) app_init: Compile time:     Oct 17 2026 14:29:07
+I (799) app_init: ELF file SHA256:  6be9b3499...
+I (804) app_init: ESP-IDF:          v5.4
+I (807) efuse_init: Min chip rev:     v0.0
+I (811) efuse_init: Max chip rev:     v0.99 
+I (815) efuse_init: Chip rev:         v0.2
+I (819) heap_init: Initializing. RAM available for dynamic allocation:
+I (825) heap_init: At 3FCB4F30 len 000347E0 (209 KiB): RAM
+I (830) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM
+I (835) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM
+I (841) heap_init: At 600FE11C len 00001ECC (7 KiB): RTCRAM
+I (846) esp_psram: Adding pool of 8192K of PSRAM memory to heap allocator
+I (853) spi_flash: detected chip: winbond
+I (856) spi_flash: flash io: dio
+I (860) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (866) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (872) main_task: Started on CPU0
+I (875) esp_psram: Reserving pool of 32K of internal memory for DMA/internal allocations
+I (883) main_task: Calling app_main()
+I (887) autodebug: backdoor ready on UART0
+[34m[info] [esp32_rtc.cpp:138 init] 板载 RTC：0x51 在线，寄存器 04..0A = 22 42 07 17 06 10 26[0m
+[34m[info] [esp32_time.cpp:62 init] 墙钟：RTC 已对时，UTC epoch 1792222942 秒（1792222942000 ms），之后用 tick 推算[0m
+I (907) gpio: GPIO[41]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+I (912) gpio: GPIO[39]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+[34m[info] [esp32_display.cpp:205 init] ST7789 就绪：240×320 竖屏，SPI 80 MHz，BGR=1，像素小端=1，反色=1[0m
+I (1042) gpio: GPIO[2]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+[34m[info] [esp32_input.cpp:153 init] CST328 就绪：地址 0x1A，自报分辨率 X=240 / Y=320（屏幕 240×320；方向不对先看这几个数）[0m
+I (1195) gpio: GPIO[21]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+I (1203) sdspi_transaction: cmd=52, R1 response: command not supported
+I (1250) sdspi_transaction: cmd=5, R1 response: command not supported
+[34m[info] [esp32_sd.cpp:111 mount] SD：已挂载 /sdcard（SD16G 3504 MB，3674210304 字节）[0m
+[34m[info] [esp32_filesystem.cpp:37 attach_root] 真机文件系统根目录：/sdcard[0m
+[34m[info] [main.cpp:213 app_main] Embark 0.1.0 启动（平台 esp32）：显示 embark::hal::DisplayInfo { width = 240, height = 320, format = embark::hal::PixelFormat::rgb565, stride_bytes = 480 }，NVS 容量 2048 字节；UI 任务栈 16384 字节，周期 5 ms[0m
+I (1326) main_task: Returned from app_main()
+[34m[info] [launcher_app.cpp:47 onCreate] App launcher onCreate[0m
+[34m[info] [aidogui_ui_bridge.cpp:144 aidogui_ui_bridge_init] AiDoGUI 资源盘 S: -> /sdcard[0m
+[34m[info] [esp32_lvgl_mem.cpp:124 font_pool] 字库区就绪：PSRAM 131024 字节（与 LVGL 静态池 49120 字节分开记账）[0m
+[34m[info] [aidogui_ui_bridge.cpp:173 aidogui_ui_bridge_init] AiDoGUI 字体 7/7 已加载（根 /sdcard）[0m
+[34m[info] [aidogui_ui_nav.cpp:191 aidogui_ui_nav_bind_click] AiDoGUI 点击绑定：屏 launcher 的 Card_Clock → App clock[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 launcher 装载后重推控件值[0m
+[34m[info] [clock_app.cpp:161 onCreate] App clock onCreate（不申请后台；界面 = 生成的 clock 屏卡片流）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 clock 装载后重推控件值[0m
+[34m[info] [settings_app.cpp:41 onCreate] App settings onCreate（后台策略 = suspend；界面 = 屏 settings）[0m
+[34m[info] [aidogui_ui_nav.cpp:213 aidogui_ui_nav_bind_action] AiDoGUI 点击绑定：屏 settings 的 Btn_Bright → 逻辑动作[0m
+[34m[info] [weather_app.cpp:35 onCreate] App weather onCreate（城市 = 深圳，下标 3；不申请后台）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 weather 装载后重推控件值[0m
+[34m[info] [music_app.cpp:24 onCreate] App music onCreate（后台策略 = suspend；界面 = AiDoGUI 占位屏 music）[0m
+[34m[info] [album_app.cpp:24 onCreate] App album onCreate（后台策略 = suspend；界面 = AiDoGUI 占位屏 album）[0m
+[34m[info] [about_app.cpp:45 onCreate] App about onCreate（后台策略 = suspend；界面 = 屏 about，七行只读信息）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 about 装载后重推控件值[0m
+[34m[info] [launcher_app.cpp:75 onEnter] App launcher 进入前台（enter 1, resume 0）[0m
+[34m[info] [aidogui_ui_bridge.cpp:118 load_entry] AiDoGUI 屏 launcher 已装载（14 个控件）[0m
+[34m[info] [aidogui_ui_nav.cpp:97 repaint_for] AiDoGUI 值重推：屏 launcher 已装载，通知 App 重推控件值[0m
+[34m[info] [launcher_app.cpp:207 refresh_clock] 主屏日期行：2026年10月17日 星期六[0m
+[34m[info] [launcher_tiles.cpp:246 launcher_tiles_rebuild] 主屏磁贴：建出 6 个磁贴 / 2 页 / 2 个页码点[0m
+[34m[info] [launcher_app.cpp:158 rebuild_tiles] 主屏磁贴：注册表 7 个 App → 6 个磁贴 → 建出 6 个 / 2 页[0m
+[34m[info] [launcher_tiles.cpp:260 launcher_tiles_show_page] 主屏磁贴：跳到第 1 页（共 2 页）[0m
+[34m[info] [framework.cpp:61 boot] App launcher 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App clock 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App settings 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App weather 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App music 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App album 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App about 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [main.cpp:105 ui_main] 框架就绪：7 个 App，默认前台 launcher；LVGL 8.3.11，绘制缓冲 40 行，LVGL 静态池 49120 字节[0m
+[34m[info] [esp32_font_probe.cpp:107 run] [FONTPROBE] ===== 字体运行时栅格化 spike（真机侧，判据 4）=====[0m
+[34m[info] [esp32_font_probe.cpp:128 run] [FONTPROBE] 分区 fonts：offset 0x310000 size 4194304 字节；mmap 耗时 158.0 us；前四字节 00 01 00 00[0m
+[34m[info] [esp32_font_probe.cpp:147 run] [FONTPROBE] 建 14px 字体（cache 65536 字节）：268.0 us；line_height 16 base_line 3；PSRAM 8219820 -> 8219820（花 0 字节）；内部堆 257807 -> 257807（花 0 字节）[0m
+[31;1m[error] [esp32_lvgl_mem.cpp:76 lvgl_report_exhausted] LVGL 静态堆用尽：容量 49120 字节，未回收 29314 字节，峰值 29956 字节（先看是不是有控件没删）[0m
+
+assert failed: stbtt__new_active stb_truetype_htcw.h:3129 (z != ((void *)0))
+
+
+Backtrace: 0x40375ee9:0x3fca0e30 0x4037dd89:0x3fca0e50 0x403856a5:0x3fca0e70 0x42038c21:0x3fca0f90 0x4203a123:0x3fca0fc0 0x4203a365:0x3fca1220 0x4203a3d8:0x3fca1270 0x4203a455:0x3fca12d0 0x4203a481:0x3fca1340 0x4203a56d:0x3fca1370 0x4203b369:0x3fca13d0 0x4201a00e:0x3fca1400 0x4201afc1:0x3fca1430 0x42010161:0x3fca17b0 0x42019089:0x3fca1e70 0x4037e85d:0x3fca1e90
+
+
+
+
+ELF file SHA256: 6be9b3499
+
+Rebooting...
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0xc (RTC_SW_CPU_RST),boot:0x2b (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4037a6ea
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0x15a0
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xd20
+load:0x403cb700,len:0x2ee4
+entry 0x403c8928
+I (26) boot: ESP-IDF v5.4 2nd stage bootloader
+I (26) boot: compile time Oct 17 2026 14:29:51
+I (26) boot: Multicore bootloader
+I (27) boot: chip revision: v0.2
+I (29) boot: efuse block revision: v1.3
+I (33) boot.esp32s3: Boot SPI Speed : 80MHz
+I (37) boot.esp32s3: SPI Mode       : DIO
+I (40) boot.esp32s3: SPI Flash Size : 16MB
+I (44) boot: Enabling RNG early entropy source...
+I (49) boot: Partition Table:
+I (51) boot: ## Label            Usage          Type ST Offset   Length
+I (58) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (64) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (71) boot:  2 factory          factory app      00 00 00010000 00300000
+I (77) boot:  3 fonts            Unknown data     01 40 00310000 00400000
+I (84) boot: End of partition table
+I (87) esp_image: segment 0: paddr=00010020 vaddr=3c0b0020 size=274e8h (161000) map
+I (123) esp_image: segment 1: paddr=00037510 vaddr=3fc97b00 size=03678h ( 13944) load
+I (126) esp_image: segment 2: paddr=0003ab90 vaddr=40374000 size=05488h ( 21640) load
+I (131) esp_image: segment 3: paddr=00040020 vaddr=42000020 size=aab80h (699264) map
+I (258) esp_image: segment 4: paddr=000eaba8 vaddr=40379488 size=0e63ch ( 58940) load
+I (271) esp_image: segment 5: paddr=000f91ec vaddr=600fe100 size=0001ch (    28) load
+I (279) boot: Loaded app from partition at offset 0x10000
+I (279) boot: Disabling RNG early entropy source...
+I (290) octal_psram: vendor id    : 0x0d (AP)
+I (290) octal_psram: dev id       : 0x02 (generation 3)
+I (290) octal_psram: density      : 0x03 (64 Mbit)
+I (292) octal_psram: good-die     : 0x01 (Pass)
+I (296) octal_psram: Latency      : 0x01 (Fixed)
+I (301) octal_psram: VCC          : 0x01 (3V)
+I (305) octal_psram: SRF          : 0x01 (Fast Refresh)
+I (310) octal_psram: BurstType    : 0x01 (Hybrid Wrap)
+I (315) octal_psram: BurstLen     : 0x01 (32 Byte)
+I (319) octal_psram: Readlatency  : 0x02 (10 cycles@Fixed)
+I (324) octal_psram: DriveStrength: 0x00 (1/1)
+I (329) MSPI Timing: PSRAM timing tuning index: 5
+I (333) esp_psram: Found 8MB PSRAM device
+I (337) esp_psram: Speed: 80MHz
+I (340) cpu_start: Multicore app
+I (775) esp_psram: SPI SRAM memory test OK
+I (784) cpu_start: Pro cpu start user code
+I (784) cpu_start: cpu freq: 240000000 Hz
+I (784) app_init: Application information:
+I (784) app_init: Project name:     embark_esp32
+I (789) app_init: App version:      issue25-20261017-1-gf069a26-dir
+I (795) app_init: Compile time:     Oct 17 2026 14:29:07
+I (800) app_init: ELF file SHA256:  6be9b3499...
+I (804) app_init: ESP-IDF:          v5.4
+I (808) efuse_init: Min chip rev:     v0.0
+I (811) efuse_init: Max chip rev:     v0.99 
+I (815) efuse_init: Chip rev:         v0.2
+I (819) heap_init: Initializing. RAM available for dynamic allocation:
+I (826) heap_init: At 3FCB4F30 len 000347E0 (209 KiB): RAM
+I (831) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM
+I (836) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM
+I (841) heap_init: At 600FE11C len 00001ECC (7 KiB): RTCRAM
+I (846) esp_psram: Adding pool of 8192K of PSRAM memory to heap allocator
+I (854) spi_flash: detected chip: winbond
+I (857) spi_flash: flash io: dio
+I (860) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (866) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (873) main_task: Started on CPU0
+I (876) esp_psram: Reserving pool of 32K of internal memory for DMA/internal allocations
+I (884) main_task: Calling app_main()
+I (887) autodebug: backdoor ready on UART0
+[34m[info] [esp32_rtc.cpp:138 init] 板载 RTC：0x51 在线，寄存器 04..0A = 26 42 07 17 06 10 26[0m
+[34m[info] [esp32_time.cpp:62 init] 墙钟：RTC 已对时，UTC epoch 1792222946 秒（1792222946000 ms），之后用 tick 推算[0m
+I (908) gpio: GPIO[41]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+I (913) gpio: GPIO[39]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+[34m[info] [esp32_display.cpp:205 init] ST7789 就绪：240×320 竖屏，SPI 80 MHz，BGR=1，像素小端=1，反色=1[0m
+I (1043) gpio: GPIO[2]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+[34m[info] [esp32_input.cpp:153 init] CST328 就绪：地址 0x1A，自报分辨率 X=240 / Y=320（屏幕 240×320；方向不对先看这几个数）[0m
+I (1196) gpio: GPIO[21]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+I (1204) sdspi_transaction: cmd=52, R1 response: command not supported
+I (1251) sdspi_transaction: cmd=5, R1 response: command not supported
+[34m[info] [esp32_sd.cpp:111 mount] SD：已挂载 /sdcard（SD16G 3504 MB，3674210304 字节）[0m
+[34m[info] [esp32_filesystem.cpp:37 attach_root] 真机文件系统根目录：/sdcard[0m
+[34m[info] [main.cpp:213 app_main] Embark 0.1.0 启动（平台 esp32）：显示 embark::hal::DisplayInfo { width = 240, height = 320, format = embark::hal::PixelFormat::rgb565, stride_bytes = 480 }，NVS 容量 2048 字节；UI 任务栈 16384 字节，周期 5 ms[0m
+I (1308) main_task: Returned from app_main()
+[34m[info] [launcher_app.cpp:47 onCreate] App launcher onCreate[0m
+[34m[info] [aidogui_ui_bridge.cpp:144 aidogui_ui_bridge_init] AiDoGUI 资源盘 S: -> /sdcard[0m
+[34m[info] [esp32_lvgl_mem.cpp:124 font_pool] 字库区就绪：PSRAM 131024 字节（与 LVGL 静态池 49120 字节分开记账）[0m
+[34m[info] [aidogui_ui_bridge.cpp:173 aidogui_ui_bridge_init] AiDoGUI 字体 7/7 已加载（根 /sdcard）[0m
+[34m[info] [aidogui_ui_nav.cpp:191 aidogui_ui_nav_bind_click] AiDoGUI 点击绑定：屏 launcher 的 Card_Clock → App clock[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 launcher 装载后重推控件值[0m
+[34m[info] [clock_app.cpp:161 onCreate] App clock onCreate（不申请后台；界面 = 生成的 clock 屏卡片流）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 clock 装载后重推控件值[0m
+[34m[info] [settings_app.cpp:41 onCreate] App settings onCreate（后台策略 = suspend；界面 = 屏 settings）[0m
+[34m[info] [aidogui_ui_nav.cpp:213 aidogui_ui_nav_bind_action] AiDoGUI 点击绑定：屏 settings 的 Btn_Bright → 逻辑动作[0m
+[34m[info] [weather_app.cpp:35 onCreate] App weather onCreate（城市 = 深圳，下标 3；不申请后台）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 weather 装载后重推控件值[0m
+[34m[info] [music_app.cpp:24 onCreate] App music onCreate（后台策略 = suspend；界面 = AiDoGUI 占位屏 music）[0m
+[34m[info] [album_app.cpp:24 onCreate] App album onCreate（后台策略 = suspend；界面 = AiDoGUI 占位屏 album）[0m
+[34m[info] [about_app.cpp:45 onCreate] App about onCreate（后台策略 = suspend；界面 = 屏 about，七行只读信息）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 about 装载后重推控件值[0m
+[34m[info] [launcher_app.cpp:75 onEnter] App launcher 进入前台（enter 1, resume 0）[0m
+[34m[info] [aidogui_ui_bridge.cpp:118 load_entry] AiDoGUI 屏 launcher 已装载（14 个控件）[0m
+[34m[info] [aidogui_ui_nav.cpp:97 repaint_for] AiDoGUI 值重推：屏 launcher 已装载，通知 App 重推控件值[0m
+[34m[info] [launcher_app.cpp:207 refresh_clock] 主屏日期行：2026年10月17日 星期六[0m
+[34m[info] [launcher_tiles.cpp:246 launcher_tiles_rebuild] 主屏磁贴：建出 6 个磁贴 / 2 页 / 2 个页码点[0m
+[34m[info] [launcher_app.cpp:158 rebuild_tiles] 主屏磁贴：注册表 7 个 App → 6 个磁贴 → 建出 6 个 / 2 页[0m
+[34m[info] [launcher_tiles.cpp:260 launcher_tiles_show_page] 主屏磁贴：跳到第 1 页（共 2 页）[0m
+[34m[info] [framework.cpp:61 boot] App launcher 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App clock 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App settings 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App weather 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App music 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App album 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App about 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [main.cpp:105 ui_main] 框架就绪：7 个 App，默认前台 launcher；LVGL 8.3.11，绘制缓冲 40 行，LVGL 静态池 49120 字节[0m
+[34m[info] [esp32_font_probe.cpp:107 run] [FONTPROBE] ===== 字体运行时栅格化 spike（真机侧，判据 4）=====[0m
+[34m[info] [esp32_font_probe.cpp:128 run] [FONTPROBE] 分区 fonts：offset 0x310000 size 4194304 字节；mmap 耗时 159.0 us；前四字节 00 01 00 00[0m
+[34m[info] [esp32_font_probe.cpp:147 run] [FONTPROBE] 建 14px 字体（cache 65536 字节）：268.0 us；line_height 16 base_line 3；PSRAM 8219820 -> 8219820（花 0 字节）；内部堆 257807 -> 257807（花 0 字节）[0m
+[31;1m[error] [esp32_lvgl_mem.cpp:76 lvgl_report_exhausted] LVGL 静态堆用尽：容量 49120 字节，未回收 29314 字节，峰值 29956 字节（先看是不是有控件没删）[0m
+
+assert failed: stbtt__new_active stb_truetype_htcw.h:3129 (z != ((void *)0))
+
+
+Backtrace: 0x40375ee9:0x3fca0e30 0x4037dd89:0x3fca0e50 0x403856a5:0x3fca0e70 0x42038c21:0x3fca0f90 0x4203a123:0x3fca0fc0 0x4203a365:0x3fca1220 0x4203a3d8:0x3fca1270 0x4203a455:0x3fca12d0 0x4203a481:0x3fca1340 0x4203a56d:0x3fca1370 0x4203b369:0x3fca13d0 0x4201a00e:0x3fca1400 0x4201afc1:0x3fca1430 0x42010161:0x3fca17b0 0x42019089:0x3fca1e70 0x4037e85d:0x3fca1e90
+
+
+
+
+ELF file SHA256: 6be9b3499
+
+Rebooting...
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0xc (RTC_SW_CPU_RST),boot:0x2b (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4037a6ea
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0x15a0
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xd20
+load:0x403cb700,len:0x2ee4
+entry 0x403c8928
+I (26) boot: ESP-IDF v5.4 2nd stage bootloader
+I (26) boot: compile time Oct 17 2026 14:29:51
+I (26) boot: Multicore bootloader
+I (27) boot: chip revision: v0.2
+I (29) boot: efuse block revision: v1.3
+I (33) boot.esp32s3: Boot SPI Speed : 80MHz
+I (37) boot.esp32s3: SPI Mode       : DIO
+I (40) boot.esp32s3: SPI Flash Size : 16MB
+I (44) boot: Enabling RNG early entropy source...
+I (49) boot: Partition Table:
+I (51) boot: ## Label            Usage          Type ST Offset   Length
+I (58) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (64) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (71) boot:  2 factory          factory app      00 00 00010000 00300000
+I (77) boot:  3 fonts            Unknown data     01 40 00310000 00400000
+I (84) boot: End of partition table
+I (87) esp_image: segment 0: paddr=00010020 vaddr=3c0b0020 size=274e8h (161000) map
+I (123) esp_image: segment 1: paddr=00037510 vaddr=3fc97b00 size=03678h ( 13944) load
+I (126) esp_image: segment 2: paddr=0003ab90 vaddr=40374000 size=05488h ( 21640) load
+I (131) esp_image: segment 3: paddr=00040020 vaddr=42000020 size=aab80h (699264) map
+I (258) esp_image: segment 4: paddr=000eaba8 vaddr=40379488 size=0e63ch ( 58940) load
+I (271) esp_image: segment 5: paddr=000f91ec vaddr=600fe100 size=0001ch (    28) load
+I (279) boot: Loaded app from partition at offset 0x10000
+I (279) boot: Disabling RNG early entropy source...
+I (290) octal_psram: vendor id    : 0x0d (AP)
+I (290) octal_psram: dev id       : 0x02 (generation 3)
+I (290) octal_psram: density      : 0x03 (64 Mbit)
+I (292) octal_psram: good-die     : 0x01 (Pass)
+I (296) octal_psram: Latency      : 0x01 (Fixed)
+I (301) octal_psram: VCC          : 0x01 (3V)
+I (305) octal_psram: SRF          : 0x01 (Fast Refresh)
+I (310) octal_psram: BurstType    : 0x01 (Hybrid Wrap)
+I (315) octal_psram: BurstLen     : 0x01 (32 Byte)
+I (319) octal_psram: Readlatency  : 0x02 (10 cycles@Fixed)
+I (324) octal_psram: DriveStrength: 0x00 (1/1)
+I (329) MSPI Timing: PSRAM timing tuning index: 5
+I (333) esp_psram: Found 8MB PSRAM device
+I (337) esp_psram: Speed: 80MHz
+I (340) cpu_start: Multicore app
+I (775) esp_psram: SPI SRAM memory test OK
+I (784) cpu_start: Pro cpu start user code
+I (784) cpu_start: cpu freq: 240000000 Hz
+I (784) app_init: Application information:
+I (784) app_init: Project name:     embark_esp32
+I (789) app_init: App version:      issue25-20261017-1-gf069a26-dir
+I (795) app_init: Compile time:     Oct 17 2026 14:29:07
+I (800) app_init: ELF file SHA256:  6be9b3499...
+I (804) app_init: ESP-IDF:          v5.4
+I (808) efuse_init: Min chip rev:     v0.0
+I (811) efuse_init: Max chip rev:     v0.99 
+I (815) efuse_init: Chip rev:         v0.2
+I (819) heap_init: Initializing. RAM available for dynamic allocation:
+I (826) heap_init: At 3FCB4F30 len 000347E0 (209 KiB): RAM
+I (831) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM
+I (836) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM
+I (841) heap_init: At 600FE11C len 00001ECC (7 KiB): RTCRAM
+I (846) esp_psram: Adding pool of 8192K of PSRAM memory to heap allocator
+I (854) spi_flash: detected chip: winbond
+I (857) spi_flash: flash io: dio
+I (860) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (866) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (873) main_task: Started on CPU0
+I (876) esp_psram: Reserving pool of 32K of internal memory for DMA/internal allocations
+I (884) main_task: Calling app_main()
+I (887) autodebug: backdoor ready on UART0
+[34m[info] [esp32_rtc.cpp:138 init] 板载 RTC：0x51 在线，寄存器 04..0A = 30 42 07 17 06 10 26[0m
+[34m[info] [esp32_time.cpp:62 init] 墙钟：RTC 已对时，UTC epoch 1792222950 秒（1792222950000 ms），之后用 tick 推算[0m
+I (908) gpio: GPIO[41]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+I (913) gpio: GPIO[39]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+[34m[info] [esp32_display.cpp:205 init] ST7789 就绪：240×320 竖屏，SPI 80 MHz，BGR=1，像素小端=1，反色=1[0m
+I (1044) gpio: GPIO[2]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+[34m[info] [esp32_input.cpp:153 init] CST328 就绪：地址 0x1A，自报分辨率 X=240 / Y=320（屏幕 240×320；方向不对先看这几个数）[0m
+I (1197) gpio: GPIO[21]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+I (1205) sdspi_transaction: cmd=52, R1 response: command not supported
+I (1252) sdspi_transaction: cmd=5, R1 response: command not supported
+[34m[info] [esp32_sd.cpp:111 mount] SD：已挂载 /sdcard（SD16G 3504 MB，3674210304 字节）[0m
+[34m[info] [esp32_filesystem.cpp:37 attach_root] 真机文件系统根目录：/sdcard[0m
+[34m[info] [main.cpp:213 app_main] Embark 0.1.0 启动（平台 esp32）：显示 embark::hal::DisplayInfo { width = 240, height = 320, format = embark::hal::PixelFormat::rgb565, stride_bytes = 480 }，NVS 容量 2048 字节；UI 任务栈 16384 字节，周期 5 ms[0m
+I (1308) main_task: Returned from app_main()
+[34m[info] [launcher_app.cpp:47 onCreate] App launcher onCreate[0m
+[34m[info] [aidogui_ui_bridge.cpp:144 aidogui_ui_bridge_init] AiDoGUI 资源盘 S: -> /sdcard[0m
+[34m[info] [esp32_lvgl_mem.cpp:124 font_pool] 字库区就绪：PSRAM 131024 字节（与 LVGL 静态池 49120 字节分开记账）[0m
+[34m[info] [aidogui_ui_bridge.cpp:173 aidogui_ui_bridge_init] AiDoGUI 字体 7/7 已加载（根 /sdcard）[0m
+[34m[info] [aidogui_ui_nav.cpp:191 aidogui_ui_nav_bind_click] AiDoGUI 点击绑定：屏 launcher 的 Card_Clock → App clock[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 launcher 装载后重推控件值[0m
+[34m[info] [clock_app.cpp:161 onCreate] App clock onCreate（不申请后台；界面 = 生成的 clock 屏卡片流）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 clock 装载后重推控件值[0m
+[34m[info] [settings_app.cpp:41 onCreate] App settings onCreate（后台策略 = suspend；界面 = 屏 settings）[0m
+[34m[info] [aidogui_ui_nav.cpp:213 aidogui_ui_nav_bind_action] AiDoGUI 点击绑定：屏 settings 的 Btn_Bright → 逻辑动作[0m
+[34m[info] [weather_app.cpp:35 onCreate] App weather onCreate（城市 = 深圳，下标 3；不申请后台）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 weather 装载后重推控件值[0m
+[34m[info] [music_app.cpp:24 onCreate] App music onCreate（后台策略 = suspend；界面 = AiDoGUI 占位屏 music）[0m
+[34m[info] [album_app.cpp:24 onCreate] App album onCreate（后台策略 = suspend；界面 = AiDoGUI 占位屏 album）[0m
+[34m[info] [about_app.cpp:45 onCreate] App about onCreate（后台策略 = suspend；界面 = 屏 about，七行只读信息）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 about 装载后重推控件值[0m
+[34m[info] [launcher_app.cpp:75 onEnter] App launcher 进入前台（enter 1, resume 0）[0m
+[34m[info] [aidogui_ui_bridge.cpp:118 load_entry] AiDoGUI 屏 launcher 已装载（14 个控件）[0m
+[34m[info] [aidogui_ui_nav.cpp:97 repaint_for] AiDoGUI 值重推：屏 launcher 已装载，通知 App 重推控件值[0m
+[34m[info] [launcher_app.cpp:207 refresh_clock] 主屏日期行：2026年10月17日 星期六[0m
+[34m[info] [launcher_tiles.cpp:246 launcher_tiles_rebuild] 主屏磁贴：建出 6 个磁贴 / 2 页 / 2 个页码点[0m
+[34m[info] [launcher_app.cpp:158 rebuild_tiles] 主屏磁贴：注册表 7 个 App → 6 个磁贴 → 建出 6 个 / 2 页[0m
+[34m[info] [launcher_tiles.cpp:260 launcher_tiles_show_page] 主屏磁贴：跳到第 1 页（共 2 页）[0m
+[34m[info] [framework.cpp:61 boot] App launcher 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App clock 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App settings 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App weather 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App music 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App album 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App about 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [main.cpp:105 ui_main] 框架就绪：7 个 App，默认前台 launcher；LVGL 8.3.11，绘制缓冲 40 行，LVGL 静态池 49120 字节[0m
+[34m[info] [esp32_font_probe.cpp:107 run] [FONTPROBE] ===== 字体运行时栅格化 spike（真机侧，判据 4）=====[0m
+[34m[info] [esp32_font_probe.cpp:128 run] [FONTPROBE] 分区 fonts：offset 0x310000 size 4194304 字节；mmap 耗时 159.0 us；前四字节 00 01 00 00[0m
+[34m[info] [esp32_font_probe.cpp:147 run] [FONTPROBE] 建 14px 字体（cache 65536 字节）：268.0 us；line_height 16 base_line 3；PSRAM 8219820 -> 8219820（花 0 字节）；内部堆 257807 -> 257807（花 0 字节）[0m
+[31;1m[error] [esp32_lvgl_mem.cpp:76 lvgl_report_exhausted] LVGL 静态堆用尽：容量 49120 字节，未回收 29314 字节，峰值 29956 字节（先看是不是有控件没删）[0m
+
+assert failed: stbtt__new_active stb_truetype_htcw.h:3129 (z != ((void *)0))
+
+
+Backtrace: 0x40375ee9:0x3fca0e30 0x4037dd89:0x3fca0e50 0x403856a5:0x3fca0e70 0x42038c21:0x3fca0f90 0x4203a123:0x3fca0fc0 0x4203a365:0x3fca1220 0x4203a3d8:0x3fca1270 0x4203a455:0x3fca12d0 0x4203a481:0x3fca1340 0x4203a56d:0x3fca1370 0x4203b369:0x3fca13d0 0x4201a00e:0x3fca1400 0x4201afc1:0x3fca1430 0x42010161:0x3fca17b0 0x42019089:0x3fca1e70 0x4037e85d:0x3fca1e90
+
+
+
+
+ELF file SHA256: 6be9b3499
+
+Rebooting...
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0xc (RTC_SW_CPU_RST),boot:0x2b (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4037a6ea
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0x15a0
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xd20
+load:0x403cb700,len:0x2ee4
+entry 0x403c8928
+I (26) boot: ESP-IDF v5.4 2nd stage bootloader
+I (26) boot: compile time Oct 17 2026 14:29:51
+I (26) boot: Multicore bootloader
+I (27) boot: chip revision: v0.2
+I (29) boot: efuse block revision: v1.3
+I (33) boot.esp32s3: Boot SPI Speed : 80MHz
+I (37) boot.esp32s3: SPI Mode       : DIO
+I (40) boot.esp32s3: SPI Flash Size : 16MB
+I (44) boot: Enabling RNG early entropy source...
+I (49) boot: Partition Table:
+I (51) boot: ## Label            Usage          Type ST Offset   Length
+I (58) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (64) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (71) boot:  2 factory          factory app      00 00 00010000 00300000
+I (77) boot:  3 fonts            Unknown data     01 40 00310000 00400000
+I (84) boot: End of partition table
+I (87) esp_image: segment 0: paddr=00010020 vaddr=3c0b0020 size=274e8h (161000) map
+I (123) esp_image: segment 1: paddr=00037510 vaddr=3fc97b00 size=03678h ( 13944) load
+I (126) esp_image: segment 2: paddr=0003ab90 vaddr=40374000 size=05488h ( 21640) load
+I (131) esp_image: segment 3: paddr=00040020 vaddr=42000020 size=aab80h (699264) map
+I (258) esp_image: segment 4: paddr=000eaba8 vaddr=40379488 size=0e63ch ( 58940) load
+I (271) esp_image: segment 5: paddr=000f91ec vaddr=600fe100 size=0001ch (    28) load
+I (279) boot: Loaded app from partition at offset 0x10000
+I (279) boot: Disabling RNG early entropy source...
+I (290) octal_psram: vendor id    : 0x0d (AP)
+I (290) octal_psram: dev id       : 0x02 (generation 3)
+I (290) octal_psram: density      : 0x03 (64 Mbit)
+I (292) octal_psram: good-die     : 0x01 (Pass)
+I (296) octal_psram: Latency      : 0x01 (Fixed)
+I (301) octal_psram: VCC          : 0x01 (3V)
+I (305) octal_psram: SRF          : 0x01 (Fast Refresh)
+I (310) octal_psram: BurstType    : 0x01 (Hybrid Wrap)
+I (315) octal_psram: BurstLen     : 0x01 (32 Byte)
+I (319) octal_psram: Readlatency  : 0x02 (10 cycles@Fixed)
+I (324) octal_psram: DriveStrength: 0x00 (1/1)
+I (329) MSPI Timing: PSRAM timing tuning index: 5
+I (333) esp_psram: Found 8MB PSRAM device
+I (337) esp_psram: Speed: 80MHz
+I (340) cpu_start: Multicore app
+I (775) esp_psram: SPI SRAM memory test OK
+I (784) cpu_start: Pro cpu start user code
+I (784) cpu_start: cpu freq: 240000000 Hz
+I (784) app_init: Application information:
+I (784) app_init: Project name:     embark_esp32
+I (789) app_init: App version:      issue25-20261017-1-gf069a26-dir
+I (795) app_init: Compile time:     Oct 17 2026 14:29:07
+I (800) app_init: ELF file SHA256:  6be9b3499...
+I (804) app_init: ESP-IDF:          v5.4
+I (808) efuse_init: Min chip rev:     v0.0
+I (811) efuse_init: Max chip rev:     v0.99 
+I (815) efuse_init: Chip rev:         v0.2
+I (819) heap_init: Initializing. RAM available for dynamic allocation:
+I (826) heap_init: At 3FCB4F30 len 000347E0 (209 KiB): RAM
+I (831) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM
+I (836) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM
+I (841) heap_init: At 600FE11C len 00001ECC (7 KiB): RTCRAM
+I (846) esp_psram: Adding pool of 8192K of PSRAM memory to heap allocator
+I (854) spi_flash: detected chip: winbond
+I (857) spi_flash: flash io: dio
+I (860) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (866) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (873) main_task: Started on CPU0
+I (876) esp_psram: Reserving pool of 32K of internal memory for DMA/internal allocations
+I (884) main_task: Calling app_main()
+I (888) autodebug: backdoor ready on UART0
+[34m[info] [esp32_rtc.cpp:138 init] 板载 RTC：0x51 在线，寄存器 04..0A = 34 42 07 17 06 10 26[0m
+[34m[info] [esp32_time.cpp:62 init] 墙钟：RTC 已对时，UTC epoch 1792222954 秒（1792222954000 ms），之后用 tick 推算[0m
+I (908) gpio: GPIO[41]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+I (913) gpio: GPIO[39]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+[34m[info] [esp32_display.cpp:205 init] ST7789 就绪：240×320 竖屏，SPI 80 MHz，BGR=1，像素小端=1，反色=1[0m
+I (1044) gpio: GPIO[2]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+[34m[info] [esp32_input.cpp:153 init] CST328 就绪：地址 0x1A，自报分辨率 X=240 / Y=320（屏幕 240×320；方向不对先看这几个数）[0m
+I (1197) gpio: GPIO[21]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+I (1205) sdspi_transaction: cmd=52, R1 response: command not supported
+I (1252) sdspi_transaction: cmd=5, R1 response: command not supported
+[34m[info] [esp32_sd.cpp:111 mount] SD：已挂载 /sdcard（SD16G 3504 MB，3674210304 字节）[0m
+[34m[info] [esp32_filesystem.cpp:37 attach_root] 真机文件系统根目录：/sdcard[0m
+[34m[info] [main.cpp:213 app_main] Embark 0.1.0 启动（平台 esp32）：显示 embark::hal::DisplayInfo { width = 240, height = 320, format = embark::hal::PixelFormat::rgb565, stride_bytes = 480 }，NVS 容量 2048 字节；UI 任务栈 16384 字节，周期 5 ms[0m
+I (1307) main_task: Returned from app_main()
+[34m[info] [launcher_app.cpp:47 onCreate] App launcher onCreate[0m
+[34m[info] [aidogui_ui_bridge.cpp:144 aidogui_ui_bridge_init] AiDoGUI 资源盘 S: -> /sdcard[0m
+[34m[info] [esp32_lvgl_mem.cpp:124 font_pool] 字库区就绪：PSRAM 131024 字节（与 LVGL 静态池 49120 字节分开记账）[0m
+[34m[info] [aidogui_ui_bridge.cpp:173 aidogui_ui_bridge_init] AiDoGUI 字体 7/7 已加载（根 /sdcard）[0m
+[34m[info] [aidogui_ui_nav.cpp:191 aidogui_ui_nav_bind_click] AiDoGUI 点击绑定：屏 launcher 的 Card_Clock → App clock[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 launcher 装载后重推控件值[0m
+[34m[info] [clock_app.cpp:161 onCreate] App clock onCreate（不申请后台；界面 = 生成的 clock 屏卡片流）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 clock 装载后重推控件值[0m
+[34m[info] [settings_app.cpp:41 onCreate] App settings onCreate（后台策略 = suspend；界面 = 屏 settings）[0m
+[34m[info] [aidogui_ui_nav.cpp:213 aidogui_ui_nav_bind_action] AiDoGUI 点击绑定：屏 settings 的 Btn_Bright → 逻辑动作[0m
+[34m[info] [weather_app.cpp:35 onCreate] App weather onCreate（城市 = 深圳，下标 3；不申请后台）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 weather 装载后重推控件值[0m
+[34m[info] [music_app.cpp:24 onCreate] App music onCreate（后台策略 = suspend；界面 = AiDoGUI 占位屏 music）[0m
+[34m[info] [album_app.cpp:24 onCreate] App album onCreate（后台策略 = suspend；界面 = AiDoGUI 占位屏 album）[0m
+[34m[info] [about_app.cpp:45 onCreate] App about onCreate（后台策略 = suspend；界面 = 屏 about，七行只读信息）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 about 装载后重推控件值[0m
+[34m[info] [launcher_app.cpp:75 onEnter] App launcher 进入前台（enter 1, resume 0）[0m
+[34m[info] [aidogui_ui_bridge.cpp:118 load_entry] AiDoGUI 屏 launcher 已装载（14 个控件）[0m
+[34m[info] [aidogui_ui_nav.cpp:97 repaint_for] AiDoGUI 值重推：屏 launcher 已装载，通知 App 重推控件值[0m
+[34m[info] [launcher_app.cpp:207 refresh_clock] 主屏日期行：2026年10月17日 星期六[0m
+[34m[info] [launcher_tiles.cpp:246 launcher_tiles_rebuild] 主屏磁贴：建出 6 个磁贴 / 2 页 / 2 个页码点[0m
+[34m[info] [launcher_app.cpp:158 rebuild_tiles] 主屏磁贴：注册表 7 个 App → 6 个磁贴 → 建出 6 个 / 2 页[0m
+[34m[info] [launcher_tiles.cpp:260 launcher_tiles_show_page] 主屏磁贴：跳到第 1 页（共 2 页）[0m
+[34m[info] [framework.cpp:61 boot] App launcher 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App clock 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App settings 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App weather 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App music 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App album 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App about 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [main.cpp:105 ui_main] 框架就绪：7 个 App，默认前台 launcher；LVGL 8.3.11，绘制缓冲 40 行，LVGL 静态池 49120 字节[0m
+[34m[info] [esp32_font_probe.cpp:107 run] [FONTPROBE] ===== 字体运行时栅格化 spike（真机侧，判据 4）=====[0m
+[34m[info] [esp32_font_probe.cpp:128 run] [FONTPROBE] 分区 fonts：offset 0x310000 size 4194304 字节；mmap 耗时 163.0 us；前四字节 00 01 00 00[0m
+[34m[info] [esp32_font_probe.cpp:147 run] [FONTPROBE] 建 14px 字体（cache 65536 字节）：272.0 us；line_height 16 base_line 3；PSRAM 8219820 -> 8219820（花 0 字节）；内部堆 257807 -> 257807（花 0 字节）[0m
+[31;1m[error] [esp32_lvgl_mem.cpp:76 lvgl_report_exhausted] LVGL 静态堆用尽：容量 49120 字节，未回收 29314 字节，峰值 29956 字节（先看是不是有控件没删）[0m
+
+assert failed: stbtt__new_active stb_truetype_htcw.h:3129 (z != ((void *)0))
+
+
+Backtrace: 0x40375ee9:0x3fca0e30 0x4037dd89:0x3fca0e50 0x403856a5:0x3fca0e70 0x42038c21:0x3fca0f90 0x4203a123:0x3fca0fc0 0x4203a365:0x3fca1220 0x4203a3d8:0x3fca1270 0x4203a455:0x3fca12d0 0x4203a481:0x3fca1340 0x4203a56d:0x3fca1370 0x4203b369:0x3fca13d0 0x4201a00e:0x3fca1400 0x4201afc1:0x3fca1430 0x42010161:0x3fca17b0 0x42019089:0x3fca1e70 0x4037e85d:0x3fca1e90
+
+
+
+
+ELF file SHA256: 6be9b3499
+
+Rebooting...
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0xc (RTC_SW_CPU_RST),boot:0x2b (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4037a6ea
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0x15a0
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xd20
+load:0x403cb700,len:0x2ee4
+entry 0x403c8928
+I (26) boot: ESP-IDF v5.4 2nd stage bootloader
+I (26) boot: compile time Oct 17 2026 14:29:51
+I (26) boot: Multicore bootloader
+I (27) boot: chip revision: v0.2
+I (29) boot: efuse block revision: v1.3
+I (33) boot.esp32s3: Boot SPI Speed : 80MHz
+I (37) boot.esp32s3: SPI Mode       : DIO
+I (40) boot.esp32s3: SPI Flash Size : 16MB
+I (44) boot: Enabling RNG early entropy source...
+I (49) boot: Partition Table:
+I (51) boot: ## Label            Usage          Type ST Offset   Length
+I (58) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (64) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (71) boot:  2 factory          factory app      00 00 00010000 00300000
+I (77) boot:  3 fonts            Unknown data     01 40 00310000 00400000
+I (84) boot: End of partition table
+I (87) esp_image: segment 0: paddr=00010020 vaddr=3c0b0020 size=274e8h (161000) map
+I (123) esp_image: segment 1: paddr=00037510 vaddr=3fc97b00 size=03678h ( 13944) load
+I (126) esp_image: segment 2: paddr=0003ab90 vaddr=40374000 size=05488h ( 21640) load
+I (131) esp_image: segment 3: paddr=00040020 vaddr=42000020 size=aab80h (699264) map
+I (258) esp_image: segment 4: paddr=000eaba8 vaddr=40379488 size=0e63ch ( 58940) load
+I (271) esp_image: segment 5: paddr=000f91ec vaddr=600fe100 size=0001ch (    28) load
+I (279) boot: Loaded app from partition at offset 0x10000
+I (279) boot: Disabling RNG early entropy source...
+I (290) octal_psram: vendor id    : 0x0d (AP)
+I (290) octal_psram: dev id       : 0x02 (generation 3)
+I (290) octal_psram: density      : 0x03 (64 Mbit)
+I (292) octal_psram: good-die     : 0x01 (Pass)
+I (296) octal_psram: Latency      : 0x01 (Fixed)
+I (301) octal_psram: VCC          : 0x01 (3V)
+I (305) octal_psram: SRF          : 0x01 (Fast Refresh)
+I (310) octal_psram: BurstType    : 0x01 (Hybrid Wrap)
+I (315) octal_psram: BurstLen     : 0x01 (32 Byte)
+I (319) octal_psram: Readlatency  : 0x02 (10 cycles@Fixed)
+I (324) octal_psram: DriveStrength: 0x00 (1/1)
+I (329) MSPI Timing: PSRAM timing tuning index: 5
+I (333) esp_psram: Found 8MB PSRAM device
+I (337) esp_psram: Speed: 80MHz
+I (340) cpu_start: Multicore app
+I (775) esp_psram: SPI SRAM memory test OK
+I (784) cpu_start: Pro cpu start user code
+I (784) cpu_start: cpu freq: 240000000 Hz
+I (784) app_init: Application information:
+I (784) app_init: Project name:     embark_esp32
+I (789) app_init: App version:      issue25-20261017-1-gf069a26-dir
+I (795) app_init: Compile time:     Oct 17 2026 14:29:07
+I (800) app_init: ELF file SHA256:  6be9b3499...
+I (804) app_init: ESP-IDF:          v5.4
+I (808) efuse_init: Min chip rev:     v0.0
+I (811) efuse_init: Max chip rev:     v0.99 
+I (815) efuse_init: Chip rev:         v0.2
+I (819) heap_init: Initializing. RAM available for dynamic allocation:
+I (826) heap_init: At 3FCB4F30 len 000347E0 (209 KiB): RAM
+I (831) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM
+I (836) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM
+I (841) heap_init: At 600FE11C len 00001ECC (7 KiB): RTCRAM
+I (846) esp_psram: Adding pool of 8192K of PSRAM memory to heap allocator
+I (854) spi_flash: detected chip: winbond
+I (857) spi_flash: flash io: dio
+I (860) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (866) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (873) main_task: Started on CPU0
+I (876) esp_psram: Reserving pool of 32K of internal memory for DMA/internal allocations
+I (884) main_task: Calling app_main()
+I (887) autodebug: backdoor ready on UART0
+[34m[info] [esp32_rtc.cpp:138 init] 板载 RTC：0x51 在线，寄存器 04..0A = 40 42 07 17 06 10 26[0m
+[34m[info] [esp32_time.cpp:62 init] 墙钟：RTC 已对时，UTC epoch 1792222960 秒（1792222960000 ms），之后用 tick 推算[0m
+I (908) gpio: GPIO[41]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+I (913) gpio: GPIO[39]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+[34m[info] [esp32_display.cpp:205 init] ST7789 就绪：240×320 竖屏，SPI 80 MHz，BGR=1，像素小端=1，反色=1[0m
+I (1044) gpio: GPIO[2]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+[34m[info] [esp32_input.cpp:153 init] CST328 就绪：地址 0x1A，自报分辨率 X=240 / Y=320（屏幕 240×320；方向不对先看这几个数）[0m
+I (1197) gpio: GPIO[21]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+I (1205) sdspi_transaction: cmd=52, R1 response: command not supported
+I (1252) sdspi_transaction: cmd=5, R1 response: command not supported
+[34m[info] [esp32_sd.cpp:111 mount] SD：已挂载 /sdcard（SD16G 3504 MB，3674210304 字节）[0m
+[34m[info] [esp32_filesystem.cpp:37 attach_root] 真机文件系统根目录：/sdcard[0m
+[34m[info] [main.cpp:213 app_main] Embark 0.1.0 启动（平台 esp32）：显示 embark::hal::DisplayInfo { width = 240, height = 320, format = embark::hal::PixelFormat::rgb565, stride_bytes = 480 }，NVS 容量 2048 字节；UI 任务栈 16384 字节，周期 5 ms[0m
+I (1306) main_task: Returned from app_main()
+[34m[info] [launcher_app.cpp:47 onCreate] App launcher onCreate[0m
+[34m[info] [aidogui_ui_bridge.cpp:144 aidogui_ui_bridge_init] AiDoGUI 资源盘 S: -> /sdcard[0m
+[34m[info] [esp32_lvgl_mem.cpp:124 font_pool] 字库区就绪：PSRAM 131024 字节（与 LVGL 静态池 49120 字节分开记账）[0m
+[34m[info] [aidogui_ui_bridge.cpp:173 aidogui_ui_bridge_init] AiDoGUI 字体 7/7 已加载（根 /sdcard）[0m
+[34m[info] [aidogui_ui_nav.cpp:191 aidogui_ui_nav_bind_click] AiDoGUI 点击绑定：屏 launcher 的 Card_Clock → App clock[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 launcher 装载后重推控件值[0m
+[34m[info] [clock_app.cpp:161 onCreate] App clock onCreate（不申请后台；界面 = 生成的 clock 屏卡片流）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 clock 装载后重推控件值[0m
+[34m[info] [settings_app.cpp:41 onCreate] App settings onCreate（后台策略 = suspend；界面 = 屏 settings）[0m
+[34m[info] [aidogui_ui_nav.cpp:213 aidogui_ui_nav_bind_action] AiDoGUI 点击绑定：屏 settings 的 Btn_Bright → 逻辑动作[0m
+[34m[info] [weather_app.cpp:35 onCreate] App weather onCreate（城市 = 深圳，下标 3；不申请后台）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 weather 装载后重推控件值[0m
+[34m[info] [music_app.cpp:24 onCreate] App music onCreate（后台策略 = suspend；界面 = AiDoGUI 占位屏 music）[0m
+[34m[info] [album_app.cpp:24 onCreate] App album onCreate（后台策略 = suspend；界面 = AiDoGUI 占位屏 album）[0m
+[34m[info] [about_app.cpp:45 onCreate] App about onCreate（后台策略 = suspend；界面 = 屏 about，七行只读信息）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 about 装载后重推控件值[0m
+[34m[info] [launcher_app.cpp:75 onEnter] App launcher 进入前台（enter 1, resume 0）[0m
+[34m[info] [aidogui_ui_bridge.cpp:118 load_entry] AiDoGUI 屏 launcher 已装载（14 个控件）[0m
+[34m[info] [aidogui_ui_nav.cpp:97 repaint_for] AiDoGUI 值重推：屏 launcher 已装载，通知 App 重推控件值[0m
+[34m[info] [launcher_app.cpp:207 refresh_clock] 主屏日期行：2026年10月17日 星期六[0m
+[34m[info] [launcher_tiles.cpp:246 launcher_tiles_rebuild] 主屏磁贴：建出 6 个磁贴 / 2 页 / 2 个页码点[0m
+[34m[info] [launcher_app.cpp:158 rebuild_tiles] 主屏磁贴：注册表 7 个 App → 6 个磁贴 → 建出 6 个 / 2 页[0m
+[34m[info] [launcher_tiles.cpp:260 launcher_tiles_show_page] 主屏磁贴：跳到第 1 页（共 2 页）[0m
+[34m[info] [framework.cpp:61 boot] App launcher 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App clock 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App settings 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App weather 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App music 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App album 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App about 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [main.cpp:105 ui_main] 框架就绪：7 个 App，默认前台 launcher；LVGL 8.3.11，绘制缓冲 40 行，LVGL 静态池 49120 字节[0m
+[34m[info] [esp32_font_probe.cpp:107 run] [FONTPROBE] ===== 字体运行时栅格化 spike（真机侧，判据 4）=====[0m
+[34m[info] [esp32_font_probe.cpp:128 run] [FONTPROBE] 分区 fonts：offset 0x310000 size 4194304 字节；mmap 耗时 158.0 us；前四字节 00 01 00 00[0m
+[34m[info] [esp32_font_probe.cpp:147 run] [FONTPROBE] 建 14px 字体（cache 65536 字节）：268.0 us；line_height 16 base_line 3；PSRAM 8219820 -> 8219820（花 0 字节）；内部堆 257807 -> 257807（花 0 字节）[0m
+[31;1m[error] [esp32_lvgl_mem.cpp:76 lvgl_report_exhausted] LVGL 静态堆用尽：容量 49120 字节，未回收 29314 字节，峰值 29956 字节（先看是不是有控件没删）[0m
+
+assert failed: stbtt__new_active stb_truetype_htcw.h:3129 (z != ((void *)0))
+
+
+Backtrace: 0x40375ee9:0x3fca0e30 0x4037dd89:0x3fca0e50 0x403856a5:0x3fca0e70 0x42038c21:0x3fca0f90 0x4203a123:0x3fca0fc0 0x4203a365:0x3fca1220 0x4203a3d8:0x3fca1270 0x4203a455:0x3fca12d0 0x4203a481:0x3fca1340 0x4203a56d:0x3fca1370 0x4203b369:0x3fca13d0 0x4201a00e:0x3fca1400 0x4201afc1:0x3fca1430 0x42010161:0x3fca17b0 0x42019089:0x3fca1e70 0x4037e85d:0x3fca1e90
+
+
+
+
+ELF file SHA256: 6be9b3499
+
+Rebooting...
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0xc (RTC_SW_CPU_RST),boot:0x2b (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4037a6ea
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0x15a0
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xd20
+load:0x403cb700,len:0x2ee4
+entry 0x403c8928
+I (26) boot: ESP-IDF v5.4 2nd stage bootloader
+I (26) boot: compile time Oct 17 2026 14:29:51
+I (26) boot: Multicore bootloader
+I (27) boot: chip revision: v0.2
+I (29) boot: efuse block revision: v1.3
+I (33) boot.esp32s3: Boot SPI Speed : 80MHz
+I (37) boot.esp32s3: SPI Mode       : DIO
+I (40) boot.esp32s3: SPI Flash Size : 16MB
+I (44) boot: Enabling RNG early entropy source...
+I (49) boot: Partition Table:
+I (51) boot: ## Label            Usage          Type ST Offset   Length
+I (58) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (64) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (71) boot:  2 factory          factory app      00 00 00010000 00300000
+I (77) boot:  3 fonts            Unknown data     01 40 00310000 00400000
+I (84) boot: End of partition table
+I (87) esp_image: segment 0: paddr=00010020 vaddr=3c0b0020 size=274e8h (161000) map
+I (123) esp_image: segment 1: paddr=00037510 vaddr=3fc97b00 size=03678h ( 13944) load
+I (126) esp_image: segment 2: paddr=0003ab90 vaddr=40374000 size=05488h ( 21640) load
+I (131) esp_image: segment 3: paddr=00040020 vaddr=42000020 size=aab80h (699264) map
+I (258) esp_image: segment 4: paddr=000eaba8 vaddr=40379488 size=0e63ch ( 58940) load
+I (271) esp_image: segment 5: paddr=000f91ec vaddr=600fe100 size=0001ch (    28) load
+I (279) boot: Loaded app from partition at offset 0x10000
+I (279) boot: Disabling RNG early entropy source...
+I (290) octal_psram: vendor id    : 0x0d (AP)
+I (290) octal_psram: dev id       : 0x02 (generation 3)
+I (290) octal_psram: density      : 0x03 (64 Mbit)
+I (292) octal_psram: good-die     : 0x01 (Pass)
+I (296) octal_psram: Latency      : 0x01 (Fixed)
+I (301) octal_psram: VCC          : 0x01 (3V)
+I (305) octal_psram: SRF          : 0x01 (Fast Refresh)
+I (310) octal_psram: BurstType    : 0x01 (Hybrid Wrap)
+I (315) octal_psram: BurstLen     : 0x01 (32 Byte)
+I (319) octal_psram: Readlatency  : 0x02 (10 cycles@Fixed)
+I (324) octal_psram: DriveStrength: 0x00 (1/1)
+I (329) MSPI Timing: PSRAM timing tuning index: 5
+I (333) esp_psram: Found 8MB PSRAM device
+I (337) esp_psram: Speed: 80MHz
+I (340) cpu_start: Multicore app
+I (775) esp_psram: SPI SRAM memory test OK
+I (784) cpu_start: Pro cpu start user code
+I (784) cpu_start: cpu freq: 240000000 Hz
+I (784) app_init: Application information:
+I (785) app_init: Project name:     embark_esp32
+I (789) app_init: App version:      issue25-20261017-1-gf069a26-dir
+I (795) app_init: Compile time:     Oct 17 2026 14:29:07
+I (800) app_init: ELF file SHA256:  6be9b3499...
+I (804) app_init: ESP-IDF:          v5.4
+I (808) efuse_init: Min chip rev:     v0.0
+I (811) efuse_init: Max chip rev:     v0.99 
+I (815) efuse_init: Chip rev:         v0.2
+I (819) heap_init: Initializing. RAM available for dynamic allocation:
+I (826) heap_init: At 3FCB4F30 len 000347E0 (209 KiB): RAM
+I (831) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM
+I (836) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM
+I (841) heap_init: At 600FE11C len 00001ECC (7 KiB): RTCRAM
+I (847) esp_psram: Adding pool of 8192K of PSRAM memory to heap allocator
+I (854) spi_flash: detected chip: winbond
+I (857) spi_flash: flash io: dio
+I (860) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (866) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (873) main_task: Started on CPU0
+I (876) esp_psram: Reserving pool of 32K of internal memory for DMA/internal allocations
+I (884) main_task: Calling app_main()
+I (888) autodebug: backdoor ready on UART0
+[34m[info] [esp32_rtc.cpp:138 init] 板载 RTC：0x51 在线，寄存器 04..0A = 45 42 07 17 06 10 26[0m
+[34m[info] [esp32_time.cpp:62 init] 墙钟：RTC 已对时，UTC epoch 1792222965 秒（1792222965000 ms），之后用 tick 推算[0m
+I (908) gpio: GPIO[41]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+I (913) gpio: GPIO[39]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+[34m[info] [esp32_display.cpp:205 init] ST7789 就绪：240×320 竖屏，SPI 80 MHz，BGR=1，像素小端=1，反色=1[0m
+I (1044) gpio: GPIO[2]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+[34m[info] [esp32_input.cpp:153 init] CST328 就绪：地址 0x1A，自报分辨率 X=240 / Y=320（屏幕 240×320；方向不对先看这几个数）[0m
+I (1197) gpio: GPIO[21]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+I (1205) sdspi_transaction: cmd=52, R1 response: command not supported
+I (1252) sdspi_transaction: cmd=5, R1 response: command not supported
+[34m[info] [esp32_sd.cpp:111 mount] SD：已挂载 /sdcard（SD16G 3504 MB，3674210304 字节）[0m
+[34m[info] [esp32_filesystem.cpp:37 attach_root] 真机文件系统根目录：/sdcard[0m
+[34m[info] [main.cpp:213 app_main] Embark 0.1.0 启动（平台 esp32）：显示 embark::hal::DisplayInfo { width = 240, height = 320, format = embark::hal::PixelFormat::rgb565, stride_bytes = 480 }，NVS 容量 2048 字节；UI 任务栈 16384 字节，周期 5 ms[0m
+I (1307) main_task: Returned from app_main()
+[34m[info] [launcher_app.cpp:47 onCreate] App launcher onCreate[0m
+[34m[info] [aidogui_ui_bridge.cpp:144 aidogui_ui_bridge_init] AiDoGUI 资源盘 S: -> /sdcard[0m
+[34m[info] [esp32_lvgl_mem.cpp:124 font_pool] 字库区就绪：PSRAM 131024 字节（与 LVGL 静态池 49120 字节分开记账）[0m
+[34m[info] [aidogui_ui_bridge.cpp:173 aidogui_ui_bridge_init] AiDoGUI 字体 7/7 已加载（根 /sdcard）[0m
+[34m[info] [aidogui_ui_nav.cpp:191 aidogui_ui_nav_bind_click] AiDoGUI 点击绑定：屏 launcher 的 Card_Clock → App clock[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 launcher 装载后重推控件值[0m
+[34m[info] [clock_app.cpp:161 onCreate] App clock onCreate（不申请后台；界面 = 生成的 clock 屏卡片流）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 clock 装载后重推控件值[0m
+[34m[info] [settings_app.cpp:41 onCreate] App settings onCreate（后台策略 = suspend；界面 = 屏 settings）[0m
+[34m[info] [aidogui_ui_nav.cpp:213 aidogui_ui_nav_bind_action] AiDoGUI 点击绑定：屏 settings 的 Btn_Bright → 逻辑动作[0m
+[34m[info] [weather_app.cpp:35 onCreate] App weather onCreate（城市 = 深圳，下标 3；不申请后台）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 weather 装载后重推控件值[0m
+[34m[info] [music_app.cpp:24 onCreate] App music onCreate（后台策略 = suspend；界面 = AiDoGUI 占位屏 music）[0m
+[34m[info] [album_app.cpp:24 onCreate] App album onCreate（后台策略 = suspend；界面 = AiDoGUI 占位屏 album）[0m
+[34m[info] [about_app.cpp:45 onCreate] App about onCreate（后台策略 = suspend；界面 = 屏 about，七行只读信息）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 about 装载后重推控件值[0m
+[34m[info] [launcher_app.cpp:75 onEnter] App launcher 进入前台（enter 1, resume 0）[0m
+[34m[info] [aidogui_ui_bridge.cpp:118 load_entry] AiDoGUI 屏 launcher 已装载（14 个控件）[0m
+[34m[info] [aidogui_ui_nav.cpp:97 repaint_for] AiDoGUI 值重推：屏 launcher 已装载，通知 App 重推控件值[0m
+[34m[info] [launcher_app.cpp:207 refresh_clock] 主屏日期行：2026年10月17日 星期六[0m
+[34m[info] [launcher_tiles.cpp:246 launcher_tiles_rebuild] 主屏磁贴：建出 6 个磁贴 / 2 页 / 2 个页码点[0m
+[34m[info] [launcher_app.cpp:158 rebuild_tiles] 主屏磁贴：注册表 7 个 App → 6 个磁贴 → 建出 6 个 / 2 页[0m
+[34m[info] [launcher_tiles.cpp:260 launcher_tiles_show_page] 主屏磁贴：跳到第 1 页（共 2 页）[0m
+[34m[info] [framework.cpp:61 boot] App launcher 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App clock 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App settings 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App weather 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App music 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App album 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App about 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [main.cpp:105 ui_main] 框架就绪：7 个 App，默认前台 launcher；LVGL 8.3.11，绘制缓冲 40 行，LVGL 静态池 49120 字节[0m
+[34m[info] [esp32_font_probe.cpp:107 run] [FONTPROBE] ===== 字体运行时栅格化 spike（真机侧，判据 4）=====[0m
+[34m[info] [esp32_font_probe.cpp:128 run] [FONTPROBE] 分区 fonts：offset 0x310000 size 4194304 字节；mmap 耗时 159.0 us；前四字节 00 01 00 00[0m
+[34m[info] [esp32_font_probe.cpp:147 run] [FONTPROBE] 建 14px 字体（cache 65536 字节）：268.0 us；line_height 16 base_line 3；PSRAM 8219820 -> 8219820（花 0 字节）；内部堆 257807 -> 257807（花 0 字节）[0m
+[31;1m[error] [esp32_lvgl_mem.cpp:76 lvgl_report_exhausted] LVGL 静态堆用尽：容量 49120 字节，未回收 29314 字节，峰值 29956 字节（先看是不是有控件没删）[0m
+
+assert failed: stbtt__new_active stb_truetype_htcw.h:3129 (z != ((void *)0))
+
+
+Backtrace: 0x40375ee9:0x3fca0e30 0x4037dd89:0x3fca0e50 0x403856a5:0x3fca0e70 0x42038c21:0x3fca0f90 0x4203a123:0x3fca0fc0 0x4203a365:0x3fca1220 0x4203a3d8:0x3fca1270 0x4203a455:0x3fca12d0 0x4203a481:0x3fca1340 0x4203a56d:0x3fca1370 0x4203b369:0x3fca13d0 0x4201a00e:0x3fca1400 0x4201afc1:0x3fca1430 0x42010161:0x3fca17b0 0x42019089:0x3fca1e70 0x4037e85d:0x3fca1e90
+
+
+
+
+ELF file SHA256: 6be9b3499
+
+Rebooting...
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0xc (RTC_SW_CPU_RST),boot:0x2b (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4037a6ea
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0x15a0
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xd20
+load:0x403cb700,len:0x2ee4
+entry 0x403c8928
+I (26) boot: ESP-IDF v5.4 2nd stage bootloader
+I (26) boot: compile time Oct 17 2026 14:29:51
+I (26) boot: Multicore bootloader
+I (27) boot: chip revision: v0.2
+I (29) boot: efuse block revision: v1.3
+I (33) boot.esp32s3: Boot SPI Speed : 80MHz
+I (37) boot.esp32s3: SPI Mode       : DIO
+I (40) boot.esp32s3: SPI Flash Size : 16MB
+I (44) boot: Enabling RNG early entropy source...
+I (49) boot: Partition Table:
+I (51) boot: ## Label            Usage          Type ST Offset   Length
+I (58) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (64) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (71) boot:  2 factory          factory app      00 00 00010000 00300000
+I (77) boot:  3 fonts            Unknown data     01 40 00310000 00400000
+I (84) boot: End of partition table
+I (87) esp_image: segment 0: paddr=00010020 vaddr=3c0b0020 size=274e8h (161000) map
+I (123) esp_image: segment 1: paddr=00037510 vaddr=3fc97b00 size=03678h ( 13944) load
+I (126) esp_image: segment 2: paddr=0003ab90 vaddr=40374000 size=05488h ( 21640) load
+I (131) esp_image: segment 3: paddr=00040020 vaddr=42000020 size=aab80h (699264) map
+I (258) esp_image: segment 4: paddr=000eaba8 vaddr=40379488 size=0e63ch ( 58940) load
+I (271) esp_image: segment 5: paddr=000f91ec vaddr=600fe100 size=0001ch (    28) load
+I (279) boot: Loaded app from partition at offset 0x10000
+I (279) boot: Disabling RNG early entropy source...
+I (290) octal_psram: vendor id    : 0x0d (AP)
+I (290) octal_psram: dev id       : 0x02 (generation 3)
+I (290) octal_psram: density      : 0x03 (64 Mbit)
+I (292) octal_psram: good-die     : 0x01 (Pass)
+I (296) octal_psram: Latency      : 0x01 (Fixed)
+I (301) octal_psram: VCC          : 0x01 (3V)
+I (305) octal_psram: SRF          : 0x01 (Fast Refresh)
+I (310) octal_psram: BurstType    : 0x01 (Hybrid Wrap)
+I (315) octal_psram: BurstLen     : 0x01 (32 Byte)
+I (319) octal_psram: Readlatency  : 0x02 (10 cycles@Fixed)
+I (324) octal_psram: DriveStrength: 0x00 (1/1)
+I (329) MSPI Timing: PSRAM timing tuning index: 5
+I (333) esp_psram: Found 8MB PSRAM device
+I (337) esp_psram: Speed: 80MHz
+I (340) cpu_start: Multicore app
+

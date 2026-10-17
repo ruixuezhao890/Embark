@@ -3663,6 +3663,445 @@
         }
       ],
       "animations": []
+    },
+    {
+      "id": "about",
+      "name": "about",
+      "isDefault": false,
+      "style": {},
+      "widgets": [
+        {
+          "id": "about_Desk",
+          "parentId": "about",
+          "type": "lv_obj",
+          "name": "Desk",
+          "x": 0,
+          "y": 0,
+          "width": 240,
+          "height": 320,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#0b1020ff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 0
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "about_Btn_Back",
+          "parentId": "about_Desk",
+          "type": "lv_obj",
+          "name": "Btn_Back",
+          "x": 8,
+          "y": 4,
+          "width": 64,
+          "height": 28,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 8
+              },
+              "PRESSED__MAIN": {
+                "bgColor": "#2a3550ff"
+              }
+            }
+          },
+          "events": [
+            {
+              "id": "event_about_back_clicked",
+              "eventType": "CLICKED",
+              "actionType": "CALL_FUNCTION",
+              "actionParams": {
+                "functionName": "embark_ui_open_launcher"
+              },
+              "enabled": true
+            }
+          ],
+          "flags": {
+            "clickable": true,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "about_Btn_Back_L",
+          "parentId": "about_Btn_Back",
+          "type": "lv_label",
+          "name": "Btn_Back_L",
+          "x": 0,
+          "y": 5,
+          "width": 64,
+          "height": 18,
+          "text": "返回",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "about_L_Title",
+          "parentId": "about_Desk",
+          "type": "lv_label",
+          "name": "L_Title",
+          "x": 84,
+          "y": 8,
+          "width": 72,
+          "height": 20,
+          "text": "关于",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 14,
+                "textAlign": "CENTER"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "about_Card_Info",
+          "parentId": "about_Desk",
+          "type": "lv_obj",
+          "name": "Card_Info",
+          "x": 14,
+          "y": 44,
+          "width": 212,
+          "height": 236,
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "bgColor": "#18213aff",
+                "bgOpa": 255,
+                "borderWidth": 0,
+                "padLeft": 0,
+                "padRight": 0,
+                "padTop": 0,
+                "padBottom": 0,
+                "radius": 12
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "about_L_Platform",
+          "parentId": "about_Card_Info",
+          "type": "lv_label",
+          "name": "L_Platform",
+          "x": 12,
+          "y": 14,
+          "width": 188,
+          "height": 18,
+          "text": "平台：host",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "LEFT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "about_L_Version",
+          "parentId": "about_Card_Info",
+          "type": "lv_label",
+          "name": "L_Version",
+          "x": 12,
+          "y": 44,
+          "width": 188,
+          "height": 18,
+          "text": "版本：0.1.0",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "LEFT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "about_L_Heap",
+          "parentId": "about_Card_Info",
+          "type": "lv_label",
+          "name": "L_Heap",
+          "x": 12,
+          "y": 74,
+          "width": 188,
+          "height": 18,
+          "text": "可用堆：-- KB",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "LEFT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "about_L_Font",
+          "parentId": "about_Card_Info",
+          "type": "lv_label",
+          "name": "L_Font",
+          "x": 12,
+          "y": 104,
+          "width": 188,
+          "height": 18,
+          "text": "字库：--/-- 份",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "LEFT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "about_L_Stack",
+          "parentId": "about_Card_Info",
+          "type": "lv_label",
+          "name": "L_Stack",
+          "x": 12,
+          "y": 134,
+          "width": 188,
+          "height": 18,
+          "text": "栈水位：-- KB",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "LEFT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "about_L_Disk",
+          "parentId": "about_Card_Info",
+          "type": "lv_label",
+          "name": "L_Disk",
+          "x": 12,
+          "y": 164,
+          "width": 188,
+          "height": 18,
+          "text": "存盘：未挂载",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "LEFT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        },
+        {
+          "id": "about_L_Clock",
+          "parentId": "about_Card_Info",
+          "type": "lv_label",
+          "name": "L_Clock",
+          "x": 12,
+          "y": 194,
+          "width": 188,
+          "height": 18,
+          "text": "对时：未对时",
+          "style": {
+            "styles": {
+              "DEFAULT__MAIN": {
+                "textFont": "ui_heiti.ttf",
+                "textColor": "#c7d0e6ff",
+                "textFontSize": 12,
+                "textAlign": "LEFT"
+              }
+            }
+          },
+          "events": [],
+          "flags": {
+            "clickable": false,
+            "scrollable": false
+          },
+          "state": {},
+          "scrolling": {
+            "scrollbar_mode": "AUTO",
+            "scroll_dir": "ALL",
+            "scroll_snap_x": "NONE",
+            "scroll_snap_y": "NONE"
+          },
+          "align": "TOP_LEFT"
+        }
+      ],
+      "animations": []
     }
   ],
   "stylePresets": [],

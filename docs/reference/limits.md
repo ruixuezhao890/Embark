@@ -91,23 +91,24 @@
 
 ---
 
-## 6. 文件系统与运行时字库（issue 17）
+## 6. 文件系统（issue 17）
 
 | 常量 | 值 | 含义 | 改它意味着什么 |
 | --- | --- | --- | --- |
-| `filesystem_max_open_files` | `4` | 同时打开的句柄数（宿主后端的定长槽表） | 第 5 个 `open` → `Error::no_space`（不排队、不静默复用）。字库服务一次只开一个文件（open → size → close），所以 4 很宽松；真机 SD 后端若做目录遍历要重新算 |
+| `filesystem_max_open_files` | `4` | 同时打开的句柄数（宿主后端的定长槽表） | 第 5 个 `open` → `Error::no_space`（不排队、不静默复用）。今天的用法都很短：'S' 盘一次开一张图，启动期整份读一次 TTF（open → size → read → close）；真机 SD 后端若做目录遍历要重新算 |
 | `filesystem_path_bytes` | `128` | 文件路径长度上限（含结尾 `\0`） | 超长 → `Error::invalid_argument`（不截断）。宿主后端的根路径缓冲是它的 4 倍，给可执行文件目录留余量 |
-| `font_budget_bytes` | `100 * 1024` | 运行时字库的字节预算 | 记账层（[`include/embark/font_ledger.h`](../../include/embark/font_ledger.h)）在 `lv_font_load` **之前**扣账：已用 + 本次 > 预算 → `no_space`，字库根本不加载。这是**独立的一条线**，与 `lvgl_alloc_budget_bytes` 不是一笔账（真机将来走 PSRAM 显式分配） |
-| `font_max_loaded` | `4` | 同时驻留的运行时字库份数 | 定长表。同路径重复 load 只 +1 引用、不占新槽；超了 → `no_space`。v1 界面全用静态子集字库，这个值只是给将来的动态文本留的门 |
-| `font_path_bytes` | `64` | 字库路径长度上限（相对文件系统根，含 `\0`） | 超长 → `invalid_argument`；`FontService::load` 据此开 `font_path_bytes + 4` 的缓冲拼 LVGL 盘符路径（`F:/…`） |
-
+> 三个字库常量（`font_budget_bytes` / `font_max_loaded` / `font_path_bytes`）已随 issue 04 删除：
+> 它们记的是「路径 + 文件字节」，而 ADR 0017 之后字体只有一条路 —— 卡上整份 TTF 常驻 PSRAM、
+> 每个字号一份字形缓存，"留在内存里的是哪个文件"这个问题不存在了。
+>
 > 两个后端的根：宿主 = 环境变量 `EMBARK_HOST_FS_ROOT` 优先、否则可执行文件旁的 `embark_host_fs/`；
 > 真机 = SD 卡挂载点 `/sdcard`（[`platform/esp32/src/esp32_sd.{h,cpp}`](../../platform/esp32/src/esp32_sd.h)，
 > 板级开关 `EMBARK_SD_ENABLED` 默认 0）。没插卡 / 没配引脚时真机 `hal::Context::filesystem` 是 `nullptr`，
-> `FontService::init()` 返回 `not_ready` —— 界面文案全在静态子集字库 `embark_zh_14` 里，不受影响。
+> 桥读不到 TTF ⇒ 7 个字号槽全指到内置 `embark_zh_14`（14 px），界面不空但字号不对。
 >
 > 真机的**字库缓冲不在这几个常量里**：它走 `platform/esp32/src/esp32_board.h` 的 `font_psram_bytes`
-> （128 KB PSRAM 定容池，与 `lvgl_pool_bytes` 分开记账），机制见 ADR 0007 的 issue 25 落地小节。
+> （**192 KB** PSRAM 定容池，装整份 TTF + 7 档字形缓存，与 `lvgl_pool_bytes` 分开记账），机制见
+> ADR 0007 的 issue 25 落地小节；ADR 0017 之后每档字号的额度由 `fit_cache_quotas()` 按池容量收敛（见 GLOSSARY 的 Glyph cache budget）。
 
 ---
 

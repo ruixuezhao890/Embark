@@ -26,6 +26,8 @@
 #include <embark_lvgl_hooks.h>
 #include <middleware/elog/elog.hpp>
 
+#include "font_alloc_scope.h"
+
 namespace {
 
 /// 分配头：记住块大小，free/realloc 才能准确记账。alignas 保证返回的指针仍然满足
@@ -137,9 +139,9 @@ extern "C" size_t embark_lvgl_budget_bytes(void) {
 }
 
 // --- 字库分配作用域（issue 25）：宿主是空操作 ---------------------------------
-// 宿主有真实堆，字库加载与 LVGL 共用上面那个 AllocationCounter，没有"换一块内存"这回事
-// （PSRAM 是真机才有的概念）。接口留着是为了让 platform/common/font_service.cpp 两侧
-// 共用同一份代码：加载/释放字库时无脑包一层作用域，各自平台决定它意味着什么。
+// 宿主有真实堆，字形栅格化与 LVGL 共用上面那个 AllocationCounter，没有"换一块内存"这回事
+// （PSRAM 是真机才有的概念）。接口留着是为了让 app/common/aidogui_ui_bridge.cpp 两侧
+// 共用同一份代码：建字号、栅格化字形时包一层作用域，各自平台决定它意味着什么。
 namespace embark::platform {
 
 void font_alloc_scope_begin() noexcept {}
@@ -150,8 +152,22 @@ std::size_t font_alloc_pool_bytes() noexcept {
   return 0;  // 没有独立字库区：账记在 LVGL 主池上（embark_lvgl_peak_bytes）
 }
 
+std::size_t font_alloc_pool_budget_bytes() noexcept {
+  return 0;  // 同理：宿主没有"字库区要先算多大"这回事，字形缓存照默认配额给
+}
+
 std::size_t font_alloc_outstanding_bytes() noexcept {
   return 0;
+}
+
+// 常驻字体缓冲（ADR 0017）：宿主有真实堆，整份 TTF 直接 malloc —— 也是它不进
+// AllocationCounter 的原因：这个计数器记的是 LVGL 自己的账。
+void* font_buffer_alloc(std::size_t bytes) noexcept {
+  return bytes != 0U ? std::malloc(bytes) : nullptr;
+}
+
+void font_buffer_free(void* pointer) noexcept {
+  std::free(pointer);
 }
 
 }  // namespace embark::platform

@@ -39,7 +39,7 @@ idf_component_register(
         # embark_aidogui：AiDoGUI 导出代码（生成代码 + 配置期写出的 aidogui 表头）。
         # 它只会在启用真机 UI 后端时被用到，但组件注册是静态的 —— 一直是依赖，走 GLOB，
         # export/ 被重导出时自动重配。
-        REQUIRES lvgl embark_aidogui embark_font nvs_flash esp_timer esp_lcd driver fatfs sdmmc esp_driver_sdspi esp_driver_sdmmc esp_driver_spi)
+        REQUIRES lvgl embark_aidogui embark_font nvs_flash esp_timer esp_lcd driver fatfs sdmmc esp_driver_sdspi esp_driver_sdmmc esp_driver_spi spi_flash)
 
 # 内核与 App 的编译口径（与宿主 embark_kernel_flags 对齐：C++17、无异常、无 RTTI）。
 set_property(TARGET ${COMPONENT_LIB} PROPERTY CXX_STANDARD 17)
@@ -94,3 +94,11 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
 # 的时刻。对"播种"这个用途来说几分钟偏差无所谓；真要精确对时得等上位机下发时间的通道。
 string(TIMESTAMP EMBARK_BUILD_EPOCH "%s" UTC)
 target_compile_definitions(${COMPONENT_LIB} PRIVATE EMBARK_BUILD_EPOCH=${EMBARK_BUILD_EPOCH})
+
+# 字体运行时栅格化的真机侧测量（platform/esp32/src/esp32_font_probe.cpp）。
+# 开关在 platform/esp32/project/CMakeLists.txt 里（-DEMBARK_FONT_PROBE=ON），默认 OFF：
+# 关着的时候 esp32_font_probe.cpp 整个文件被 #if 排空，main.cpp 里那句调用也不存在，
+# 固件与现在等价。
+if(EMBARK_FONT_PROBE)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE EMBARK_FONT_PROBE=1)
+endif()

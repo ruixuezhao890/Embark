@@ -192,7 +192,8 @@ if (lv_obj_t* label = aidogui_ui_bridge_widget("my", "L_Value")) {
 
 **F. 导出**（两条路，产物相同）：
 
-- GUI：菜单「导出 C 代码」向导 → 输出目录选 `<仓库>/app/aidogui_ui/export`，图片 / 字体格式都选 **BIN**；
+- GUI：菜单「导出 C 代码」向导 → 输出目录选 `<仓库>/app/aidogui_ui/export`，图片格式选 **BIN**
+  （字体格式随便选 —— 设计器产的字体 BIN 会被 `export.ps1` 删掉，字体走卡上的 TTF，见 ADR 0017）；
 - 无头（CI / agent 首选）：
 
 ```powershell
@@ -200,7 +201,7 @@ if (lv_obj_t* label = aidogui_ui_bridge_widget("my", "L_Value")) {
 pwsh -NoProfile -File tools/aidogui/export.ps1
 ```
 
-它打印「完成：代码 N 个 · 字体BIN M 个 · 屏：…」与「导航事件：embark_ui_open_* xK」——
+它打印「完成：代码 N 个 · 图片BIN M 个 · 字体 走卡上 TTF · 屏：…」与「导航事件：embark_ui_open_* xK」——
 **屏列表里没有你的新屏 = 没导成功**。
 
 > ⚠ `export.ps1` 是**先整目录删掉 `export/` 再重建**：生成失败会让工作树一片删除。

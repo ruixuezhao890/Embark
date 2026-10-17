@@ -187,7 +187,7 @@ AiDoGUI 里 screen 名 == 同名 App 的名字（子页 `<app名>_<编号>_sub`�
 _Avoid_: 编号映射表、手工维护的屏清单
 
 **UI bridge（界面桥）**：
-`app/common/aidogui_ui_bridge.h` 的双向接线：Embark → 界面是 `load_screen` / `load_screen_for_app`（按屏名约定载屏，**切走即释放**）、`unload_current`（显示器交给桥的空屏兜底）与 `widget(屏, 控件名)`（**控件表 = 界面数据接口**，按名拿 `lv_obj_t*`）；界面 → Embark 是屏观察者：**每次装载屏都回调**（桥自己发起的 `load_screen*` 也通知——观察者靠这条把点击绑定重挂到新控件上、并调 App 的值重推钩子（**Value repaint**）；请求切到「已是前台」的 App 时框架直接 return，不会成环）。字体也由桥加载（BIN 走 'S' 盘），失败只降级告警。App 只调桥，不 include 生成代码头。
+`app/common/aidogui_ui_bridge.h` 的双向接线：Embark → 界面是 `load_screen` / `load_screen_for_app`（按屏名约定载屏，**切走即释放**）、`unload_current`（显示器交给桥的空屏兜底）与 `widget(屏, 控件名)`（**控件表 = 界面数据接口**，按名拿 `lv_obj_t*`）；界面 → Embark 是屏观察者：**每次装载屏都回调**（桥自己发起的 `load_screen*` 也通知——观察者靠这条把点击绑定重挂到新控件上、并调 App 的值重推钩子（**Value repaint**）；请求切到「已是前台」的 App 时框架直接 return，不会成环）。字体也由桥加载（现在是 SD 卡上的整份 TTF，见 Runtime font；BIN 时代走同一条 'S' 盘），失败只降级告警。App 只调桥，不 include 生成代码头。
 _Avoid_: 生成代码直连、App 里 include ui.h
 
 **Style scope（样式域）**：
@@ -195,7 +195,7 @@ _Avoid_: 生成代码直连、App 里 include ui.h
 _Avoid_: 魔法颜色、主题对象
 
 **Font charset table（字体字符表）**：
-设计工程里 `i18n.customCharsetEnabled + i18n.customCharsetRows`（GUI：「语言 / 自定义字符」页）显式列出每个 (字体, 字号) 要打进 BIN 的字符。默认的自动子集只收**设计期文字**，动态数字（时间、日期、天数）会缺字形变方框；开了这张表就完全以表为准——每行必须是「设计期文字 ∪ 运行期字符」的超集，且每个用到的 (字体, 字号) 都得有一行。
+设计工程里 `i18n.customCharsetEnabled + i18n.customCharsetRows`（GUI：「语言 / 自定义字符」页）显式列出每个 (字体, 字号) 要打进 BIN 的字符。**已退役**（ADR 0017）：TTF 全量 cmap 不存在「要打进 BIN 的字符集」这个概念，这张表只在还导出 BIN 的旧工程里才有意义。它当年治的病是「自动子集只收设计期文字，动态数字（时间、日期、天数）缺字形变方框」——TTF 侧这个病由 Coverage audit 直接兜住。
 _Avoid_: 靠设计稿文字凑字符、运行时才发现方框
 
 **Foreground tick（前台节拍）**：
@@ -204,6 +204,7 @@ _Avoid_: UI tick、渲染回调
 
 **Static subset font（静态子集字库）**：
 lv_font_conv 生成、编译进 flash 的 C 数组字库，只收录 UI 实际用到的字符；覆盖范围由清单文件声明、构建期审计。
+**ADR 0017 之后它的角色变了**：不再是"界面的字"，只是**无卡时的兜底**（Runtime font 是主路径）；清单 `tools/font/embark_zh_14.json` 只是"这份兜底字库收了哪些字"的存档 —— 缺字审计已改为对照 TTF cmap，不再读它。
 当前唯一一份：`assets/fonts/embark_zh_14.c`（Noto Sans SC 子集，14 px / 4 bpp / 压缩位图，184 字形 = ASCII 95 + 界面文案 84 + 图标 5），清单 `tools/font/embark_zh_14.json`，生成脚本 `tools/font/gen_font.mjs`；已在 `config/lv_conf.h` 里接成 **LVGL 默认字体**（`LV_FONT_CUSTOM_DECLARE` + `LV_FONT_DEFAULT`），链接时要整体收进归档（宿主 `--whole-archive`、真机 `WHOLE_ARCHIVE`），否则成员会被丢弃、字库根本进不了镜像。
 _Avoid_: 全量字库、外挂字体文件
 
@@ -212,15 +213,42 @@ _Avoid_: 全量字库、外挂字体文件
 _Avoid_: 文件系统、SD 驱动
 
 **Font ledger（字库记账）**：
-运行时字库的显式资源管理：字节预算 + 引用计数，包装 `lv_font_load` 与 `lv_font_free`，独立于 LVGL 全局堆预算；超预算返回 `no_space`。已落地：内核层 `include/embark/font_ledger.h` + `src/embark/font_ledger.cpp`（零堆、定长表、不依赖 LVGL）+ 平台侧 `platform/common/font_service.{h,cpp}`（把 LVGL 的 `'F'` 盘注册到 `hal::IFileSystem`；同路径复用只 +1 引用，引用归零才 free）。容量见 `config/embark_limits.h`：`font_budget_bytes` 100 KB、`font_max_loaded` 4、`font_path_bytes` 64。真机侧已映射到 **PSRAM 定容池**（见 Font alloc scope）：字库不占 LVGL 的 48 KB 静态池，加载前后 `lvgl_peak_bytes` 不变。
+**已退役**（ADR 0017）：它记的是「路径 + 文件字节」，而 TTF 时代记账对象是**字形缓存字节 + 字号**（Glyph cache budget），路径概念整个消失；它唯一的消费者是 `platform/esp32/src/esp32_bringup.cpp:130` 的探针，桥从来没走过。以下为历史形态（保留作参照）——
+当时的形态：字节预算 + 引用计数，包装 `lv_font_load` 与 `lv_font_free`，独立于 LVGL 全局堆预算；超预算返回 `no_space`。内核层 `include/embark/font_ledger.h` + `src/embark/font_ledger.cpp`（零堆、定长表、不依赖 LVGL）+ 平台侧 `platform/common/font_service.{h,cpp}`（把 LVGL 的 `'F'` 盘注册到 `hal::IFileSystem`；同路径复用只 +1 引用，引用归零才 free）。容量见 `config/embark_limits.h`：`font_budget_bytes` 100 KB、`font_max_loaded` 4、`font_path_bytes` 64。真机侧曾映射到 **PSRAM 定容池**（见 Font alloc scope）：字库不占 LVGL 的 48 KB 静态池，加载前后 `lvgl_peak_bytes` 不变。**issue 04 已把这四个文件与三个常量一起删掉**（含 `tests/kernel/test_font_ledger.cpp`、`tests/host/test_font_service.cpp`）。
 _Avoid_: 字体缓存、字库池
 
 **Font alloc scope（字库分配作用域）**：
-包住 `lv_font_load` / `lv_font_free` 的一段"接下来这批分配算字库的"标记：`font_alloc_scope_begin()` / `font_alloc_scope_end()` + 观测 `font_alloc_pool_bytes()` / `font_alloc_outstanding_bytes()`（`platform/common/font_alloc_scope.h`）。为什么需要它：LVGL 8.3.11 的 `lv_font_loader.c` 全部走 `lv_mem_alloc`，而钩子是我们自己的 —— 只能按"当前是否在字库作用域里"决定这次分配落 LVGL 静态池还是真机的 PSRAM 池；**归还**不看作用域、只看指针落在哪块池。真机实现在 `platform/esp32/src/esp32_lvgl_mem.cpp`（`heap_caps_malloc(MALLOC_CAP_SPIRAM)` 懒建 `font_psram_bytes` = 128 KB 定容池），宿主实现是空操作；唯一调用点是 `platform/common/font_service.cpp` 的四处 load/free。
+包住「建字号 / 栅格化字形」的一段"接下来这批分配算字体的"标记：`font_alloc_scope_begin()` / `font_alloc_scope_end()` + 观测 `font_alloc_pool_bytes()` / `font_alloc_outstanding_bytes()`（`platform/common/font_alloc_scope.h`）。为什么需要它：LVGL 8.3.11 的 `lv_font_loader.c` 全部走 `lv_mem_alloc`，而钩子是我们自己的 —— 只能按"当前是否在字库作用域里"决定这次分配落 LVGL 静态池还是真机的 PSRAM 池；**归还**不看作用域、只看指针落在哪块池。真机实现在 `platform/esp32/src/esp32_lvgl_mem.cpp`（`heap_caps_malloc(MALLOC_CAP_SPIRAM)` 懒建 `font_psram_bytes` = **192 KB** 定容池），宿主实现是空操作（有真实堆，作用域退化为空标记）。ADR 0017 之后调用方从 `font_service` 换成桥里的字体加载（整份 TTF 常驻 + 每字号字形缓存都落这块池），同一头文件再长出两个入口：`font_alloc_pool_budget_bytes()` 报「计划容量」（池懒建、首次分配才 malloc，而配额必须在建字体前定下，所以不能问 `font_alloc_pool_bytes()`）、`font_buffer_alloc()` / `font_buffer_free()` 收「常驻对象」（3.85 MB TTF 缓冲；两者都 `[[nodiscard]]`、`noexcept`，失败返回 `nullptr` 由调用方降级）。
 _Avoid_: 字体内存钩子、PSRAM 分配器
 
+**Runtime font（运行期字体）**：
+`lv_tiny_ttf` 从 SD 卡上的**整份** TTF 建出来的 `lv_font_t`：每个字号一个实例，`fallback` 恒 NULL（单 face，ADR 0017），位深恒 8 bpp。TTF 数据必须常驻（`third_party/lvgl/src/extra/libs/tiny_ttf/lv_tiny_ttf.c:206` 只存指针不复制）——真机放 PSRAM，宿主直接读仓库里的文件。与 Static subset font 的分界：前者从卡里"读字"，后者从 flash 里"查表"。
+_Avoid_: TTF 字库、动态字体
+
+**Font slot（字号槽）**：
+AiDoGUI 生成代码里的 7 个全局 `lv_font_t*`（`ui_font_ui_heiti_{11,12,14,22,28,48,56}`），`app/aidogui_ui/export/screens/*.c` 有 75 处直接把它们塞进控件。**槽是间接层**：换字体实现（BIN → TTF）只换槽里塞的指针，7 张屏零改动。`export/ui.c` 是设计器生成物（`tools/aidogui/export.ps1:62` 会清空 `export/` 重生），所以加载逻辑要落在桥或后处理里，手改会被覆盖。
+_Avoid_: 字体句柄表、ui_font 全局变量
+
+**Glyph cache budget（字形缓存预算）**：
+每个字号实例的 LRU 字节上限（传进 `lv_tiny_ttf` 的 `cache_size`，`third_party/lvgl/src/extra/libs/tiny_ttf/lv_tiny_ttf.c:214` 收字节，`third_party/lvgl/src/misc/lv_lru.c:85-86` 记账）。8 bpp ⇒ 单字形 ≈ w×h 字节，所以预算是「该字号一屏最大并发字形数 × w×h」，不是「字体文件多大」。**预算必须严格小于可用池**，否则每帧都在重新栅格化（ADR 0016 那次 64 KB > 59 KB 可用池，首帧 716 ms）。
+已定稿（`app/common/aidogui_ui_bridge.cpp` 的 `kCacheQuotaDefaults`，ADR 0017 第 6 条）：11/12/14/22/28/48/56 px = 6/12/32/16/16/16/20 KB，合计 **118 KB**。三档数字的来源与三条规矩：实测一屏并发字形数只有 9/32/32/5/5/5/5（临时插桩统计，已删），表按 2~6 倍给；配额总和只按字库区容量的 **3/4** 收（字形在池里实占「16 字节对齐位图 + 48 字节块头」≈ 记账值 1.3 倍，再加每字号一个 `lv_lru` 哈希桶）；超了由 `fit_cache_quotas()` 按固定顺序 **56 → 48 → 28 → 22 → 14 → 12 → 11** 逐个砍半、下限 4 KB，砍到底仍装不下只 `ELOG_ERROR` 报三个数字，**不 assert 不复位**（ADR 0016 的复位教训）。init 会打两行账：配额合计、以及「已用 / 字库区」；命中率不作数（`lv_lru_t` 藏在私有 `ttf_font_desc_t` 里，为读它复制私有布局或改 third_party 都不值）。
+_Avoid_: 字体缓存、cache 大小
+
+**Boot self-check screen（启动自检屏）**：
+开机前约 9 秒的占位屏（`app/common/aidogui_ui_bridge.cpp` 的 `splash_*` 系列）—— 那 9 秒在同步读 3.85 MB 的 TTF，LVGL 一帧也刷不出来，全黑看着像死机。形态是 Linux 开机自检（POST）：`[OK]/[..]/[!!]/[  ]` 逐行打勾 + 整行配色 + 右下角 `t=<elapsed> ms`；**形式像自检，内容全真**（查不到就 `[!!]` 打红，不假装绿）。硬件行由平台注入：`aidogui_ui_bridge_set_boot_checks()` 收最多 6 条 `{label, detail, ok}`（`main.cpp` 填 flash / psram / display / touch / sdcard / font pool），不注入时桥退回自知的 3 行。**节奏靠读卡进度免费带出来**：每 256 KB 回一次进度回调，顺带把「到点」的行翻绿 ⇒ 零额外启动时间（实测 60/1323/2580/3214/4470/5106 ms，翻绿只能落在读块边界上）。两个硬约束：文案常量 `static_assert(ascii_only(...))` 钉死（那会儿只有内置 14 px 的 184 字形，中文必方框）；算时间**不能用 `lv_tick_get()`** —— `LvglPort::tick()` 只在 UI 循环里推进，阻塞期恒 0，得由 `set_boot_checks()` 注入平台时钟（`esp_timer_get_time()/1000`）。
+_Avoid_: splash、开机动画、loading 页
+
+**Line breaking gap（断行缺口）**：
+LVGL 8.3.11 的已知排版短板，**已实测钉进 `tests/host/test_text_wrap.cpp`（issue 07，宿主 ctest 里跑）**：
+① CJK 逐字断行只认 U+4E00–U+9FA5（`third_party/lvgl/src/misc/lv_txt.h:165-184`），假名/谚文/CJK 扩展区/全角标点都不算断点；
+② 全仓没有**行首禁则**（kinsoku）⇒ 断点只能落在断字符之前，「，」「。」因此被推到下一行行首（实测行首出现标点）；
+③ 找不到断点的长串（假名串、拉丁长单词）按宽度**硬切**：不溢出，但也没有连字符、没有词边界保护。
+实测数字（14 px、行宽 100 px）：汉字 / 假名 / 全角标点各 14 px 宽、`A` 11 px，一行 7 个汉字（98 px）。
+阅读器先用它跑起来（ADR 0017 第 10 条）；真要治只能 reader 自算断行 —— `_lv_txt_get_next_line()` 就是 `lv_label` 排版时走的同一个函数，可以先切成行再塞控件（要独立量宽度用 `lv_txt_get_size()`）。
+_Avoid_: 排版 bug、换行问题
+
 **Coverage audit（缺字审计）**：
-构建期检查：扫描源码中的 UI 字符串，对照静态子集字库的覆盖清单，发现字库外字符即失败（CI 门禁），从源头防豆腐块。已落地 `tools/font/audit_glyphs.mjs`（Node、零依赖：扫描 `app/` `src/` `platform/` 里所有会把字符串送上屏的 setter，缺字打印字符 + 文件:行号并 exit 1）；另有 `--print-required`（打印该进清单的字符集）与 `--selftest`（自造缺字夹具验证报错路径）；CI 里是 `font-audit` job。LVGL 图标区 `U+F000–U+F8FF` 默认豁免（内置字形，不进清单），`--include-symbols` 可关掉豁免。
+构建期检查：扫描源码里所有会上屏的字符串，逐字符问**最终字体**认不认识，缺字即失败（CI 门禁），从源头防豆腐块。ADR 0017 之后对照物是**卡上那份 TTF 的 cmap**（`app/aidogui_ui/assets/font/ui_heiti.ttf`，脚本自己解 format 4/12），不再读子集清单 `tools/font/embark_zh_14.json`。已落地 `tools/font/audit_glyphs.mjs`（Node、零依赖）：扫 `app/` `src/` `platform/` 里 18 个会上屏的 setter（`UI_TEXT_SETTERS`），缺字打印字符 + 文件:行号并 exit 1；另有 `--print-required`（当前文案用到的全部字符）、`--selftest`、`--ttf`、`--include-symbols`、`--roots`。只换数据源不清白名单会把"没扫到"误报成全绿，所以脚本带 `SUSPECT_PATTERNS` 守卫：名字像 setter 却不在白名单的调用会被点名并 exit 1。CI 里是 `font-audit` job。LVGL 图标区 `U+F000–U+F8FF` 默认豁免（内置字形，不进 cmap），`--include-symbols` 可关掉豁免。
 _Avoid_: 运行时缺字检查、字体检测
 
 **Weather App（天气 App）**：
@@ -240,5 +268,5 @@ _Avoid_: mock 数据、假数据源
 _Avoid_: 城市列表、地区表
 
 **Glyph coverage guard（字形守卫）**：
-`--ui-weather` 验收里的检查：把控件当前文本逐字符喂给 `lv_font_get_glyph_dsc`，缺字形即判失败并打出 U+ 码点。字体按 (字体, 字号) 子集化，漏字符**不会**编译或运行报错，屏幕上只是一个方框而验收照样「通过」—— 这条把方框变成可断言的失败（字符表见 Font charset table）。
+`--ui-weather` 验收里的检查：把控件当前文本逐字符喂给 `lv_font_get_glyph_dsc`，缺字形即判失败并打出 U+ 码点。字体缺字符**不会**编译或运行报错，屏幕上只是一个方框而验收照样「通过」—— 这条把方框变成可断言的失败。ADR 0017 之后缺字的成因从"子集没打进去"变成"字体 cmap 没这个码点"（谚文、CJK 扩展区最可能），守卫本身不变：它问的是字体对象，不关心字从哪来。
 _Avoid_: 缺字检测、字体验证

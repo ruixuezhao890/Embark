@@ -4,7 +4,7 @@
  * =====================================================================
  * 产物（两个，都在仓库内，可重复生成、幂等覆盖）：
  *   1. assets/fonts/embark_zh_14.c   —— lv_font_conv 生成的 LVGL C 字体
- *   2. tools/font/embark_zh_14.json  —— 覆盖清单，issue 17「缺字审计」的唯一依据
+ *   2. tools/font/embark_zh_14.json  —— 覆盖清单（存档：缺字审计已改为对照卡上 TTF 的 cmap，见 ADR 0017）
  *
  * 用法（仓库根执行）：
  *   node tools/font/gen_font.mjs
@@ -170,7 +170,7 @@ const LV_INCLUDE = 'lvgl.h';
 /**
  * 实际能产出字形的 ASCII：0x20..0x7E，共 95 个。
  * 上界取 0x7E('~') 而不是 0x7F：0x7F 是 DEL，没有字形（见 ASCII_RANGE 注释）。
- * 这就是覆盖清单 chars.ascii 的内容——审计时可以直接 chars.ascii.includes(c)。
+ * 这就是覆盖清单 chars.ascii 的内容（存档用；缺字审计已改为对照 TTF 的 cmap，不再读清单）。
  */
 const ASCII_CHARS = Array.from({ length: 0x7f - 0x20 }, (_, i) => String.fromCharCode(0x20 + i)).join('');
 

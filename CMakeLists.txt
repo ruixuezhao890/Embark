@@ -108,4 +108,13 @@ if(EMBARK_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
+# 字体运行时栅格化 spike（默认关）：只出数据，不进产品路径。
+# 数据来源与判据见 .scratch/embark-v1/spikes/font-runtime/README.md。
+#   cmake -G Ninja -B build -DEMBARK_BUILD_FONT_SPIKE=ON
+#   cmake --build build --target embark_font_spike
+option(EMBARK_BUILD_FONT_SPIKE "构建字体运行时栅格化 spike（判据测量，默认关）" OFF)
+if(EMBARK_BUILD_FONT_SPIKE)
+  add_subdirectory(".scratch/embark-v1/spikes/font-runtime")
+endif()
+
 message(STATUS "Embark ${PROJECT_VERSION} / 平台 ${EMBARK_PLATFORM_NAME} / ${CMAKE_BUILD_TYPE}")

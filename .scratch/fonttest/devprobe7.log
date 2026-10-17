@@ -1,0 +1,204 @@
+I (126) esp_image: segment 1: paddr=0003ae90 vaddr=3fc97b00 sizeESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0x2b (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4037a6ea
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0x15a0
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xd20
+load:0x403cb700,len:0x2ee4
+entry 0x403c8928
+I (26) boot: ESP-IDF v5.4 2nd stage bootloader
+I (27) boot: compile time Oct 17 2026 14:29:51
+I (27) boot: Multicore bootloader
+I (27) boot: chip revision: v0.2
+I (30) boot: efuse block revision: v1.3
+I (33) boot.esp32s3: Boot SPI Speed : 80MHz
+I (37) boot.esp32s3: SPI Mode       : DIO
+I (41) boot.esp32s3: SPI Flash Size : 16MB
+I (45) boot: Enabling RNG early entropy source...
+I (49) boot: Partition Table:
+I (52) boot: ## Label            Usage          Type ST Offset   Length
+I (58) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (65) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (71) boot:  2 factory          factory app      00 00 00010000 00300000
+I (78) boot:  3 fonts            Unknown data     01 40 00310000 00400000
+I (84) boot: End of partition table
+I (87) esp_image: segment 0: paddr=00010020 vaddr=3c0b0020 size=2ae68h (175720) map
+I (126) esp_image: segment 1: paddr=0003ae90 vaddr=3fc97b00 size=03678h ( 13944) load
+I (129) esp_image: segment 2: paddr=0003e510 vaddr=40374000 size=01b08h (  6920) load
+I (131) esp_image: segment 3: paddr=00040020 vaddr=42000020 size=ab090h (700560) map
+I (261) esp_image: segment 4: paddr=000eb0b8 vaddr=40375b08 size=11fbch ( 73660) load
+I (277) esp_image: segment 5: paddr=000fd07c vaddr=600fe100 size=0001ch (    28) load
+I (285) boot: Loaded app from partition at offset 0x10000
+I (285) boot: Disabling RNG early entropy source...
+I (296) octal_psram: vendor id    : 0x0d (AP)
+I (296) octal_psram: dev id       : 0x02 (generation 3)
+I (296) octal_psram: density      : 0x03 (64 Mbit)
+I (298) octal_psram: good-die     : 0x01 (Pass)
+I (302) octal_psram: Latency      : 0x01 (Fixed)
+I (306) octal_psram: VCC          : 0x01 (3V)
+I (311) octal_psram: SRF          : 0x01 (Fast Refresh)
+I (315) octal_psram: BurstType    : 0x01 (Hybrid Wrap)
+I (320) octal_psram: BurstLen     : 0x01 (32 Byte)
+I (325) octal_psram: Readlatency  : 0x02 (10 cycles@Fixed)
+I (330) octal_psram: DriveStrength: 0x00 (1/1)
+I (335) MSPI Timing: PSRAM timing tuning index: 5
+I (339) esp_psram: Found 8MB PSRAM device
+I (342) esp_psram: Speed: 80MHz
+I (345) cpu_start: Multicore app
+I (781) esp_psram: SPI SRAM memory test OK
+I (790) cpu_start: Pro cpu start user code
+I (790) cpu_start: cpu freq: 240000000 Hz
+I (790) app_init: Application information:
+I (790) app_init: Project name:     embark_esp32
+I (794) app_init: App version:      issue25-20261017-1-gf069a26-dir
+I (800) app_init: Compile time:     Oct 17 2026 14:29:07
+I (805) app_init: ELF file SHA256:  7a9f9b7e5...
+I (810) app_init: ESP-IDF:          v5.4
+I (813) efuse_init: Min chip rev:     v0.0
+I (817) efuse_init: Max chip rev:     v0.99 
+I (821) efuse_init: Chip rev:         v0.2
+I (825) heap_init: Initializing. RAM available for dynamic allocation:
+I (831) heap_init: At 3FCB4F38 len 000347D8 (209 KiB): RAM
+I (836) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM
+I (841) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM
+I (847) heap_init: At 600FE11C len 00001ECC (7 KiB): RTCRAM
+I (852) esp_psram: Adding pool of 8192K of PSRAM memory to heap allocator
+I (859) spi_flash: detected chip: winbond
+I (862) spi_flash: flash io: dio
+I (866) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (872) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (878) main_task: Started on CPU0
+I (881) esp_psram: Reserving pool of 32K of internal memory for DMA/internal allocations
+I (889) main_task: Calling app_main()
+I (892) autodebug: backdoor ready on UART0
+[34m[info] [esp32_rtc.cpp:138 init] 板载 RTC：0x51 在线，寄存器 04..0A = 45 51 07 17 06 10 26[0m
+[34m[info] [esp32_time.cpp:62 init] 墙钟：RTC 已对时，UTC epoch 1792223505 秒（1792223505000 ms），之后用 tick 推算[0m
+I (913) gpio: GPIO[41]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+I (918) gpio: GPIO[39]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+[34m[info] [esp32_display.cpp:205 init] ST7789 就绪：240×320 竖屏，SPI 80 MHz，BGR=1，像素小端=1，反色=1[0m
+I (1048) gpio: GPIO[2]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+[34m[info] [esp32_input.cpp:153 init] CST328 就绪：地址 0x1A，自报分辨率 X=240 / Y=320（屏幕 240×320；方向不对先看这几个数）[0m
+I (1201) gpio: GPIO[21]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 
+I (1209) sdspi_transaction: cmd=52, R1 response: command not supported
+I (1256) sdspi_transaction: cmd=5, R1 response: command not supported
+[34m[info] [esp32_sd.cpp:111 mount] SD：已挂载 /sdcard（SD16G 3504 MB，3674210304 字节）[0m
+[34m[info] [esp32_filesystem.cpp:37 attach_root] 真机文件系统根目录：/sdcard[0m
+[34m[info] [main.cpp:213 app_main] Embark 0.1.0 启动（平台 esp32）：显示 embark::hal::DisplayInfo { width = 240, height = 320, format = embark::hal::PixelFormat::rgb565, stride_bytes = 480 }，NVS 容量 2048 字节；UI 任务栈 16384 字节，周期 5 ms[0m
+I (1332) main_task: Returned from app_main()
+[34m[info] [launcher_app.cpp:47 onCreate] App launcher onCreate[0m
+[34m[info] [aidogui_ui_bridge.cpp:144 aidogui_ui_bridge_init] AiDoGUI 资源盘 S: -> /sdcard[0m
+[34m[info] [esp32_lvgl_mem.cpp:124 font_pool] 字库区就绪：PSRAM 131024 字节（与 LVGL 静态池 49120 字节分开记账）[0m
+[34m[info] [aidogui_ui_bridge.cpp:173 aidogui_ui_bridge_init] AiDoGUI 字体 7/7 已加载（根 /sdcard）[0m
+[34m[info] [aidogui_ui_nav.cpp:191 aidogui_ui_nav_bind_click] AiDoGUI 点击绑定：屏 launcher 的 Card_Clock → App clock[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 launcher 装载后重推控件值[0m
+[34m[info] [clock_app.cpp:161 onCreate] App clock onCreate（不申请后台；界面 = 生成的 clock 屏卡片流）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 clock 装载后重推控件值[0m
+[34m[info] [settings_app.cpp:41 onCreate] App settings onCreate（后台策略 = suspend；界面 = 屏 settings）[0m
+[34m[info] [aidogui_ui_nav.cpp:213 aidogui_ui_nav_bind_action] AiDoGUI 点击绑定：屏 settings 的 Btn_Bright → 逻辑动作[0m
+[34m[info] [weather_app.cpp:35 onCreate] App weather onCreate（城市 = 深圳，下标 3；不申请后台）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 weather 装载后重推控件值[0m
+[34m[info] [music_app.cpp:24 onCreate] App music onCreate（后台策略 = suspend；界面 = AiDoGUI 占位屏 music）[0m
+[34m[info] [album_app.cpp:24 onCreate] App album onCreate（后台策略 = suspend；界面 = AiDoGUI 占位屏 album）[0m
+[34m[info] [about_app.cpp:45 onCreate] App about onCreate（后台策略 = suspend；界面 = 屏 about，七行只读信息）[0m
+[34m[info] [aidogui_ui_nav.cpp:231 aidogui_ui_nav_bind_repaint] AiDoGUI 值重推绑定：屏 about 装载后重推控件值[0m
+[34m[info] [launcher_app.cpp:75 onEnter] App launcher 进入前台（enter 1, resume 0）[0m
+[34m[info] [aidogui_ui_bridge.cpp:118 load_entry] AiDoGUI 屏 launcher 已装载（14 个控件）[0m
+[34m[info] [aidogui_ui_nav.cpp:97 repaint_for] AiDoGUI 值重推：屏 launcher 已装载，通知 App 重推控件值[0m
+[34m[info] [launcher_app.cpp:207 refresh_clock] 主屏日期行：2026年10月17日 星期六[0m
+[34m[info] [launcher_tiles.cpp:246 launcher_tiles_rebuild] 主屏磁贴：建出 6 个磁贴 / 2 页 / 2 个页码点[0m
+[34m[info] [launcher_app.cpp:158 rebuild_tiles] 主屏磁贴：注册表 7 个 App → 6 个磁贴 → 建出 6 个 / 2 页[0m
+[34m[info] [launcher_tiles.cpp:260 launcher_tiles_show_page] 主屏磁贴：跳到第 1 页（共 2 页）[0m
+[34m[info] [framework.cpp:61 boot] App launcher 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App clock 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App settings 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App weather 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App music 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App album 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [framework.cpp:61 boot] App about 后台配置 embark::AppSettings {
+  background = embark::BackgroundPolicy::suspend,
+  period_ms = 0,
+  task_stack_words = 0,
+  task_priority = 0,
+  arm = embark::ArmPolicy::on_first_enter
+}[0m
+[34m[info] [main.cpp:105 ui_main] 框架就绪：7 个 App，默认前台 launcher；LVGL 8.3.11，绘制缓冲 40 行，LVGL 静态池 49120 字节[0m
+[34m[info] [esp32_font_probe.cpp:151 run] [FONTPROBE] ===== 字体运行时栅格化 spike（真机侧，判据 4）=====[0m
+[34m[info] [esp32_font_probe.cpp:152 run] [FONTPROBE] 进来时：LVGL 静态池 容量 49120 / 未回收 9077 / 峰值 9077 字节；字库区 容量 131024 / 未回收 70184 字节（剩 60840）；PSRAM 余 8219820；内部堆余 258099[0m
+[34m[info] [esp32_font_probe.cpp:180 run] [FONTPROBE] 分区 fonts：offset 0x310000 size 4194304 字节；mmap 耗时 167.0 us；前四字节 00 01 00 00（TTF 头 0x00010000 = 合法 TrueType）[0m
+[34m[info] [esp32_font_probe.cpp:211 run] [FONTPROBE] 扫 U+4E00 起 204 个码点，命中字库 120 个（缺字 84 个）；line_height/base_line 由下面每次建字体时打印[0m
+[34m[info] [esp32_font_probe.cpp:239 run] [FONTPROBE] 建 14px 字体（cache 40960 字节，PSRAM）：130.0 us；line_height 16 base_line 3；字库区未回收 71252 字节[0m
+[34m[info] [esp32_font_probe.cpp:251 run] [FONTPROBE] 冷栅格 60 字（成 60 字）：24338.0 us ⇒ 405.63 us/字；热命中：1184.0 us ⇒ 19.73 us/字；字形缓存占 14739 字节[0m
+[34m[info] [esp32_font_probe.cpp:145 measure_screen] [FONTPROBE] 运行时 14px（缓存 PSRAM） 首帧    56.83 ms | 热帧    35.56 ms[0m
+[34m[info] [esp32_font_probe.cpp:278 run] [FONTPROBE] 内部 RAM 版：cache 28672 字节；冷栅格 30078.0 us ⇒ 501.30 us/字；静态池未回收 24136 / 峰值 28674 字节[0m
+[34m[info] [esp32_font_probe.cpp:145 measure_screen] [FONTPROBE] 运行时 14px（缓存内部RAM） 首帧    55.98 ms | 热帧    34.66 ms[0m
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[Warn]	(0.000, +0)	 lv_draw_sw_letter: lv_draw_letter: glyph dsc. not found for U+4E03 	(in lv_draw_sw_letter.c line #106)
+[34m[info] [esp32_font_probe.cpp:145 measure_screen] [FONTPROBE] 卡上 BIN 14px            首帧   128.48 ms | 热帧   123.00 ms[0m
+[34m[info] [esp32_font_probe.cpp:145 measure_screen] [FONTPROBE] 内置 montserrat 14px（150A） 首帧    29.62 ms | 热帧    26.25 ms[0m
+[34m[info] [esp32_font_probe.cpp:321 run] [FONTPROBE] 对照：运行时(PSRAM缓存) − BIN 首帧 -71.65 ms / 热帧 -87.45 ms；运行时(内部缓存) − BIN 首帧 -72.50 ms / 热帧 -88.34 ms[0m
+[34m[info] [esp32_font_probe.cpp:325 run] [FONTPROBE] 收尾：字库区未回收 70376 字节（本次栅格化峰值前 85683 字节）；PSRAM 8219820 -> 8219820[0m
+[34m[info] [esp32_font_probe.cpp:330 run] [FONTPROBE] ===== 测量结束 =====[0m
+[34m[info] [esp32_bringup.cpp:120 check_sd_font] BRINGUP SD：/sdcard（SD16G 3504 MB）已挂载，开始运行时字库自检[0m
+[34m[info] [esp32_bringup.cpp:167 check_sd_font] BRINGUP SD：字库已加载并渲染；fonts/ui_font_ui_heiti_14.bin 的 启动 量得 28×16 px（期望 14-17 px：符合）；记账 17812 / 102400 字节，引用 1 次，字库池在用 89191 / 131024 字节[0m
+[34m[info] [esp32_bringup.cpp:186 check_sd_font] BRINGUP SD：释放后记账 0 字节、在册 0 个、字库池在用 70376 字节（进来时 70376，应回到基线：1）[0m
+[34m[info] [main.cpp:132 ui_main] [AUTODEBUG_PASS] SD_FONT_OK[0m
+[34m[info] [main.cpp:173 ui_main] 心跳：2000 帧；堆空余 257727 字节，UI 栈余 9184 字节；LVGL 池未回收 9103 / 峰值 28920 字节；刷新 113 次；触摸 按下 0 / 抬起 0 / 滑动 0 / 吞掉空拍 0 / 读失败 0；帧耗时 均值 1216 us / 峰值 7445 us；墙钟 已对时[0m
+[34m[info] [main.cpp:173 ui_main] 心跳：4000 帧；堆空余 257727 字节，UI 栈余 9184 字节；LVGL 池未回收 9103 / 峰值 28920 字节；刷新 152 次；触摸 按下 0 / 抬起 0 / 滑动 0 / 吞掉空拍 0 / 读失败 0；帧耗时 均值 1208 us / 峰值 6207 us；墙钟 已对时[0m
+

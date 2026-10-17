@@ -37,8 +37,7 @@ add_executable(embark_tests
         kernel/test_static_pool.cpp
         kernel/test_pooled_task_spawner.cpp
         kernel/test_own_task_lifecycle.cpp
-        kernel/test_zero_alloc.cpp
-        kernel/test_font_ledger.cpp)
+        kernel/test_zero_alloc.cpp)
 
 # 测试内部用 "fakes/fakes.h" 这种从 tests/ 起算的相对包含。
 # app/ 与 app/common/ 也在搜索路径上：屏名解析（app/common/eez_ui_screen_names.h，
@@ -57,24 +56,37 @@ target_link_libraries(embark_tests PRIVATE
 add_test(NAME embark_tests COMMAND embark_tests)
 
 # --- 宿主平台后端的测试（链 embark_platform_host） ---------------------------
-# 与 embark_tests 相反：这里要的就是真后端。目前只有文件系统一个（issue 17 运行时字库
-# 的底座）：宿主的平台库不带 tests/fakes 的那套替身，单独一个可执行文件不会撞符号。
+# 与 embark_tests 相反：这里要的就是真后端。宿主的平台库不带 tests/fakes 的那套替身，
+# 单独一个可执行文件不会撞符号。
 add_executable(embark_host_tests
         host/test_host_filesystem.cpp
-        host/test_font_service.cpp)
+        host/test_text_wrap.cpp
+        host/test_ttf_font.cpp)
 
 target_include_directories(embark_host_tests PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}"
         "${PROJECT_SOURCE_DIR}/platform/host")
 
+# 字体用例要真文件：仓库里那份 ui_heiti.ttf（ADR 0017 之后字体只有这一条路）。
+# 缺了就在配置期失败 —— "字体链在 CI 上偷偷坏掉而测试全绿"比早报错贵得多。
+set(EMBARK_TEST_TTF_FILE "${PROJECT_SOURCE_DIR}/app/aidogui_ui/assets/font/ui_heiti.ttf")
+if(NOT EXISTS "${EMBARK_TEST_TTF_FILE}")
+  message(FATAL_ERROR "字体用例需要 ${EMBARK_TEST_TTF_FILE}（见 ADR 0017）")
+endif()
+target_compile_definitions(embark_host_tests PRIVATE "EMBARK_TEST_TTF_FILE=\"${EMBARK_TEST_TTF_FILE}\"")
+
+# 链 embark::common_ui：字体用例要 LVGL 与 tiny_ttf，而 LV_FONT_DEFAULT == &embark_zh_14
+# ⇒ 必须连带静态子集字库（whole-archive 那条规矩在 embark_common_ui 自己的链接接口上，
+# 这里不重复）。文件系统用例仍然只用到平台后端。
+# liblvgl.a 要的 embark_lvgl_alloc / embark_lvgl_assert_failed 定义在 platform_host 的
+# host_lvgl_mem.cpp 里，而归档按命令行顺序只扫一遍。正式程序里 aidogui 桥会调
+# font_alloc_scope_begin()，正好把 host_lvgl_mem.o 提前拖进来，所以从来不疼；这个测试
+# 只碰 lv_tiny_ttf，谁也没提前引用它 —— 整包进（whole-archive）是这里最省事的解法。
 target_link_libraries(embark_host_tests PRIVATE
+        -Wl,--whole-archive
         embark::platform_host
+        -Wl,--no-whole-archive
         embark::common_ui
         doctest::doctest)
-
-# 端到端用到的真实字库文件（issue 17 的 fixture）：AiDoGUI 导出的 LVGL 字库 .bin。
-# 目录以绝对路径编进二进制，测试里直接当文件系统根用（不依赖 ctest 的工作目录）。
-target_compile_definitions(embark_host_tests PRIVATE
-        EMBARK_TEST_FONT_DIR="${PROJECT_SOURCE_DIR}/app/aidogui_ui/export/font")
 
 add_test(NAME embark_host_tests COMMAND embark_host_tests)

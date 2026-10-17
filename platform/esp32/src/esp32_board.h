@@ -143,23 +143,13 @@ inline constexpr int sd_spi_host = 1;  // = SPI2_HOST
 // 10 MHz：杜邦线/长线也能跑稳；卡与线都短且质量好时可以往上加。
 inline constexpr std::uint32_t sd_spi_hz = 10U * 1000U * 1000U;
 inline constexpr const char* sd_mount_point = "/sdcard";
-// 运行时字库自检（bringup::check_sd_font）：卡上要放的文件 + 用来量尺寸的两个字。路径
-// 相对挂载点，与宿主同一个口径（'F' 盘 = IFileSystem 的根）。卡上建个 fonts/ 目录，把
-// app/aidogui_ui/export/font/ui_font_ui_heiti_14.bin 抄进去即可（任意 lv_font_conv 出的
-// .bin 都行）。文件不在 = 这一项没过（返回 false），不是"跳过"。
-inline constexpr const char* sd_font_probe_file = "fonts/ui_font_ui_heiti_14.bin";
-inline constexpr const char* sd_font_probe_text = "启动";
-// 期望尺寸：_14 这份字库声明的字号是 14 px，「启动」两个字全角 ⇒ 宽 ≈ 2×14 = 28 px；
-// 高是字库自己的 line_height（LVGL 口径 = ascent − descent，这份字库 13 − (−3) = 16 px，
-// 见 third_party/lvgl/src/font/lv_font_loader.c:504），所以判据给的是 [字号, 字号+3] 这个
-// 窗口而不是写死 28×14：窗口挡得住"把别的字号改名成 _14"（_11 会量到 12、_22 量到 25，
-// 都在窗口外），又不会被 ascender/descender 的口径差打偏。
-inline constexpr int sd_font_probe_size = 14;
-inline constexpr int sd_font_probe_height_slack = 3;
-// 自检没过时的策略：默认**只报错、继续启动**（2026-10-17 改）。以前这里是 true —— 当场 abort()
-// 走 IDF panic handler 打回溯，是"专门验收这一项"时的一次性手段。设备到了日常使用，卡没插好、
-// 文件被删、卡槽接触不良都会让它 abort → panic → 重启 → 再 abort，无限重启循环：既看不到原因，
-// 也没法降级使用（界面缺字总比一直重启好）。要当场取证时再临时置 true。
+// 字库自检没过时的策略：默认**只报错、继续启动**（2026-10-17 改）。以前这里是 true —— 当场
+// abort() 走 IDF panic handler 打回溯，是"专门验收这一项"时的一次性手段。设备到了日常使用，
+// 卡没插好、文件被删、卡槽接触不良都会让它 abort → panic → 重启 → 再 abort，无限重启循环：
+// 既看不到原因，也没法降级使用（字号退回内置 14 px 总比一直重启好）。要当场取证时再临时置 true。
+//
+// 自检本身在 main.cpp：ADR 0017 之后字体只有一条路 —— AiDoGUI 桥读卡上的 ui_heiti.ttf
+// 建 7 档字号，所以判据就是桥的字体报告（loaded == total），不再自己读字库文件。
 inline constexpr bool sd_font_check_fatal = false;
 
 // --- 板载 I2C（IMU / RTC 共用）——框架 hal::IBus 走这条 ----------------------
@@ -200,12 +190,18 @@ inline constexpr std::uint8_t own_task_core = 0;
 // 宿主演示跑满一轮的 LVGL 未回收量不到 10 KB，48 KB 对四个 demo App 绰绰有余。
 inline constexpr std::size_t lvgl_pool_bytes = 48U * 1024U;
 
-// 字库区（issue 25）：运行时字库（lv_font_load）的分配单独走一块 PSRAM 池 ——
-// 与 LVGL 的 .bss 静态池（上面那个 lvgl_pool_bytes）分开，于是"加载字库"并不会推动
-// lvgl_peak_bytes：字库记账（font_budget_bytes，100 KB）与 LVGL 堆预算各管各的。
+// 字库区（issue 25 / ADR 0017）：字体的分配单独走一块 PSRAM 池 —— 与 LVGL 的 .bss
+// 静态池（上面那个 lvgl_pool_bytes）分开，于是"建字体、栅格化字形"并不会推动
+// lvgl_peak_bytes：字库的账与 LVGL 堆预算各管各的。
 // 池是首次要用时才从 PSRAM 里显式分配出来的（heap_caps_malloc + MALLOC_CAP_SPIRAM，
-// 见 esp32_lvgl_mem.cpp），没人加载字库就不占这块内存。0 = 关掉（字库与 LVGL 挤同一个池）。
-inline constexpr std::size_t font_psram_bytes = 128U * 1024U;
+// 见 esp32_lvgl_mem.cpp），没人建字体就不占这块内存。0 = 关掉（字库与 LVGL 挤同一个池）。
+// 注意 TTF 字源本身不走这块池：3.85 MB 的整份字体用 font_buffer_alloc() 单独占 PSRAM。
+// ADR 0017 起这块池装的是 TTF 的**字形缓存**（7 个字号各一份 LRU，见
+// app/common/aidogui_ui_bridge.cpp 的 kCacheQuotaDefaults，实测定稿合计 118 KB）—— 每个缓存
+// 字形在池里实占"16 字节对齐的位图 + 48 字节块头"，比 LRU 记的字节数大约三成，所以留到
+// 192 KB。桥在 init 时按"池容量 × 3/4"收配额（fit_cache_quotas），所以池缩小也不会出现
+// "配额之和 > 池"那种每帧重栅格化。
+inline constexpr std::size_t font_psram_bytes = 192U * 1024U;
 
 // 任务栈预算。框架里的 *_stack_words 是按**宿主的字长**调的（x86-64 的 StackType_t = size_t
 // = 8 字节：2048 字 = 16 KB），而真机的 StackType_t 是 uint8_t（1 字 = 1 字节）——

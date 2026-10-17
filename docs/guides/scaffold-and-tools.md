@@ -149,7 +149,7 @@ node tools/font/gen_font.mjs      # 在仓库根执行
 产物两个，都在仓库内、可重复生成、幂等覆盖：
 
 - `assets/fonts/embark_zh_14.c` —— lv_font_conv 生成的 LVGL C 字体（`--lv-font-name embark_zh_14`）
-- `tools/font/embark_zh_14.json` —— **覆盖清单**，"缺字审计"（见下）的唯一依据
+- `tools/font/embark_zh_14.json` —— 覆盖清单（**存档**：缺字审计已改为对照 TTF 的 cmap，不再读它）
 
 **它怎么被用上**：`config/lv_conf.h` 里 `#define LV_FONT_CUSTOM_DECLARE LV_FONT_DECLARE(embark_zh_14)` +
 `#define LV_FONT_DEFAULT &embark_zh_14` 把它接成 LVGL 的**默认字体**（没显式设字体的文本都走它）；
@@ -187,20 +187,22 @@ node tools/font/gen_font.mjs      # 在仓库根执行
 ### 配套：`tools/font/audit_glyphs.mjs`（缺字审计，CI 门禁）
 
 ```sh
-node tools/font/audit_glyphs.mjs                    # 审计 app/ src/ platform/，有字库外字符就 exit 1
-node tools/font/audit_glyphs.mjs --print-required   # 打印「应进清单」的字符集（改完 UI 文案照它更新 UI_TEXT）
+node tools/font/audit_glyphs.mjs                    # 审计 app/ src/ platform/，字体 cmap 里没有的字符就 exit 1
+node tools/font/audit_glyphs.mjs --print-required   # 打印当前界面文案用到的全部字符（换字体时核对面）
 node tools/font/audit_glyphs.mjs --selftest         # 临时目录里自造缺字夹具，验证报错路径与行号
+node tools/font/audit_glyphs.mjs --ttf 别的字体.ttf --include-symbols --roots=app,src
 ```
 
-扫描所有会把字符串送上屏的 setter（`lv_label_set_text` / `_fmt` / `_static`、`lv_checkbox_set_text`、
-`lv_dropdown_set_options`、`lv_roller_set_options`、`lv_btnmatrix_set_map`、`lv_table_set_cell_value`…），
-逐字符对照 `tools/font/*.json` 的 `chars` 清单；缺字时打印字符（含 U+ 码点）+ `文件:行号` 并 `exit 1`。
-LVGL 图标区 `U+F000–U+F8FF` 默认豁免（内置字形，不进清单），`--include-symbols` 可关掉豁免。
-CI 里是独立的 `font-audit` job（`.github/workflows/ci.yml`）。
+对照物是**卡上那份 TTF**（`app/aidogui_ui/assets/font/ui_heiti.ttf`，ADR 0017）：脚本自己解它的 cmap
+（format 4 / 12，零依赖），不读任何清单。扫描所有会把字符串送上屏的 setter（`lv_label_set_text` / `_fmt` /
+`_static`、`lv_checkbox_set_text`、`lv_dropdown_set_options`、`lv_roller_set_options`、
+`lv_btnmatrix_set_map`、`lv_table_set_cell_value`…，白名单是脚本里的 `UI_TEXT_SETTERS`），缺字时打印字符
+（含 U+ 码点）+ `文件:行号` 并 `exit 1`；名字像 setter 却不在白名单里的调用也会被点名（`SUSPECT_PATTERNS`），
+免得哪天换个写法把字符串绕过去还全绿。LVGL 图标区 `U+F000–U+F8FF` 默认豁免（内置字形，不进 cmap），
+`--include-symbols` 可关掉豁免。CI 里是独立的 `font-audit` job（`.github/workflows/ci.yml`）。
 
-工作流：**加了界面文案 → 跑审计拿缺字 → 补 `gen_font.mjs` 的 `UI_TEXT` → 重跑 `gen_font.mjs` → 再跑审计应为绿**。
-注意 `--print-required` 的输出依赖**当前**清单，整体替换 `UI_TEXT` 时要取并集 —— 否则旧清单已覆盖、
-而新文案也还在用的字会被漏掉（曾被咬过一次：「动启器时置设钟」六字随替换消失）。
+工作流：**加了界面文案 → 跑审计**。缺字只有三条出路：换字体 / 改文案 / 给这个 label 显式指定一个
+含该字的字体（内置 `embark_zh_14` 只有 184 个字形，指望不上）。
 
 ---
 

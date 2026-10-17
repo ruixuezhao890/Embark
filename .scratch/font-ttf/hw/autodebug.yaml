@@ -1,0 +1,10 @@
+target_project: E:/01_Workspace/00_Active_projects/00_code/0_embedded_project/0_esp32_project/simulation_project_development/platform/esp32/project
+port: COM3
+baud: 115200
+idf_path: E:/00_Software/03_Dev_Env/IDF
+idf_python: E:/00_Software/03_Dev_Env/Espressif/tools/python_env/idf5.4_py3.11_env/Scripts/python.exe
+report_dir: autodebug_reports
+pass_timeout_s: 180
+watchdog_timeout_s: 60
+pass_tokens:
+  - "[AUTODEBUG_PASS]"

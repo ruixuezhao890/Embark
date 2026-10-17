@@ -22,6 +22,12 @@ get_filename_component(EMBARK_REPO_ROOT "${EMBARK_REPO_ROOT}" ABSOLUTE)
 include("${EMBARK_REPO_ROOT}/cmake/embark_middleware.cmake")
 embark_create_middleware_view("${CMAKE_BINARY_DIR}/include/middleware" "${EMBARK_REPO_ROOT}")
 
+# 字体运行时栅格化的真机侧测量开关（默认关）。打开后用
+#   idf.py -C platform/esp32/project -B build-esp32 -DEMBARK_FONT_PROBE=ON build
+# 编一版探针固件：启动后量卡上 TTF 的读速、桥给每个字号建的字体实例的冷/热栅格化，
+# 以及每个字号一屏的首帧/热帧，结果以 [FONTPROBE] 前缀打进串口。不是产品开关。
+option(EMBARK_FONT_PROBE "编译字体运行时栅格化的真机侧探针" OFF)
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 project(embark_esp32)

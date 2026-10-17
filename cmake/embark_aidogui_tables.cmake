@@ -4,8 +4,8 @@
 # tools/aidogui/export.ps1 都往这里写）
 #   * export/screens/ui_<屏id>.h：该屏的控件符号 extern lv_obj_t * ui_<屏id>[_<控件名>];
 #     与 ui_<屏id>_screen_init / ui_<屏id>_screen_destroy 两个函数；
-#   * export/ui.c：字体 BIN 的运行时路径（ui_font_x = lv_font_load("S:/fonts/x.bin")，
-#     路径以生成代码为准 —— 根由工程 exportSettings 决定，不在这里猜）；
+#   * export/ui.c：7 个字号槽的定义（lv_font_t * ui_font_ui_heiti_<字号> = NULL;）。ADR 0017
+#     之后字体由桥注入（卡上的 TTF 运行期栅格化），这里只抓**槽名里的字号**，不碰文件路径；
 #   * export/components/ui_comp.h：自定义事件号（LV_EVENT_GET_COMP_CHILD 等）。
 #
 # 纪律（照抄 cmake/embark_eez_screens.cmake）：解析不到就写空表 + WARNING，绝不 FATAL_ERROR。
@@ -78,7 +78,9 @@ function(embark_generate_aidogui_tables EXPORT_DIR OUT_H)
     list(APPEND _screen_names "${_sid}（${_widget_count} 控件）")
   endforeach()
 
-  # 字体：从 ui.c 的 lv_font_load("<路径>") 取符号与路径（8.4.0 口径；9.x 是 lv_binfont_create）。
+  # 字体：字号槽的符号在 ui.c 里定义（lv_font_t * ui_font_ui_heiti_11 = NULL;），字号取符号名
+  # 的数字后缀。ADR 0017 之后字体不再有"文件路径"这回事（整份 TTF 常驻 + 每字号一份字形缓存），
+  # 所以表里只剩 {px, slot}：换加载源（BIN → TTF）就只是换槽里塞的指针，生成代码零改动。
   set(_font_rows "")
   set(_font_count 0)
   set(_font_names "")
@@ -86,25 +88,28 @@ function(embark_generate_aidogui_tables EXPORT_DIR OUT_H)
   if(EXISTS "${_ui_c}")
     file(READ "${_ui_c}" _ui_c_txt)
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_ui_c}")
-    string(REGEX MATCHALL "ui_font_[A-Za-z0-9_]+ *= *lv_font_load *[(]? *\"[^\"]+\"" _fpairs
+    string(REGEX MATCHALL "lv_font_t[ \t]*\\*[ \t]*ui_font_[A-Za-z0-9_]+[ \t]*=[ \t]*NULL" _fsyms
            "${_ui_c_txt}")
-    if(_fpairs)
-      list(REMOVE_DUPLICATES _fpairs)
+    if(_fsyms)
+      list(REMOVE_DUPLICATES _fsyms)
     endif()
-    foreach(_p IN LISTS _fpairs)
-      string(REGEX MATCH "^ui_font_[A-Za-z0-9_]+" _fsym "${_p}")
-      string(REGEX MATCH "\"[^\"]+\"" _fpath "${_p}")
-      string(REPLACE "\"" "" _fpath "${_fpath}")
+    foreach(_p IN LISTS _fsyms)
+      string(REGEX MATCH "ui_font_[A-Za-z0-9_]+" _fsym "${_p}")
+      if(NOT _fsym MATCHES "_([0-9]+)$")
+        message(WARNING "AiDoGUI 表：字体符号 ${_fsym} 认不出字号，跳过")
+        continue()
+      endif()
+      set(_size "${CMAKE_MATCH_1}")
       string(APPEND _decls_all "extern lv_font_t* ${_fsym};\n")
-      string(APPEND _font_rows "  {\"${_fpath}\", &${_fsym}},\n")
+      string(APPEND _font_rows "  {${_size}, &${_fsym}},\n")
       math(EXPR _font_count "${_font_count} + 1")
-      list(APPEND _font_names "${_fpath}")
+      list(APPEND _font_names "${_size} px")
     endforeach()
   else()
-    message(WARNING "AiDoGUI 表：找不到 ${_ui_c}，字体表为空（界面会退回 LVGL 内置字体）")
+    message(WARNING "AiDoGUI 表：找不到 ${_ui_c}，字号槽表为空（界面会退回 LVGL 内置字体）")
   endif()
   if(_font_count EQUAL 0)
-    set(_font_rows "  {nullptr, nullptr},  // 空表占位（没有 BIN 字体）\n")
+    set(_font_rows "  {0, nullptr},  // 空表占位（没解析到字号槽）\n")
   endif()
 
   # 自定义事件号：ui_comp.c 定义、components/ui_comp.h 声明。生成代码的 aidogui_init 本来会注册
@@ -141,7 +146,7 @@ function(embark_generate_aidogui_tables EXPORT_DIR OUT_H)
     "typedef struct {\n  const char* name;\n  lv_obj_t** slot;\n} aidogui_widget_entry_t;\n\n"
     "typedef struct {\n  const char* name;\n  lv_obj_t** root;\n  void (*init)(void);\n"
     "  void (*destroy)(void);\n  const aidogui_widget_entry_t* widgets;\n  int widget_count;\n} aidogui_screen_entry_t;\n\n"
-    "typedef struct {\n  const char* bin_path;\n  lv_font_t** slot;\n} aidogui_font_entry_t;\n\n"
+    "typedef struct {\n  int size;\n  lv_font_t** slot;\n} aidogui_font_entry_t;\n\n"
     "${_widget_arrays}"
     "inline constexpr aidogui_screen_entry_t kAidoguiScreens[] = {\n${_screen_table}};\n"
     "inline constexpr int AIDOGUI_SCREEN_COUNT = ${_screen_count};\n\n"
@@ -149,7 +154,7 @@ function(embark_generate_aidogui_tables EXPORT_DIR OUT_H)
     "inline constexpr int AIDOGUI_FONT_COUNT = ${_font_count};\n\n"
     "#ifdef __cplusplus\n}\n#endif\n\n#endif /* EMBARK_AIDOGUI_UI_TABLES_H */\n")
 
-  message(STATUS "  AiDoGUI 表：${_screen_count} 屏 / ${_font_count} 个 BIN 字体（源：${EXPORT_DIR}）")
+  message(STATUS "  AiDoGUI 表：${_screen_count} 屏 / ${_font_count} 个字号槽（源：${EXPORT_DIR}）")
   foreach(_n IN LISTS _screen_names)
     message(STATUS "    屏 ${_n}")
   endforeach()

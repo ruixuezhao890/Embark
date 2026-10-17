@@ -7,6 +7,12 @@ AiDoGUI 的产物同样是 **LVGL C 代码**，所以 App 契约、屏名约定�
 不变，换掉的只是「生成代码从哪来」和「资源怎么进程序」。本 ADR 取代
 [0008](0008-eez-studio-adapter.md)。
 
+**状态**：已定。**字体那部分已被 [ADR 0017](0017-font-ttf-from-sd.md) 取代**：第 4 条里「字体 BIN 按
+(字体文件, 字号) 各一个文件、只含实际用到的字符」与第 5 条里「生成代码用 `lv_font_load` 装 BIN」都已作废
+—— 现在卡上放整份 `ui_heiti.ttf`、运行期栅格化，生成代码里那段字体装载被
+`tools/aidogui/export.ps1` 打桩成空实现，只留 7 个 `lv_font_t*` 槽给桥去填。**图片仍走 BIN，那部分不变**。
+本文其余决策（薄桥、屏表/控件表按名查找、S 盘）继续有效。
+
 选型的实测依据（本次迁移跑出来的，不是手册说法）：工程文件 `screen.aid` 是 JSON、
 9 个 MCP 工具可读写画布、代码生成器能在**没有 GUI**的情况下调用
 （`tools/aidogui/export.ps1` 一条命令重导出，实测 `filesGenerated=21, warnings=[]`），

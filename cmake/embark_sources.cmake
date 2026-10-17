@@ -46,7 +46,6 @@ set(EMBARK_KERNEL_SOURCES
         "${EMBARK_ROOT}/src/embark/framework.cpp"
         "${EMBARK_ROOT}/src/embark/bus.cpp"
         "${EMBARK_ROOT}/src/embark/log.cpp"
-        "${EMBARK_ROOT}/src/embark/font_ledger.cpp"
         "${EMBARK_ROOT}/src/embark/version.cpp")
 
 # --- 宿主 App 全量（app/<App 名>/ 与 app/common/） -----------------------------
@@ -65,6 +64,7 @@ set(EMBARK_APP_SOURCES
         "${EMBARK_ROOT}/app/weather/weather_app.cpp"
         "${EMBARK_ROOT}/app/music/music_app.cpp"
         "${EMBARK_ROOT}/app/album/album_app.cpp"
+        "${EMBARK_ROOT}/app/about/about_app.cpp"
         "${EMBARK_ROOT}/app/common/eez_ui_bridge.cpp"
         "${EMBARK_ROOT}/app/common/eez_ui_nav.cpp"
         "${EMBARK_ROOT}/app/common/aidogui_ui_bridge.cpp"
@@ -86,6 +86,7 @@ set(EMBARK_APP_SOURCES_DEVICE
         "${EMBARK_ROOT}/app/weather/weather_app.cpp"
         "${EMBARK_ROOT}/app/music/music_app.cpp"
         "${EMBARK_ROOT}/app/album/album_app.cpp"
+        "${EMBARK_ROOT}/app/about/about_app.cpp"
         "${EMBARK_ROOT}/app/common/aidogui_ui_bridge.cpp"
         "${EMBARK_ROOT}/app/common/aidogui_ui_nav.cpp")
 
@@ -94,25 +95,23 @@ set(EMBARK_APP_SOURCES_DEVICE
 set(EMBARK_COMMON_STATIC_POOL_SOURCES
         "${EMBARK_ROOT}/platform/common/static_pool.cpp")
 
-# LVGL 端口 + UI 端口 + 运行时字库服务：两侧都编（宿主 SDL 与真机 esp_lcd + CST328 共用
-# 同一份）。
+# LVGL 端口 + UI 端口：两侧都编（宿主 SDL 与真机 esp_lcd + CST328 共用同一份）。
+# 运行时字库服务（font_service.cpp，issue 17）与它那层记账（src/embark/font_ledger.cpp）
+# 已在 issue 04 删除：字体改走 ADR 0017 的 TTF 运行期栅格化 —— 整份 TTF 常驻 PSRAM、
+# 每个字号一份字形缓存，容量归 font_alloc_scope.h 那一套，不再有"文件句柄 + 路径引用计数"。
 set(EMBARK_COMMON_UI_SOURCES
         "${EMBARK_ROOT}/platform/common/lvgl_port.cpp"
-        "${EMBARK_ROOT}/platform/common/lvgl_ui_port.cpp"
-        # 运行时字库服务（issue 17）：把 LVGL 的 'F' 盘接到 hal::IFileSystem 并记账。
-        # issue 25 起真机也有了 IFileSystem 后端（SD 卡），所以它两侧都编 —— 没插卡时
-        # Context::filesystem == nullptr，init() 返回 not_ready，整条路径安静地不生效。
-        "${EMBARK_ROOT}/platform/common/font_service.cpp")
+        "${EMBARK_ROOT}/platform/common/lvgl_ui_port.cpp")
 
 # 宿主专属 —— 真机没有对应后端，所以不进真机清单。这个"显式声明"就是收口 B 的减法
 # 被减数：归口目录里任何**没写在这里、也不在上面两份**的文件都会让下面的审计报错。
-# issue 25 起这份名单是空的：运行时字库服务已经升级成"两侧都编"（见上），真机在没插卡时
-# 靠 Context::filesystem == nullptr 让它自然失效，不需要在源清单里区分平台。
+# 现在是空的（issue 04 之后 platform/common 下已没有宿主专属的 UI 胶水）。
 set(EMBARK_COMMON_UI_HOST_ONLY_SOURCES)
 set(EMBARK_COMMON_AIDOGUI_RES_SOURCES
         # AiDoGUI 资源盘（'S' 盘，ADR 0011）：宿主根 = 仓库里的导出目录（EMBARK_AIDOGUI_RES_ROOT
         # 在宿主 platform/common/CMakeLists.txt 定义）；真机根 = SD 卡挂载点 /sdcard
-        # （components/embark 上的同名宏），字体路径就是生成代码写死的 S:/fonts/*.bin。
+        # （components/embark 上的同名宏）。盘上只剩图片（生成代码写死的 S:/images/*.bin）：
+        # 字体自 ADR 0017 起由 AiDoGUI 桥直接读卡上的 ui_heiti.ttf，不再过 'S' 盘。
         "${EMBARK_ROOT}/platform/common/aidogui_res_fs.cpp")
 
 # 真机要编的共用胶水 = 定容池 + LVGL/UI 端口 + AiDoGUI 资源盘（'S' 盘 → /sdcard）。
@@ -148,6 +147,9 @@ set(EMBARK_ESP32_SOURCES
         "${EMBARK_ROOT}/platform/esp32/src/esp32_ui_task.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_lvgl_mem.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_bringup.cpp"
+        # 字体运行时栅格化 spike 的真机侧测量（判据 4）。整个 TU 在 EMBARK_FONT_PROBE
+        # 未定义时是空的，默认构建里不产生任何代码 —— 四判据测完（见 ADR）就删这一行。
+        "${EMBARK_ROOT}/platform/esp32/src/esp32_font_probe.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_hal.cpp")
 
 # --- 真机 App 的 include 目录（收口 C） ---------------------------------------

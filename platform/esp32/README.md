@@ -106,7 +106,7 @@ cmake -S . -B build -DEMBARK_BUILD_ESP32=ON   # 出现 embark_esp32_hint / embar
 | `ISystem` | 进程重启 + 平台水位 | `heap_caps`（只看内部 SRAM）+ `uxTaskGetStackHighWaterMark` + `esp_task_wdt_reset`，`fatal` → `abort`（走 IDF panic handler 打回溯） |
 | `IBus` | 一律 `unsupported`（这台机器没有物理总线） | `I2C_NUM_1` 上的 `i2c_master`（按地址懒建设备、不驱逐）；`spi_transfer` 仍是 `unsupported`（屏幕 SPI 由 `esp_lcd` 独占） |
 | LVGL 堆 | `malloc` + 记账（256 KB 软预算） | **`.bss` 静态池 48 KB**（`src/esp32_board.h` 的 `lvgl_pool_bytes`） |
-| 字库内存（`lv_font_load`） | `malloc`（`font_alloc_scope` 是空操作） | **PSRAM 定容池 128 KB**（`src/esp32_board.h` 的 `font_psram_bytes`，懒建；与那 48 KB 分开记账） |
+| 字库内存（整份 TTF + 字形缓存） | `malloc`（`font_alloc_scope` 是空操作） | **PSRAM 定容池 192 KB**（`src/esp32_board.h` 的 `font_psram_bytes`，懒建；与那 48 KB 分开记账，ADR 0017） |
 | 唯一 UI 任务 | `xTaskCreateStatic` + 宿主自起调度器 | `xTaskCreateStaticPinnedToCore(…, core 1)`，调度器已在跑 |
 | 后台 own task | 静态任务（不落核） | 静态任务落 core 0 |
 | 断言 / `fatal` | `platform/host/host_system.cpp` 唯一定义 | `src/esp32_system.cpp` 唯一定义 |
@@ -126,39 +126,42 @@ cmake -S . -B build -DEMBARK_BUILD_ESP32=ON   # 出现 embark_esp32_hint / embar
    点左上应 ≈(0,0)、点右下应 ≈(239,319)。x/y 互换 → `touch_swap_xy`；左右反 → `touch_mirror_x`；上下反 →
    `touch_mirror_y`。启动日志还会打 CST328 自报的 `RES_X / RES_Y`（例：`CST328 就绪：地址 0x1A，自报分辨率 X=240 / Y=320`），
    先用它确认轴方向（面板竖屏 ⇒ x 是短轴 0..239、y 是长轴 0..319）。
-   核对完把 `bringup_self_test` 置回 `false`（现在默认就是 false）；接上 aidogui UI 后端后
-   `src/esp32_bringup.{h,cpp}` 里除 `check_sd_font` 之外的部分与 `main.cpp` 里的色带自检调用可以整个删。
+   核对完把 `bringup_self_test` 置回 `false`（现在默认就是 false）；`src/esp32_bringup.{h,cpp}`
+   与 `main.cpp` 里的色带自检调用随时可以整个删（aidogui 已接管 App 层，这块只是面板对不对的一次性刻度）。
 4. **触摸复位时序**：`touch_reset_low_ms = 20` / `touch_reset_high_ms = 120`（先低后高，厂商口径）。
 5. **背光**：`backlight_pwm_hz = 5000` / `backlight_pwm_bits = 13` / `backlight_default_percent = 70`。
 6. **FreeRTOS 计时**：`CONFIG_FREERTOS_HZ=1000` 是硬要求（默认 100 Hz 下 `pdMS_TO_TICKS(5) == 0`，
    UI 循环会忙等）。改过 `sdkconfig.defaults` 之后要 `idf.py fullclean` 再构建。
 7. **v1 有意不做**（将来要就得先加 HAL 面）：RTC **写时间**（没有可信时间源，也别让固件瞎改芯片）、
    RTC 秒中断、温度补偿校准、音频、WiFi/BLE、`spi_transfer()`、低功耗与深睡。
-8. **SD 卡（issue 25）**：默认**关**（`src/esp32_board.h` 的 `EMBARK_SD_ENABLED 0`，四个信号脚是 `-1`）。
-   要用得先量接线：卡座的 CS / MOSI / MISO / CLK 各走哪个 GPIO（这块板的手册不给这组，照 2D/3D 图纸或
-   万用表量；12PIN 排针上的 IO18 / IO15 / GPIO43 / GPIO44 只是候选），填进 `sd_pin_*` 再把开关置 1 ——
-   开了却没填引脚会被 `esp32_board.h` 末尾的 `static_assert` 在**编译期**拦下。挂载点 `/sdcard`（SPI2，10 MHz）。
-   验证用卡上的一个运行时字库：把 `app/aidogui_ui/export/font/ui_font_ui_heiti_14.bin` 拷到卡的
-   `fonts/` 目录（`sd_font_probe_file` 指的路径），启动日志应出现这几行：
+8. **SD 卡（issue 25）**：**已开**（`src/esp32_board.h` 的 `EMBARK_SD_ENABLED 1`），信号脚已填：
+   CS = IO21 / MOSI = IO17 / MISO = IO16 / CLK = IO14（卡检测脚留 -1）。挂载点 `/sdcard`（SPI2，10 MHz）。
+   历史上这里是"默认关、四个信号脚是 -1"——那块板的手册不给卡座接线，得照 2D/3D 图纸或万用表量；
+   引脚填完把开关置 1，`esp32_board.h` 末尾的 `static_assert` 会在**编译期**拦下"开了却没填引脚"。
+   改了引脚/开关之后照旧重烧即可；`sd_spi_hz = 10 MHz` 是杜邦线也能跑稳的值（要提频是独立决定，见 issue 08）。
+   验证用卡上的一份 TTF（ADR 0017 之后字体只有这条路）：把 `app/aidogui_ui/assets/font/ui_heiti.ttf`
+   （3.85 MB）拷到卡的 `fonts/` 目录（桥按 `fonts/` → `font/` → `../assets/font/` 的顺序找），
+   启动日志应出现这几行：
 
    ```
    I (1624) embark: SD：已挂载 /sdcard（SD32G 30436 MB，31914983424 字节）
-   I (1625) embark: BRINGUP SD：/sdcard（SD32G 30436 MB）已挂载，开始运行时字库自检
-   I (1700) embark: BRINGUP SD：字库已加载并渲染；fonts/ui_font_ui_heiti_14.bin 的 启动 量得 28×14 px；记账 7932 / 102400 字节，引用 1 次，字库池在用 7932 / 131072 字节
-   I (1701) embark: BRINGUP SD：释放后记账 0 字节、在册 0 个、字库池在用 0 字节（都应归零）
+   I (1700) embark: AiDoGUI 字体源：/sdcard/fonts/ui_heiti.ttf（3854132 字节，常驻 PSRAM）
+   I (1706) embark: AiDoGUI 字体 14 px 就绪（字形缓存 32768 字节，行高 16，基线 3）
+   I (1712) embark: AiDoGUI 字体 7/7 已加载（TTF 运行期栅格化；根 /sdcard）
+   I (1712) embark: 字体缓存：已用 41224 字节 / 字库区 196608 字节（配额合计 120832 字节）
+   I (1713) embark: [AUTODEBUG_PASS] SD_FONT_OK
    ```
 
-   判读：只有 `SD：本板未配置卡座引脚…跳过挂载` + `BRINGUP SD：文件系统未挂载…整体跳过` 两行 → 开关或接线；
-   `BRINGUP SD：… 加载失败（错误码 3）` → 卡上没有那个文件（`not_found`）；错误码 8（`corrupt_data`）→ 文件不是
-   `lv_font_conv` 产物；同一个心跳行里的 **LVGL 池未回收/峰值看不出变化**是对的（字库不占那 48 KB）。
-   屏上还会多出一行黄字「启动」在底部中间（`check_sd_font` 真的渲染并刷了一帧），这是"字库文件能被
-   解析并画出字形"的当场证据。
+   判读：只有 `SD：本板未配置卡座引脚…跳过挂载` 一行 → 开关或接线；`AiDoGUI 字体源 … 读不全` 的 WARN
+   → 卡上路径不对（桥会把三个候选试完，最后 7 个槽全指内置 14 px）；`AiDoGUI 字体 N px 建不出来` →
+   该字号的字形缓存拿不到内存；最后一行没有 `SD_FONT_OK` → 字号数不是 7/7。同一个心跳行里的
+   **LVGL 池未回收/峰值看不出变化**是对的 —— 字体占的是 `font_psram_bytes` 那块 PSRAM 池。
 
    **自检没过时会怎样**：默认只打错误、**继续启动**（`src/esp32_board.h` 的 `sd_font_check_fatal = false`）——
-   界面缺字表现为空心方框，但设备能用、串口能看到原因；宿主工具那边因为没收到通过令牌，最终判
+   界面字号退回内置 14 px，设备能用、串口能看到原因；宿主工具那边因为没收到通过令牌，最终判
    TIMEOUT（退出码 4）而不是 PANIC_DETECTED。把这个开关置 `true` 会让失败当场 `abort()`（panic 回溯 +
-   `addr2line` 回源码行），那只是"专门验收这一项"时的一次性手段；常开的话，没插卡/文件被删/卡槽接触
-   不良都会变成 panic 重启循环 —— 原因看不见，界面也进不去。
+   `addr2line` 回源码行），那只是专门验收这一项时的一次性手段；常开的话，没插卡 / 卡槽接触不良都会
+   变成 panic 重启循环 —— 原因看不见，界面也进不去。
 
 9. **触摸判据与跟手（2026-10-17）**：CST328 在**手指静止**时会报"0 个触点"——原来的 poll 读 0xD005 的点数、
    读到 0 就判松开，于是"按一下"被拆成几十次 press/release：真机 10 秒里按下计数从 56 涨到 259，
@@ -236,16 +239,18 @@ I (640) embark: 框架就绪：3 个 App，默认前台 launcher；LVGL 8.3.11�
 I (648) embark: BRINGUP 自检屏就绪：四角 TL/TR/BL/BR，四条色带 R/G/B/W；点四角核对坐标（左上应 ≈0,0，右下应 ≈239, 319）
 I (1620) embark: BRINGUP 触摸按下：12, 9
 I (1624) embark: SD：已挂载 /sdcard（SD32G 30436 MB，31914983424 字节）
-I (1625) embark: BRINGUP SD：/sdcard（SD32G 30436 MB）已挂载，开始运行时字库自检
-I (1700) embark: BRINGUP SD：字库已加载并渲染；fonts/ui_font_ui_heiti_14.bin 的 启动 量得 28×14 px；记账 7932 / 102400 字节，引用 1 次，字库池在用 7932 / 131072 字节
-I (1701) embark: BRINGUP SD：释放后记账 0 字节、在册 0 个、字库池在用 0 字节（都应归零）
+I (1700) embark: AiDoGUI 字体源：/sdcard/fonts/ui_heiti.ttf（3854132 字节，常驻 PSRAM）
+I (1706) embark: AiDoGUI 字体 14 px 就绪（字形缓存 32768 字节，行高 16，基线 3）
+I (1712) embark: AiDoGUI 字体 7/7 已加载（TTF 运行期栅格化；根 /sdcard）
+I (1712) embark: 字体缓存：已用 41224 字节 / 字库区 196608 字节（配额合计 120832 字节）
+I (1713) embark: [AUTODEBUG_PASS] SD_FONT_OK
 I (10420) embark: 心跳：2000 帧；堆空余 268435456 字节，UI 栈余 6824 字节；LVGL 池未回收 9978 / 峰值 12480 字节；刷新 214 次，触摸按下 3 次
 ```
 
 心跳每 2000 帧（≈10 s）一行，上板调试主要靠它：堆、UI 栈水位、LVGL 静态池、刷新次数、触摸次数。
-SD 那四行只在插了卡（且填了引脚）时出现；默认关 / 没插卡时是 `SD：本板未配置卡座引脚（esp32_board.h 的
-EMBARK_SD_ENABLED = 0），跳过挂载` 与 `BRINGUP SD：文件系统未挂载（板级没配卡座引脚，或没插卡），
-运行时字库整体跳过` 两行。
+字库那几行只在插了卡（且填了引脚）时出现；默认关 / 没插卡时是 `SD：本板未配置卡座引脚（esp32_board.h 的
+EMBARK_SD_ENABLED = 0），跳过挂载` 一行，随后桥读不到 TTF ⇒ 7 个槽全指内置 14 px，串口打
+`AiDoGUI 字体：一个字号也没建出来（源 ui_heiti.ttf），7 个槽全指向内置字体`。
 致命错误长这样（`abort()` → IDF panic handler 打回溯与寄存器）：
 
 ```

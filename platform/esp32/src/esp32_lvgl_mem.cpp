@@ -50,9 +50,10 @@ bool g_exhausted_reported = false;
 StaticPool g_lvgl_pool(g_lvgl_pool_arena, sizeof(g_lvgl_pool_arena));
 
 // --- 字库区（issue 25）--------------------------------------------------------
-// 运行时字库（lv_font_load）的分配走另一块池：从 PSRAM 显式分配（heap_caps_malloc +
-// MALLOC_CAP_SPIRAM），与上面 .bss 里的 LVGL 静态池分开。两笔账于是各管各的：加载字库
-// 不推动 lvgl_peak_bytes，字库的字节预算由 FontLedger 管（issue 25 验收④）。
+// 字体的分配走另一块池：整份 TTF 缓冲（font_buffer_alloc）与每个字号一份字形缓存
+// （lv_tiny_ttf 的 LRU）都从 PSRAM 显式分配（heap_caps_malloc + MALLOC_CAP_SPIRAM），
+// 与上面 .bss 里的 LVGL 静态池分开。两笔账于是各管各的：字体不推动 lvgl_peak_bytes，
+// 容量上限是 esp32_board.h 的 font_psram_bytes（ADR 0017；FontLedger 已于 issue 04 退役）。
 // 池是懒创建的：没人加载字库就不占这块 PSRAM；StaticPool 没有默认构造，所以用一块
 // 静态存储 + placement new（构造本身不需要堆，也不会抛异常）。
 namespace {
@@ -61,7 +62,7 @@ alignas(StaticPool) std::uint8_t g_font_pool_storage[sizeof(StaticPool)];
 std::uint8_t* g_font_arena = nullptr;  // PSRAM 里那块；判断指针归属要用它
 std::size_t g_font_arena_bytes = 0;
 StaticPool* g_font_pool = nullptr;
-bool g_font_scope_active = false;  // 是否正处在 lv_font_load / lv_font_free 里
+bool g_font_scope_active = false;  // 是否正处在建字号 / 栅格化字形里
 bool g_font_pool_failed = false;   // 分配失败过就别每次重试（日志已经报过）
 bool g_font_exhausted_reported = false;
 
@@ -168,8 +169,8 @@ void font_report_exhausted() noexcept {
   }
   g_font_exhausted_reported = true;
   ELOG_ERROR(
-      "字库区用尽：容量 {} 字节，未回收 {} 字节，峰值 {} 字节（对一下 font_budget_bytes "
-      "与字库大小）",
+      "字库区用尽：容量 {} 字节，未回收 {} 字节，峰值 {} 字节（对一下 esp32_board.h 的 "
+      "font_psram_bytes 与 TTF 大小 + 各字号缓存配额）",
       static_cast<unsigned>(g_font_pool->capacity_bytes()),
       static_cast<unsigned>(g_font_pool->outstanding_bytes()),
       static_cast<unsigned>(g_font_pool->peak_bytes()));
@@ -237,8 +238,8 @@ extern "C" size_t embark_lvgl_budget_bytes(void) {
 }
 
 // --- 字库分配作用域（issue 25）：真机侧 = 切到 PSRAM 那块字库区 -------------------
-// 只有"路由开关"在这里；字库怎么加载、账怎么记，都在 platform/common/font_service.cpp
-// （宿主与真机同一份）。
+// 只有"路由开关"在这里；字体怎么建、缓存配额怎么定，都在 app/common/aidogui_ui_bridge.cpp
+// 的 kCacheQuotaDefaults / fit_cache_quotas（宿主与真机同一份）。
 namespace embark::platform {
 
 void font_alloc_scope_begin() noexcept {
@@ -253,8 +254,27 @@ std::size_t font_alloc_pool_bytes() noexcept {
   return esp32::font_pool_capacity_bytes();  // 池是懒建的：没加载过就是 0
 }
 
+std::size_t font_alloc_pool_budget_bytes() noexcept {
+  return esp32::font_psram_bytes;  // 计划值：字形缓存配额得在建池之前定
+}
+
 std::size_t font_alloc_outstanding_bytes() noexcept {
   return esp32::font_pool_outstanding_bytes();
+}
+
+// 常驻字体缓冲（ADR 0017）：整份 TTF 从 SD 卡读进来就住这儿 —— 8 MB 八线 PSRAM，
+// 不占内部 RAM，也不进上面那块定容字库池（它按字节数定容，装不下 3.85 MB 的字源）。
+void* font_buffer_alloc(std::size_t bytes) noexcept {
+  if (bytes == 0U) {
+    return nullptr;
+  }
+  return heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM);
+}
+
+void font_buffer_free(void* pointer) noexcept {
+  if (pointer != nullptr) {
+    heap_caps_free(pointer);
+  }
 }
 
 }  // namespace embark::platform

@@ -15,6 +15,9 @@ factory,     app,  factory,   0x10000,  3M
 #    radio support later does not force a partition table change.
 #  * factory at 3 MB is far larger than this firmware (LVGL + kernel, no file
 #    system, no audio assets); revisit if large resources are ever needed.
+#  * The chip has 16 MB of flash; the app ends at 0x310000, so ~13 MB stays unused
+#    (next free offset 0x310000). A 4 MB "fonts" data partition lived here for the
+#    2026-10-17 font spike; deleted once the runtime TTF moved to the SD card (ADR 0017).
 #
 # NOTE: this file must stay ASCII-only (IDF's kconfgen/gen_esp32part read config
 # files under the host locale encoding; non-ASCII comments abort the build on a

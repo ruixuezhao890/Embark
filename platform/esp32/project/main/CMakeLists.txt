@@ -23,3 +23,10 @@ target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra -fno-exceptions -f
 # embark_config.h 里的 ETL 头会直接炸（`unknown type name 'namespace'`）。
 get_filename_component(EMBARK_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../.." ABSOLUTE)
 target_compile_options(${COMPONENT_LIB} PRIVATE -include "${EMBARK_ROOT}/config/embark_config.h")
+
+# 字体运行时栅格化 spike 的真机侧探针开关（platform/esp32/project/CMakeLists.txt 的 option）。
+# 入口 TU 也要看到它，否则 main.cpp 里那句 ep::font_probe::run() 会被 #if 排掉，链接期整个探针
+# 被丢掉 —— 第一版就是这么"编成功但固件字节数一模一样"（0xe2100）的。默认 OFF。
+if(EMBARK_FONT_PROBE)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE EMBARK_FONT_PROBE=1)
+endif()

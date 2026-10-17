@@ -225,11 +225,11 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
 
 ## LVGL 界面文案
 
-LVGL 内置字体只有 Montserrat（无中文字形），所以中文界面文案全靠静态子集字库
-`embark_zh_14`（issue 17 起它就是 `LV_FONT_DEFAULT`）和 aidogui/EEZ 导出屏自带的
-运行时字库。**新增中文字符串时必须跑 `node tools/font/audit_glyphs.mjs`**（CI 也跑）：
-缺字会 exit 1 并给出行号；补字要改 `tools/font/gen_font.mjs` 的 `UI_TEXT` 再重新生成字库。
-框架与日志的中文不受影响（那是宿主侧输出）。
+界面字体是**卡上那份 TTF**（`app/aidogui_ui/assets/font/ui_heiti.ttf`，运行期用 `lv_tiny_ttf`
+栅格化，ADR 0017）；内置的 `embark_zh_14`（184 字形）只剩「没插卡」这一个角色，汉字会成方框。
+**新增界面文案后跑 `node tools/font/audit_glyphs.mjs`**（CI 也跑）：它对照 TTF 的 cmap，缺字会
+exit 1 并给出行号。缺字的出路是换字体 / 改文案 / 给该 label 显式指定含这个字的字体 —— **不是**
+再补一份子集清单（BIN 那条链已经删了）。框架与日志的中文不受影响（那是宿主侧输出）。
 ## EEZ Studio 生成代码（issue 19）
 
 - 生成代码的 UI 文本进 `app/eez_ui/screens.c`（`lv_label_set_text` 调用），不叫

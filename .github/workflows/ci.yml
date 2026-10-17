@@ -4,8 +4,9 @@
 #   1. host-build-test：ubuntu 上构建宿主工程 + ctest 全量单测（SDL2 用 apt 装）。
 #   2. esp32-build：espressif/idf:release-v5.4 容器里构建 ESP32-S3 固件（只编不烧）。
 #      issue 11 已落地，所以是真构建：同一个仓库、同一套源码，宿主与真机两个目标都必须过。
-#   3. font-audit：缺字审计（issue 17）——界面文案逐字符对照静态子集字库覆盖清单
-#      （tools/font/*.json），字库外字符就把构建卡红；先跑 --selftest 保证脚本本身没退化。
+#   3. font-audit：缺字审计（issue 17 / ADR 0017）——界面文案逐字符对照卡上那份 TTF 的 cmap
+#      （app/aidogui_ui/assets/font/ui_heiti.ttf，脚本自己解 cmap），字体里没有的字符就把构建卡红；
+#      先跑 --selftest 保证脚本本身没退化。
 #   4. format-check：clang-format --dry-run --Werror（版本 18，与本地开发机一致；
 #      .clang-format 里的注释说明：v1 阶段不强制本机格式化，CI 只作提示/卡漂移）。
 #
@@ -78,7 +79,7 @@ jobs:
           idf.py -C platform/esp32/project -B build-esp32 build
 
   font-audit:
-    name: Font glyph audit (issue 17)
+    name: Font glyph audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,7 +88,7 @@ jobs:
           node-version: '20'
       - name: Audit script self-test
         run: node tools/font/audit_glyphs.mjs --selftest
-      - name: Audit UI strings against font manifest
+      - name: Audit UI strings against font cmap
         run: node tools/font/audit_glyphs.mjs
 
   format-check:

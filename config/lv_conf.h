@@ -133,6 +133,15 @@
  * "保留备用" —— 真机与宿主上没显式设字体的文本都由它渲染。 */
 #define LV_USE_FONT_COMPRESSED 1
 
+/* 运行时字体栅格化（2026-10-17，见 .scratch/embark-v1/spikes/font-runtime/）。
+ * LVGL 内树自带 tiny_ttf（stb_truetype_htcw，htcw 对 stb 的魔改版，支持流式 read/seek）：
+ * 把 TTF 数据指针交给 lv_tiny_ttf_create_data()，字形在**运行时**按需栅格化进 LRU 缓存，
+ * 不再需要构建期按字号生成 BIN 子集（ADR 0007 的第 4 条「FreeType 推迟」由此接续）。
+ * 只开 LV_USE_TINY_TTF：LV_TINY_TTF_FILE_SUPPORT 保持 0 —— 产品自己把卡上的整份 TTF 读进
+ * PSRAM，再把指针交给 create_data（ADR 0017），不依赖 lv_fs，也不需要流式 read/seek。
+ * 关掉它不会让现有代码报错，只会让 lv_tiny_ttf_* 符号消失。 */
+#define LV_USE_TINY_TTF 1
+
 /*=========================================================================
    主题、示例与诊断开关
  *========================================================================*/

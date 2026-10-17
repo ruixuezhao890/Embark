@@ -48,8 +48,8 @@ class HostHal {
 
   [[nodiscard]] const char* storage_path() const noexcept { return storage_.path(); }
 
-  /// 文件系统后端（issue 17）：运行时字库服务（platform/common/font_service.cpp）用它读
-  /// 字库 .bin。真机侧还没有这个后端（Context 里是 nullptr），字库服务会返回 not_ready。
+  /// 文件系统后端（issue 17）：读卡上的资源文件（'S' 盘图片、启动期整份 TTF）。
+  /// 真机侧的对应后端是 esp32_filesystem.cpp（挂到 SD 卡）。
   [[nodiscard]] HostFileSystem& filesystem() noexcept { return filesystem_; }
 
  private:

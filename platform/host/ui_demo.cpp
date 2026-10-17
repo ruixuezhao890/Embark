@@ -53,6 +53,7 @@
 #include <embark/log.h>
 #include <embark_limits.h>
 
+#include "about/about_app.h"
 #include "album/album_app.h"
 #include "clock/clock_app.h"
 #include "eez_ui_bridge.h"
@@ -70,6 +71,7 @@
 #include "host_input.h"
 #include "host_lvgl_mem.h"
 #include "launcher/launcher_app.h"
+#include "launcher/launcher_pages.h"   // 分页/几何的纯函数：验收按它算期望值
 #include "launcher/launcher_tiles.h"  // --ui-launcher-pages：运行时磁贴的观测点
 #include "lvgl_port.h"
 #include "lvgl_ui_port.h"
@@ -406,7 +408,8 @@ namespace embark::platform::host {
 // MusicApp/AlbumApp 是占位 App（屏上写着"界面还没做"）：磁贴数 5 → 主屏 2 页，
 // 正好用来验收"后面的 App 划得到"（--ui-launcher-pages）。
 EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp,
-                 embark::demo::WeatherApp, embark::demo::MusicApp, embark::demo::AlbumApp)
+                 embark::demo::WeatherApp, embark::demo::MusicApp, embark::demo::AlbumApp,
+                 embark::demo::AboutApp)
 
 }  // namespace embark::platform::host
 
@@ -526,12 +529,13 @@ bool aidogui_time_text_ok(const char* text) {
 bool aidogui_acceptance() {
   bool ok = true;
 
-  // 1) 字体：工程里 6 个 BIN 每个 (字体,字号) 一个文件，全从 'S' 盘 lv_font_load 进来。
-  //    加载失败桥只记警告并降级（退回内置字体）——屏不空但字不对，所以这里必须全绿。
+  // 1) 字体：ADR 0017 之后只有一条路 —— 桥把卡上的 ui_heiti.ttf 整份读进 PSRAM，为设计器
+  //    用到的 7 个字号各建一份 tiny_ttf 实例。建不出来时 7 个槽全指向内置 14 px（屏不空但
+  //    字号不对），所以这里必须全绿。
   const embark::demo::AidoguiFontReport fonts = embark::demo::aidogui_ui_bridge_font_report();
   const char* res_root = embark::platform::aidogui_res_fs_root();
-  ELOG_INFO("aidogui 字体：{}/{} 个 BIN 加载成功（S: 盘 = {}）", fonts.loaded, fonts.total,
-            res_root != nullptr ? res_root : "<未挂载>");
+  ELOG_INFO("aidogui 字体：{}/{} 个字号建出来了（TTF 由桥自己找，资源根 = {}）", fonts.loaded,
+            fonts.total, res_root != nullptr ? res_root : "<未挂载>");
   if (fonts.total <= 0 || fonts.loaded != fonts.total) {
     ok = false;
   }
@@ -787,24 +791,37 @@ PanelPoint aidogui_tile_center(std::size_t index, int fallback_x, int fallback_y
 }
 
 /// --ui-launcher-pages 帧 10：主屏磁贴/页/页码点与 App 注册表是否一致。
-/// 本可执行文件的注册表是 6 个 App（launcher + clock/settings/weather/music/album）
-/// → 磁贴 5 个、2 页、2 个页码点；第 5 个磁贴是「相册」；几何照设计稿（页内 12/68/…，
-/// 第 2 页整体 +240），2 个点整行居中 = 113/121。顺带把"方框字"断掉。
-bool aidogui_launcher_pages_check() {
+/// 期望值**全部从注册表推导**（磁贴 = App 数 − 1、页 = 每页 4 个向上取整、几何照设计稿）。
+/// 以前这里写死"5 个磁贴 / 2 页 / clock,settings,weather,music,album"—— 加一个 App 就得改验收
+/// 程序，等于用测试把新 App 挡在门外（2026-10-17 加 about 时正是这么绊了一下）。顺带断"方框字"。
+bool aidogui_launcher_pages_check(const embark::AppRegistry& apps) {
   const std::size_t tiles = embark::demo::launcher_tiles_count();
   const std::size_t pages = embark::demo::launcher_tiles_page_count();
   const std::size_t dots = embark::demo::launcher_tiles_dot_count();
-  const char* const expect_apps[] = {"clock", "settings", "weather", "music", "album"};
-  bool order_ok = tiles == 5;
+  const std::size_t expect_tiles = embark::launcher::tile_count(apps.size());
+  const std::size_t expect_pages = embark::launcher::page_count(expect_tiles);
+  // 顺序：磁贴 i 必须就是注册表第 i+1 个 App（第 0 个是主屏自己，不给自己磁贴）。
+  bool order_ok = tiles == expect_tiles;
   for (std::size_t i = 0; order_ok && i < tiles; ++i) {
     const char* got = embark::demo::launcher_tiles_app(i);
-    if (got == nullptr || (i < 5 && std::strcmp(got, expect_apps[i]) != 0)) {
+    const embark::App* expect = apps.at(static_cast<embark::AppId>(i + 1U));
+    if (got == nullptr || expect == nullptr || std::strcmp(got, expect->name()) != 0) {
       order_ok = false;
     }
   }
-  lv_obj_t* label4 = embark::demo::launcher_tiles_tile_label(4);
-  const char* text4 = label4 != nullptr ? lv_label_get_text(label4) : nullptr;
-  const bool album_ok = text4 != nullptr && std::strcmp(text4, "相册") == 0;
+  // 「相册」那一格的文案该是 AlbumApp::title()：先按名字找到它在第几格，再看标签文字。
+  std::size_t album_tile = tiles;
+  for (std::size_t i = 0; i < tiles && album_tile == tiles; ++i) {
+    const char* name = embark::demo::launcher_tiles_app(i);
+    if (name != nullptr && std::strcmp(name, "album") == 0) {
+      album_tile = i;
+    }
+  }
+  lv_obj_t* album_label =
+      album_tile < tiles ? embark::demo::launcher_tiles_tile_label(album_tile) : nullptr;
+  const char* album_text = album_label != nullptr ? lv_label_get_text(album_label) : nullptr;
+  const bool album_ok =
+      album_tile < tiles && album_text != nullptr && std::strcmp(album_text, "相册") == 0;
   bool fonts_ok = true;
   for (std::size_t i = 0; i < tiles; ++i) {
     lv_obj_t* label = embark::demo::launcher_tiles_tile_label(i);
@@ -830,19 +847,26 @@ bool aidogui_launcher_pages_check() {
   const int x_p1 = p1 != nullptr ? lv_obj_get_x(p1) : -1;
   const int x_d0 = d0 != nullptr ? lv_obj_get_x(d0) : -1;
   const int x_d1 = d1 != nullptr ? lv_obj_get_x(d1) : -1;
-  const bool geo_ok = x_t0 == 12 && x_t1 == 68 && x_p1 == 240 && x_d0 == 113 && x_d1 == 121;
+  // 几何期望也走纯函数：页内 12/68、第 2 页整体 +240、页码点整行居中（2 个点时 113/121）。
+  const bool geo_ok =
+      x_t0 == static_cast<int>(embark::launcher::tile_x(0)) &&
+      x_t1 == static_cast<int>(embark::launcher::tile_x(1)) &&
+      (expect_pages < 2U || x_p1 == static_cast<int>(embark::launcher::page_x(1))) &&
+      x_d0 == static_cast<int>(embark::launcher::dot_x(0, expect_pages)) &&
+      (expect_pages < 2U || x_d1 == static_cast<int>(embark::launcher::dot_x(1, expect_pages)));
   lv_obj_t* hint = embark::demo::aidogui_ui_bridge_widget("launcher", "L_Hint");
   const char* hint_text = hint != nullptr ? lv_label_get_text(hint) : nullptr;
   const bool hint_ok = hint_text != nullptr && std::strcmp(hint_text, "左右滑动翻页") == 0 &&
                        aidogui_font_covers("launcher", "L_Hint");
   ELOG_INFO(
-      "主屏分页自检：磁贴 {}（期望 5）/ 页 {}（期望 2）/ 点 {}（期望 2）；顺序 {}；第 5 格 {}；"
-      "几何 {}（磁贴 x {}/{}，第 2 页 x {}，点 x {}/{}）；字形 {}；提示行 {}（\"{}\"）",
-      tiles, pages, dots, order_ok ? "对" : "错", album_ok ? "「相册」" : "<不是相册>",
-      geo_ok ? "对" : "错", x_t0, x_t1, x_p1, x_d0, x_d1, fonts_ok ? "全在" : "有缺字",
-      hint_ok ? "对" : "错", hint_text != nullptr ? hint_text : "<取不到>");
-  return tiles == 5 && pages == 2 && dots == 2 && order_ok && album_ok && geo_ok && fonts_ok &&
-         hint_ok;
+      "主屏分页自检：磁贴 {}（期望 {}）/ 页 {}（期望 {}）/ 点 {}（应等于页数）；顺序 {}；"
+      "「相册」格 {}；几何 {}（磁贴 x {}/{}，第 2 页 x {}，点 x {}/{}）；字形 {}；提示行 {}（\"{}\"）",
+      tiles, expect_tiles, pages, expect_pages, dots, order_ok ? "对" : "错",
+      album_ok ? "对" : "<不是相册>", geo_ok ? "对" : "错", x_t0, x_t1, x_p1, x_d0, x_d1,
+      fonts_ok ? "全在" : "有缺字", hint_ok ? "对" : "错",
+      hint_text != nullptr ? hint_text : "<取不到>");
+  return tiles == expect_tiles && pages == expect_pages && dots == expect_pages && order_ok &&
+         album_ok && geo_ok && fonts_ok && hint_ok;
 }
 
 /// --ui-launcher-pages 帧 44：横向拖完应停在第 2 页（吸附式：松手吸附最近页）。
@@ -871,7 +895,7 @@ bool aidogui_launcher_album_check() {
 /// 而且**屏重建后仍停在离开时的第 2 页** —— 这是视图留存（App 自持 view state，ADR 0015）：
 /// 屏对象是新的、磁贴是从第 1 页重新长出来的，但 App 记得用户停在第几页，装载后跳回去。
 /// 回程走屏上的按钮（设计器事件 embark_ui_open_launcher）——上滑返回手势已按需求去掉。
-bool aidogui_launcher_back_check() {
+bool aidogui_launcher_back_check(const embark::AppRegistry& apps) {
   const char* current = embark::demo::aidogui_ui_bridge_current_screen();
   const bool launcher_created = embark::demo::aidogui_ui_bridge_screen_created("launcher");
   const bool album_gone = !embark::demo::aidogui_ui_bridge_screen_created("album");
@@ -887,7 +911,7 @@ bool aidogui_launcher_back_check() {
       current != nullptr ? current : "<null>", launcher_created ? "是" : "否",
       album_gone ? "是" : "否", tiles, page + 1, scroll_x, page_kept ? "对" : "错");
   return current != nullptr && std::strcmp(current, "launcher") == 0 && launcher_created &&
-         album_gone && tiles == 5 && page_kept;
+         album_gone && tiles == embark::launcher::tile_count(apps.size()) && page_kept;
 }
 
 /// --ui-launcher-pages 帧 118：反向拖回第 1 页（留存在第 2 页之后，验收脚本自己把页翻回来）。
@@ -924,12 +948,13 @@ bool aidogui_launcher_bright_check(std::size_t before, std::size_t after) {
 }
 
 /// --ui-launcher-pages 帧 118：设置屏点「返回」应回主屏，且磁贴重新建出。
-bool aidogui_launcher_home_check() {
+bool aidogui_launcher_home_check(const embark::AppRegistry& apps) {
   const char* current = embark::demo::aidogui_ui_bridge_current_screen();
   const std::size_t tiles = embark::demo::launcher_tiles_count();
   ELOG_INFO("设置屏点「返回」后：当前屏 {}（应回到 launcher）；磁贴 {} 个",
             current != nullptr ? current : "<null>", tiles);
-  return current != nullptr && std::strcmp(current, "launcher") == 0 && tiles == 5;
+  return current != nullptr && std::strcmp(current, "launcher") == 0 &&
+         tiles == embark::launcher::tile_count(apps.size());
 }
 
 /// --ui-weather：天气屏是否与数据桩逐字段一致（城市名 / 现在区 / 5 天逐行）。
@@ -1362,7 +1387,7 @@ void ui_main(void* argument) noexcept {
 #if defined(EMBARK_AIDOGUI_UI)
       auto* ulp_settings_app = static_cast<embark::demo::SettingsApp*>(framework.app(2));
       if (frames_run == ulp_check_frame) {
-        ulp_tiles_ok = aidogui_launcher_pages_check();
+        ulp_tiles_ok = aidogui_launcher_pages_check(framework.apps());
       }
       if (frames_run == ulp_drag_press_frame) {
         push_motion_and_press(options->scale, ulp_drag_x_from, ulp_band_y);
@@ -1404,7 +1429,7 @@ void ui_main(void* argument) noexcept {
         push_release(options->scale, ulp_back_x, ulp_back_y);
       }
       if (frames_run == ulp_back_check_frame) {
-        ulp_back_ok = aidogui_launcher_back_check();
+        ulp_back_ok = aidogui_launcher_back_check(framework.apps());
       }
       // 留存断言过了（回来仍在第 2 页），验收脚本自己把页翻回第 1 页 —— 反向拖一遍。
       if (frames_run == ulp_back_drag_press_frame) {
@@ -1466,7 +1491,7 @@ void ui_main(void* argument) noexcept {
         push_release(options->scale, ulp_back_x, ulp_back_y);
       }
       if (frames_run == ulp_home_check_frame) {
-        ulp_home_ok = aidogui_launcher_home_check();
+        ulp_home_ok = aidogui_launcher_home_check(framework.apps());
       }
 #endif
       if (frames_run == ulp_quit_frame) {
@@ -1612,10 +1637,14 @@ void ui_main(void* argument) noexcept {
 #if defined(EMBARK_AIDOGUI_UI)
     const int repaint_bindings = embark::demo::aidogui_ui_nav_repaint_bindings();
     const int repaint_calls = embark::demo::aidogui_ui_nav_repaint_calls();
-    repaint_ok = repaint_bindings == 3 && repaint_calls >= 3;
+    // 下限断言，不是等号：每加一个"进屏要重推"的 App，这个数就该 +1。
+    // 用 == 3 会让"新加 App 绑了 repaint"变成验收失败 —— 那就等于把新 App 拦在门外了。
+    constexpr int kMinimumRepaintBindings = 3;  // launcher / clock / weather 三个老账
+    repaint_ok = repaint_bindings >= kMinimumRepaintBindings && repaint_calls >= kMinimumRepaintBindings;
     ELOG_INFO(
-        "值重推：声明 {} 个屏（launcher / clock / weather，期望 3），屏装载后被调 {} 次（期望 ≥3）",
-        repaint_bindings, repaint_calls);
+        "值重推：声明 {} 个屏（launcher / clock / weather 为老账，往后的 App 只会更多；"
+        "期望 ≥{}），屏装载后被调 {} 次（期望 ≥{}）",
+        repaint_bindings, kMinimumRepaintBindings, repaint_calls, kMinimumRepaintBindings);
 #endif
     const bool ulp_all_ok = ulp_ok && no_background_ok && repaint_ok;
     ELOG_INFO(

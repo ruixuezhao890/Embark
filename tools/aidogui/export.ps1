@@ -1,15 +1,18 @@
 <#
 .SYNOPSIS
-  无头重新生成 app/aidogui_ui 的界面代码 + BIN 资源（不需要打开 AiDoGUI Designer）。
+  无头重新生成 app/aidogui_ui 的界面代码 + 图片 BIN（不需要打开 AiDoGUI Designer）。
 
 .DESCRIPTION
   主路径是 GUI：在 AiDoGUI Designer 里「打开工程」app/aidogui_ui/screen.aid → 改完屏 →
   导出向导（C 代码生成）→ 输出目录选 app/aidogui_ui/export。本脚本是可选路径：给「没开
   设计器 / CI / 想敲一条命令重生成」用，走的是同一个生成器、写到同一个目录，产物完全一样。
 
-  产物（AiDoGUI 自己的导出布局，原样入库、原样拷到 S: 盘根下即可运行）：
+  产物（AiDoGUI 自己的导出布局，原样入库；图片 BIN 拷到 S: 盘根下即可）：
     app/aidogui_ui/export/ui.c · ui.h · ui_helpers.* · ui_comm.* · ui_events.h · filelist.txt
-    app/aidogui_ui/export/screens/ui_<屏id>.{c,h} · components/* · font/*.bin · image/*.bin
+    app/aidogui_ui/export/screens/ui_<屏id>.{c,h} · components/* · image/*.bin
+  字体不在产物里（ADR 0017）：字体是 SD 卡上的整份 TTF，由 app/common/aidogui_ui_bridge
+  在运行时栅格化。设计器只会出 BIN|C 两种字体产物，两种都不是我们要的，所以脚本导完就
+  删掉 font/ 并把生成代码里的字体初始化打桩（见文件末尾）。
   屏表/控件表/字体表不在这里生成：cmake/embark_aidogui_tables.cmake 在配置期解析上面这些文件，
   写出构建目录 include/embark_aidogui_ui_tables.h。
 
@@ -26,8 +29,7 @@ param(
   [string]$Project = 'app/aidogui_ui/screen.aid',
   [string]$OutDir = 'app/aidogui_ui/export',
   [string]$AiDoGuiHome = $env:AIDOGUI_HOME,
-  [ValidateSet('BIN', 'C')][string]$ImageFormat = 'BIN',
-  [ValidateSet('BIN', 'C')][string]$FontFormat = 'BIN'
+  [ValidateSet('BIN', 'C')][string]$ImageFormat = 'BIN'
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
@@ -67,14 +69,15 @@ $designerHome = Resolve-AiDoGuiHome $AiDoGuiHome
 $gen = Join-Path $PSScriptRoot 'gen_ui.cjs'
 Write-Host "工程   : $projectAbs"
 Write-Host "输出   : $outAbs"
-Write-Host "设计器 : $designerHome（$ImageFormat 图片 / $FontFormat 字体）"
+Write-Host "设计器 : $designerHome（$ImageFormat 图片；字体走 SD 上的 TTF，不出 BIN）"
 
 $prevRunAsNode = $env:ELECTRON_RUN_AS_NODE
 try {
   $env:ELECTRON_RUN_AS_NODE = '1'
   # 必须把输出接进管道（Out-String）才会等这个 GUI 子系统 exe 跑完；而且它作为 GUI 进程
   # 不设 $LASTEXITCODE，判断成败看生成器自己打的 RESULT 行（下面还有产物检查兜底）。
-  $output = (& (Join-Path $designerHome 'AiDoGUIDesigner.exe') $gen $projectAbs $outAbs $ImageFormat $FontFormat 2>&1 | Out-String)
+  # 生成器只认 BIN|C 两种字体产物，没有「不出字体」这一项 —— 传 BIN（体积最小）然后在下面丢掉。
+  $output = (& (Join-Path $designerHome 'AiDoGUIDesigner.exe') $gen $projectAbs $outAbs $ImageFormat 'BIN' 2>&1 | Out-String)
   Write-Host $output.Trim()
   if ($output -notmatch 'RESULT: .*"success":true') { throw "生成器没有报告成功：$($output.Trim())" }
 } finally {
@@ -124,17 +127,38 @@ if ($hookCalls.Count -eq 0) {
   Write-Host ("导航事件：" + (($hookCalls.Keys | Sort-Object | ForEach-Object { "$_ x$($hookCalls[$_])" }) -join ' · '))
 }
 
-# 补字：设计器只把「设计稿里出现过的字符」打进每个字号的 BIN（子集字库），运行期要显示
-# 设计稿里没有的字（占位串「等待对时」、真实日期里的「星期」等）就是空心方框 —— LVGL 的
-# 缺字形占位符。所以导出之后按「静态文案 + App 源码字符串」重生成一遍 BIN。详见
-# tools/aidogui/gen_fonts_bin.mjs 的头注释。设计器重导出会覆盖 font/，所以这步必须挂在这里。
-Write-Host '补字   : 重生成 font/ui_font_ui_heiti_*.bin（设计稿子集 + App 文案并集）'
-& node (Join-Path $PSScriptRoot 'gen_fonts_bin.mjs')
-if ($LASTEXITCODE -ne 0) { throw "字库补字失败（node tools/aidogui/gen_fonts_bin.mjs 退出码 $LASTEXITCODE）" }
+# 字体（ADR 0017）：字体是 SD 卡上的整份 TTF，由 app/common/aidogui_ui_bridge 在运行时用
+# lv_tiny_ttf 为每个字号建一份栅格化字体 —— 所以设计器生成的 BIN 字体产物一律丢掉，生成代码
+# 里的字体初始化也打桩。为什么必须打桩：那 7 个 lv_font_load 只在 aidogui_init() 里被调用，
+# 而 aidogui_init() 产品不调（桥自己建屏）；留着它，下一个人看到的就是「要往卡里拷 BIN」。
+Write-Host '字体   : 丢弃 font/*.bin、字体初始化打桩（字体走卡上的 ui_heiti.ttf）'
+$fontDir = Join-Path $outAbs 'font'
+if (Test-Path -LiteralPath $fontDir) { Remove-Item -LiteralPath $fontDir -Recurse -Force }
+$stubInit = @'
+static bool aidogui_fonts_init(void)
+{
+    /* 字体由桥加载（ADR 0017）：整份 TTF + lv_tiny_ttf 运行期栅格化。 */
+    return true;
+}
+'@
+$stubDestroy = @'
+static void aidogui_fonts_destroy(void)
+{
+    /* 字体由桥加载（ADR 0017）：这里不持有字体，无需释放。 */
+}
+'@
+# 生成器把注释写在函数头前一行，所以从函数签名匹配到第一个顶格 '}'（内层括号都是缩进的）。
+$uiCText = [System.IO.File]::ReadAllText($uiC)
+$uiCPatched = [regex]::Replace($uiCText, '(?s)static void aidogui_fonts_destroy\(void\)[^{]*\{.*?\r?\n\}', $stubDestroy)
+$uiCPatched = [regex]::Replace($uiCPatched, '(?s)static bool aidogui_fonts_init\(void\)[^{]*\{.*?\r?\n\}', $stubInit)
+if ($uiCPatched -match 'lv_font_load') { throw '字体初始化打桩失败：生成的 ui.c 里还有 lv_font_load（生成器模板变了？）' }
+if ($uiCPatched -ne $uiCText) {
+  # 必须走 .NET 的 UTF8 写入：Set-Content 在 PowerShell 5.1 下会按 GBK 解码再写成 BOM，中文注释全毁。
+  [System.IO.File]::WriteAllText($uiC, $uiCPatched, (New-Object System.Text.UTF8Encoding($false)))
+}
 
 $codeCount = @(Get-ChildItem -LiteralPath $outAbs -Recurse -File -Include '*.c', '*.h').Count
-$fontCount = @(Get-ChildItem -LiteralPath (Join-Path $outAbs 'font') -File -ErrorAction SilentlyContinue).Count
 $imageCount = @(Get-ChildItem -LiteralPath (Join-Path $outAbs 'image') -File -ErrorAction SilentlyContinue).Count
 $screenNames = ($screenHeaders | ForEach-Object { [System.IO.Path]::GetFileNameWithoutExtension($_.Name) -replace '^ui_', '' }) -join ', '
-Write-Host "完成：代码 $codeCount 个 · 字体BIN $fontCount 个 · 图片BIN $imageCount 个 · 屏：$screenNames"
+Write-Host "完成：代码 $codeCount 个 · 图片BIN $imageCount 个 · 字体 走卡上 TTF · 屏：$screenNames"
 Write-Host "下一步：cmake --build build --target embark_host_ui（表由 cmake 配置期从 export/ 生成；改了导出产物要重新 configure 才刷新表）"

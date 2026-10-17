@@ -5,8 +5,8 @@
  * 要求，任意四个 GPIO 都能接；SDMMC 要求信号走在固定的 IO_MUX 引脚上。fatfs 之上那一层
  * （esp_vfs_fat_sdspi_mount / esp_vfs_fat_sdmmc_mount）两者共用。
  *
- * 板子默认 EMBARK_SD_ENABLED = 0：这段驱动代码照样编译（不随开关烂掉），运行时第一行
- * 判断直接返回 not_ready。
+ * 板子当前 EMBARK_SD_ENABLED = 1（引脚见 esp32_board.h）；把它置 0 时这段驱动代码照样编译
+ * （不随开关烂掉），运行时第一行判断直接返回 not_ready。
  */
 #include "esp32_sd.h"
 

@@ -11,7 +11,9 @@
 #include <cstdint>
 #include <cstdio>
 
-#include <esp_timer.h>  // 每帧耗时（微秒）：心跳里报"卡不卡"要靠它
+#include <esp_flash.h>      // 启动自检行的 flash 容量（占位屏第一行）
+#include <esp_heap_caps.h>  // 启动自检行的 PSRAM 容量
+#include <esp_timer.h>      // 每帧耗时（微秒）：心跳里报"卡不卡"要靠它
 
 #include <embark/app_registry.h>
 #include <embark/diagnostics.h>
@@ -19,6 +21,7 @@
 #include <embark/version.h>
 #include <middleware/elog/elog.hpp>
 
+#include "about_app.h"
 #include "album_app.h"
 #include "clock_app.h"
 #include "launcher_app.h"
@@ -26,15 +29,16 @@
 #include "settings_app.h"
 #include "weather_app.h"
 
-#include "aidogui_ui_bridge.h"   // AiDoGUI 桥：真机 UI 后端（ADR 0011），只用来登记字库作用域
+#include "aidogui_ui_bridge.h"
 #include "autodebug.h"  // esp32-autodebug 后门（UART 自报）：调试分支，见 platform/esp32/README.md §5
 #include "esp32_board.h"
 #include "esp32_bringup.h"
+#include "esp32_font_probe.h"  // 字体运行时栅格化 spike（EMBARK_FONT_PROBE 时才编进来）
 #include "esp32_hal.h"
 #include "esp32_lvgl_mem.h"  // 静态池观测：容量 / 未回收 / 峰值（心跳日志要用）
 #include "esp32_task_spawner.h"
 #include "esp32_ui_task.h"
-#include "font_alloc_scope.h"  // 字库分配作用域：把 lv_font_load 的申请路由到 PSRAM 字库区
+#include "font_alloc_scope.h"  // 占位屏的 font pool 行：字库区的计划容量
 #include "lvgl_ui_port.h"
 
 using embark::Error;
@@ -56,7 +60,8 @@ namespace embark::platform::esp32 {
 // 平台后端，2026-10-17 一并放进 cmake/embark_sources.cmake 的 EMBARK_APP_SOURCES_DEVICE。
 // 注册顺序 = 主屏磁贴顺序（launcher 自己不算磁贴），要与 platform/host/ui_demo.cpp:406 同序。
 EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp,
-                 embark::demo::WeatherApp, embark::demo::MusicApp, embark::demo::AlbumApp)
+                 embark::demo::WeatherApp, embark::demo::MusicApp, embark::demo::AlbumApp,
+                 embark::demo::AboutApp)
 
 }  // namespace embark::platform::esp32
 
@@ -66,15 +71,10 @@ namespace {
 /// 堆、UI 栈水位、LVGL 静态池、刷新次数、触摸次数这几项周期性打出来（bring-up 主要依据）。
 constexpr std::uint32_t heartbeat_frames = 2000U;
 
-/// 字库分配作用域（issue 25 的 PSRAM 字库区）转发给 AiDoGUI 桥：
-/// 生成代码里 7 个 BIN 字体合计 57 KB，加载期的分配必须落字库区，不能推动 48 KB 的 LVGL 静态池。
-/// 桥是平台中立层（app/common），不认识 platform/common 的字库头，所以只收两个函数指针。
-void aidogui_font_scope_begin() {
-  embark::platform::font_alloc_scope_begin();
-}
-
-void aidogui_font_scope_end() {
-  embark::platform::font_alloc_scope_end();
+/// 启动自检的毫秒时钟：esp_timer 从开机起算、单调，且不受 LVGL 影响 —— 读卡那九秒里没有帧，
+/// lv_tick 是冻住的（platform/common/lvgl_port.cpp 的 tick() 只在 UI 循环里推进）。
+std::uint32_t boot_clock_millis(void*) {
+  return static_cast<std::uint32_t>(esp_timer_get_time() / 1000);
 }
 
 }  // namespace
@@ -88,11 +88,47 @@ void ui_main(void*) noexcept {
   // own task 的后台任务槽位（BSS，不占 UI 任务栈）：固件级一个实例。
   static ep::Esp32TaskSpawner spawner;
 
-  // 必须在 boot() 之前登记：boot 会跑第一个 App 的 onCreate，那条路会调 AiDoGUI 桥的 init
-  //（挂 'S' 盘 + 加载 7 个 BIN 字体），字库分配就在那一刻发生。
-  embark::demo::aidogui_ui_bridge_set_font_scope(&aidogui_font_scope_begin, &aidogui_font_scope_end);
-
   Framework framework(hal.context(), ep::embark_apps(), &ui_port, &spawner);
+
+  // 启动自检行（占位屏逐行翻绿 [OK]，一秒一行）：平台手里的事实比桥知道的多 —— flash、PSRAM、
+  // 触摸都只有这里能拿到。六行正好是占位屏的上限（kBootCheckMax），一秒翻一行，铺在读 TTF 的
+  // 那九秒里，所以打勾不花任何额外启动时间。文案必须 ASCII（这一刻屏上只有内置子集的 95 个
+  // 字形），缓冲活到 boot() 返回就够了 —— 桥只在 init 期间读这些指针。
+  // 触摸没有独立的就绪查询：hal.init() 失败会直接 fatal，能走到这里就说明 CST328 起来了。
+  char check_flash[24];
+  char check_psram[24];
+  char check_display[24];
+  char check_sd[64];  // SdCard::info_ 本身是 64 字节，缓冲区不能比它小（-Werror=format-truncation）
+  char check_pool[24];
+  std::uint32_t boot_flash_bytes = 0;
+  if (esp_flash_get_size(nullptr, &boot_flash_bytes) != ESP_OK) {
+    boot_flash_bytes = 0;  // 读不到就报红，不假装 16 MB
+  }
+  const std::size_t boot_psram_bytes = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+  std::snprintf(check_flash, sizeof check_flash, "%u MB",
+                static_cast<unsigned>(boot_flash_bytes >> 20U));
+  std::snprintf(check_psram, sizeof check_psram, "%u MB",
+                static_cast<unsigned>(boot_psram_bytes >> 20U));
+  const embark::hal::DisplayInfo boot_display = hal.display().info();
+  std::snprintf(check_display, sizeof check_display, "%ux%u",
+                static_cast<unsigned>(boot_display.width),
+                static_cast<unsigned>(boot_display.height));
+  std::snprintf(check_sd, sizeof check_sd, "%s", hal.sd().mounted() ? hal.sd().info() : "missing");
+  const std::size_t boot_pool_bytes = embark::platform::font_alloc_pool_budget_bytes();
+  std::snprintf(check_pool, sizeof check_pool, "%u KB",
+                static_cast<unsigned>(boot_pool_bytes >> 10U));
+  const embark::demo::AidoguiBootCheck boot_checks[] = {
+      {"flash", check_flash, boot_flash_bytes != 0U},
+      {"psram", check_psram, boot_psram_bytes != 0U},
+      {"display", check_display, boot_display.width != 0U && boot_display.height != 0U},
+      {"touch", "cst328", true},
+      {"sdcard", check_sd, hal.sd().mounted()},
+      {"font pool", check_pool, boot_pool_bytes != 0U},
+  };
+  embark::demo::aidogui_ui_bridge_set_boot_checks(
+      boot_checks, static_cast<int>(sizeof boot_checks / sizeof boot_checks[0]), &boot_clock_millis,
+      nullptr);
+
   if (const Error boot_error = framework.boot(); boot_error != Error::none) {
     char text[24];
     embark::fatal(embark::error_text(text, boot_error));
@@ -104,6 +140,12 @@ void ui_main(void*) noexcept {
             LVGL_VERSION_MINOR, LVGL_VERSION_PATCH, static_cast<int>(embark::lvgl_draw_buf_lines),
             static_cast<unsigned>(ep::lvgl_pool_capacity_bytes()));
 
+#if defined(EMBARK_FONT_PROBE)
+  // 字体运行时栅格化的真机读数：卡上 TTF 的顺序读速 + 桥给每个字号建的实例的冷/热栅格化 + 整屏首帧。
+  // 只读不写产品状态，跑完把临时屏还回去；开关默认关，见 project/CMakeLists.txt。
+  ep::font_probe::run();
+#endif
+
   // B 阶段上板核对屏（四角色标 + R/G/B/W 色带 + 中央触摸坐标）：bring-up 专用。
   // 2026-10-17 起真机接上了 AiDoGUI UI 后端（界面来自 app/aidogui_ui/export 的生成代码），
   // 默认屏不再空白 ⇒ 这张自检屏默认关（esp32_board.h 的 bringup_self_test = false）。
@@ -112,10 +154,15 @@ void ui_main(void*) noexcept {
     ep::bringup::show();
   }
 
-  // SD 卡 + 运行时字库自检（issue 25）：与自检屏相互独立（自检屏是 B 阶段的上板核对，
-  // 这项是 issue 25 的验收证据）。返回值 = 过没过：卡没挂载、字库加载不出来、尺寸不在窗口里、
-  // 账目没归零，都算没过。
-  if (ep::bringup::check_sd_font()) {
+  // 字库自检（验收令牌 SD_FONT_OK，原 issue 25）：ADR 0017 之后字体只有一条路 —— AiDoGUI 桥
+  // 在 framework.boot() 里读卡上的 ui_heiti.ttf、整份常驻 PSRAM，再给 7 个字号各建一份运行期
+  // 栅格字体。所以"卡上有字体吗、栅格得出来吗"的唯一真相就是桥的报告，不必再自己读一遍那个
+  // 3.85 MB（桥已经占着它，再读一份会让 8 MB PSRAM 见底）。
+  const embark::demo::AidoguiFontReport font_report = embark::demo::aidogui_ui_bridge_font_report();
+  if (font_report.total == 0) {
+    // 没有 AiDoGUI 后端（EMBARK_AIDOGUI_UI=0）的构建不建运行期字体：这一项无事可做。
+    ELOG_INFO("字库自检：本构建不建运行期字体（未启用 AiDoGUI 后端），跳过");
+  } else if (font_report.loaded == font_report.total) {
     // 通过令牌：宿主工具（esp32-autodebug）看到这一行就判 TEST_PASSED（退出码 0）并停止观测。
     // 两条都发是有意的：autodebug 那条走 uart_write_bytes（要求 UART 驱动真装上了），ELOG 这条
     // 走控制台（驱动没装上时，令牌也一定出现在串口日志里）。
@@ -125,11 +172,15 @@ void ui_main(void*) noexcept {
     // 没过就 abort()：IDF panic handler 打出回溯，宿主工具据此判 PANIC_DETECTED 并把地址
     // addr2line 回源码行。只在"专门验收这一项"时把 esp32_board.h 的开关临时置 true ——
     // 常开会让缺卡/缺文件的设备进 panic 重启循环（原因看不见，界面也进不去）。
-    embark::fatal("SD 字库自检未通过（issue 25）");
+    embark::fatal("字库自检未通过：卡上的 ui_heiti.ttf 没建出全部字号（ADR 0017）");
   } else {
-    // 默认策略：报错但**继续启动**。缺字在界面上是空心方框，但设备能用、串口能看到原因；
-    // 宿主工具那边因为没收到通过令牌，最终判 TIMEOUT（退出码 4）而不是 PANIC_DETECTED。
-    ELOG_ERROR("SD 字库自检未通过（sd_font_check_fatal = false）：继续启动，界面可能缺字 —— 原因见上面几行");
+    // 默认策略：报错但**继续启动**。7 个字号槽会退回内置 14 px（桥自己打 WARN），设备能用、
+    // 串口能看到原因；宿主工具那边因为没收到通过令牌，最终判 TIMEOUT（退出码 4）而不是
+    // PANIC_DETECTED。
+    ELOG_ERROR(
+        "字库自检未通过（{} / {} 档字号建出来了，sd_font_check_fatal = false）：继续启动，"
+        "界面字号退回内置 14 px —— 卡上有 fonts/ui_heiti.ttf 吗",
+        font_report.loaded, font_report.total);
   }
 
   std::uint32_t frames = 0;
@@ -169,9 +220,9 @@ void ui_main(void*) noexcept {
           static_cast<unsigned>(ep::ui_task_stack_high_water_bytes()),
           static_cast<unsigned>(ep::lvgl_outstanding_bytes()),
           static_cast<unsigned>(ep::lvgl_peak_bytes()),
-          static_cast<unsigned>(hal.display().refreshes()),
-          static_cast<unsigned>(touch.presses()), static_cast<unsigned>(touch.releases()),
-          static_cast<unsigned>(touch.moves()), static_cast<unsigned>(touch.swallowed_gaps()),
+          static_cast<unsigned>(hal.display().refreshes()), static_cast<unsigned>(touch.presses()),
+          static_cast<unsigned>(touch.releases()), static_cast<unsigned>(touch.moves()),
+          static_cast<unsigned>(touch.swallowed_gaps()),
           static_cast<unsigned>(touch.read_failures()),
           static_cast<unsigned>(frame_us_sum / heartbeat_frames),
           static_cast<unsigned>(frame_us_max), hal.time().wall_clock_note());

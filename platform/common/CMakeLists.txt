@@ -24,10 +24,9 @@ if(NOT TARGET embark_lvgl)
 endif()
 
 # 源清单取自 cmake/embark_sources.cmake（宿主与真机共用，issue 20）。
-# EMBARK_COMMON_UI_SOURCES = 两侧都编（LVGL 端口 + UI 端口）；
-# EMBARK_COMMON_UI_HOST_ONLY_SOURCES = 只有宿主编 —— font_service.cpp（运行时字库服务，
-# issue 17）把 LVGL 的 'F' 盘接到 hal::IFileSystem，真机 Context::filesystem == nullptr
-# 时是死代码，等 SD 后端（issue 25）落地再从清单里挪到共用那一份。
+# EMBARK_COMMON_UI_SOURCES = 两侧都编（LVGL 端口 + UI 端口）。
+# EMBARK_COMMON_UI_HOST_ONLY_SOURCES = 只有宿主编，现在是空的（issue 04 起运行时字库服务
+# font_service.cpp 已随 BIN 链退役，字体走 ADR 0017 的 TTF 运行期栅格化）。
 add_library(embark_common_ui STATIC
         ${EMBARK_COMMON_UI_SOURCES}
         ${EMBARK_COMMON_UI_HOST_ONLY_SOURCES})
