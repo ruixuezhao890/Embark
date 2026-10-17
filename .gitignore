@@ -19,6 +19,10 @@ platform/esp32/project/sdkconfig.old
 platform/esp32/project/dependencies.lock
 platform/esp32/project/managed_components/
 
+# esp32-autodebug（真机调试闭环）的诊断报告：每次跑都会重写，属本机运行产物。
+# 有价值的那次报告要留证据，复制到 .scratch/<feature>/evidence/ 里再提交（见 docs/agents/）。
+platform/esp32/project/autodebug_reports/
+
 # 编辑器 / IDE
 .idea/
 .vscode/

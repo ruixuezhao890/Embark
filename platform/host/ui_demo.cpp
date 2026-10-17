@@ -258,6 +258,7 @@ struct Options {
   int frames = 0;
   int scale = 1;
   int delay_ms = 5;
+  bool delay_explicit = false;  // 用户显式给了 --delay？没给时按模式补默认值（见 parse_options）
   const char* screenshot = nullptr;
   int shot_frame = 0;  // --shot-frame N FILE：第 N 帧截图（任意模式）
   const char* shot_path = nullptr;
@@ -302,9 +303,10 @@ void print_usage() {
       "  --screenshot FILE  最后一帧存 BMP\n"
       "  --shot-frame N FILE 第 N 帧存 BMP（配 --eez 等故事线抓中途屏）\n"
       "  --scale S           窗口放大倍数（默认 1 = 240×320 1:1）\n"
-      "  --delay MS          每帧间隔（默认 5）。合成点击/手势的验收模式请给 ≥40：LVGL 约每\n"
-      "                      30 ms 读一次输入，帧跑得比它快就会把几次按下/抬起采样进同一帧，\n"
-      "                      时序飘（拖动看着没吸附、点击晚十几帧才生效），见 ui_demo.cpp 顶部注\n"
+      "  --delay MS          每帧间隔（默认 5；选了合成点击/手势的验收模式时自动用 40 ——\n"
+      "                      LVGL 约每 30 ms 读一次输入，帧跑得比它快就会把几次按下/抬起\n"
+      "                      采样进同一帧，时序飘：拖动看着没吸附、点击晚十几帧才生效。\n"
+      "                      显式给值则以你给的为准）\n"
       "  --quit-at N         第 N 帧推关窗事件\n"
       "  --help              打印用法\n",
       clock_button_fallback_x, clock_button_fallback_y);
@@ -430,6 +432,7 @@ Options parse_options(int argc, char** argv) {
       options.scale = std::atoi(argv[++i]);
     } else if (std::strcmp(arg, "--delay") == 0 && !next_is_flag()) {
       options.delay_ms = std::atoi(argv[++i]);
+      options.delay_explicit = true;
     } else if (std::strcmp(arg, "--screenshot") == 0 && !next_is_flag()) {
       options.screenshot = argv[++i];
     } else if (std::strcmp(arg, "--shot-frame") == 0 && i + 2 < argc) {
@@ -479,6 +482,19 @@ Options parse_options(int argc, char** argv) {
       print_usage();
       std::exit(1);
     }
+  }
+
+  // 合成输入（点击 / 拖动 / 手势）的时序由 LVGL 的输入读取周期决定（约 30 ms）：帧间隔比它
+  // 小的时候，几次按下/抬起会被采样进同一帧 —— 拖动看着没吸附、点击晚十几帧才生效。
+  // 以前这靠人在命令行上记得加 --delay 40，忘了就得到一条假红（比如
+  // --ui-launcher-pages 的两条拖动断言 scroll_x=186/40，期望 240/0）。这里替用户补上：
+  // 只要有合成输入、又没显式给 --delay，就用 40 ms（要压测照样可以显式给更小的值）。
+  const bool synthetic_input = options.click || options.drag || options.launch || options.eez ||
+                               options.ui || options.ui_nav || options.ui_weather ||
+                               options.ui_launcher_pages;
+  if (synthetic_input && !options.delay_explicit) {
+    options.delay_ms = 40;
+    std::printf("[ui_demo] 有合成输入的模式：帧间隔自动设为 40 ms（要覆盖请显式传 --delay MS）\n");
   }
   return options;
 }

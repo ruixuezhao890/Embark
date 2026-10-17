@@ -1,0 +1,25 @@
+menu "Autodebug backdoor"
+
+    config AUTODEBUG_BACKDOOR
+        bool "Enable autodebug UART self-report backdoor"
+        default y
+        help
+            Enables boot banner, heartbeat and AUTODEBUG_PASS helpers used by
+            the esp32-autodebug host loop.
+
+    config AUTODEBUG_UART_NUM
+        int "Autodebug UART port number"
+        range 0 1
+        default 0
+        depends on AUTODEBUG_BACKDOOR
+        help
+            UART_NUM used by the backdoor component.
+
+    config AUTODEBUG_HEARTBEAT_MS
+        int "Heartbeat interval in milliseconds (0 = disabled)"
+        default 1000
+        depends on AUTODEBUG_BACKDOOR
+        help
+            Periodic heartbeat task prints [AUTODEBUG_HB] every N ms.
+
+endmenu

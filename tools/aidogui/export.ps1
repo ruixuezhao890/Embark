@@ -124,6 +124,14 @@ if ($hookCalls.Count -eq 0) {
   Write-Host ("导航事件：" + (($hookCalls.Keys | Sort-Object | ForEach-Object { "$_ x$($hookCalls[$_])" }) -join ' · '))
 }
 
+# 补字：设计器只把「设计稿里出现过的字符」打进每个字号的 BIN（子集字库），运行期要显示
+# 设计稿里没有的字（占位串「等待对时」、真实日期里的「星期」等）就是空心方框 —— LVGL 的
+# 缺字形占位符。所以导出之后按「静态文案 + App 源码字符串」重生成一遍 BIN。详见
+# tools/aidogui/gen_fonts_bin.mjs 的头注释。设计器重导出会覆盖 font/，所以这步必须挂在这里。
+Write-Host '补字   : 重生成 font/ui_font_ui_heiti_*.bin（设计稿子集 + App 文案并集）'
+& node (Join-Path $PSScriptRoot 'gen_fonts_bin.mjs')
+if ($LASTEXITCODE -ne 0) { throw "字库补字失败（node tools/aidogui/gen_fonts_bin.mjs 退出码 $LASTEXITCODE）" }
+
 $codeCount = @(Get-ChildItem -LiteralPath $outAbs -Recurse -File -Include '*.c', '*.h').Count
 $fontCount = @(Get-ChildItem -LiteralPath (Join-Path $outAbs 'font') -File -ErrorAction SilentlyContinue).Count
 $imageCount = @(Get-ChildItem -LiteralPath (Join-Path $outAbs 'image') -File -ErrorAction SilentlyContinue).Count

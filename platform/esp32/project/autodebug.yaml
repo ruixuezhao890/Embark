@@ -1,0 +1,54 @@
+# esp32-autodebug 在 Embark ESP32-S3 真机上的运行配置（issue 25 调试分支）。
+#
+# 用法（在仓库根，用装了依赖的解释器跑；工具自带一份默认 config.yaml，这里只覆盖本工程要改的项）：
+#   python "E:/01_Workspace/01_Archives/esp32_/esp32-autodebug/run_autodebug.py" ^
+#          --project platform/esp32/project --config platform/esp32/project/autodebug.yaml
+#
+# 闭环：build → flash → 复位 → 独占串口观测 → 命中 pass_tokens 判 0 / 命中 panic 判 3 并 addr2line 回栈
+#      → 报告写到 <项目>/autodebug_reports/diagnostic_report.{md,json}
+
+# 通过判据：main.cpp 在 check_sd_font() 返回 true 后发这一行（"SD 字库加载成功"专用令牌）。
+# 工具内部把两边都转小写做子串包含匹配，所以大小写不敏感。
+pass_tokens:
+  - "[AUTODEBUG_PASS] SD_FONT_OK"
+  - "[AUTODEBUG_PASS]"
+
+# panic 判据沿用工具默认的 IDF 签名（guru meditation / abort() was called / assert failed: …）
+# 平台级致命错误走 embark::fatal → abort() → IDF panic handler 打回溯，正好落在这里。
+# 注意：SD 字库自检**默认不 abort**（esp32_board.h 的 sd_font_check_fatal = false，只报错继续跑），
+# 所以它没过时这里最终判的是 TIMEOUT（退出码 4），不是 PANIC_DETECTED；要它当场 abort 取证，
+# 把那个开关临时置 true 再跑。
+
+# 超时：首次是全量构建（LVGL 源码级编译），构建超时留足；
+# 通过令牌要等 HAL 起来 → UI 任务跑起来 → SD 挂载 → 字库加载，正常 2 秒内就有结果。
+# 但调试分支里有一步「在板子上把 3504 MB 的卡格式化成 FAT32」（临时诊断代码，交付前删），
+# 实测 120 秒不够（run15 卡在 vfs_fat_sdmmc: Formatting card 直到超时），所以观测窗口放到 600 秒。
+build_timeout_s: 1800
+flash_timeout_s: 600
+pass_timeout_s: 600
+watchdog_timeout_s: 30
+
+# 工具链：本机 IDF 不在 ~/.espressif 下，工具自己的 _find_idf_python() 找不到它，
+# 所以 idf_path / idf_python 必须写死成这台机器的路径（换机器要改）。
+idf_path: "E:/00_Software/03_Dev_Env/IDF"
+idf_python: "E:/00_Software/03_Dev_Env/Espressif/tools/python_env/idf5.4_py3.11_env/Scripts/python.exe"
+
+# 串口自动探测（ESP32-S3 的 USB-Serial/JTAG，VID 0x303A 命中即优先）
+port: auto
+baud: 115200
+
+# 烧录复位方式：本板是 ESP32-S3 原生 USB-Serial/JTAG（VID 0x303A）。
+# 当 app 每次 boot 都 abort 形成 panic 重启循环时，esptool 默认的 DTR/RTS 复位会让 CDC 卡住、
+# 报 "A serial exception error occurred: Write timeout"（实测 2026-10-17，COM3，换 115200 也无效）；
+# 配 flash_before 后工具改用 esptool 直烧并加 --before usb_reset，一次成功。
+# 若换成 CH340/UART 桥接串口烧录，删掉这行（退回 idf.py flash 的默认复位）。
+flash_before: usb_reset
+
+# 观测阶段的复位方式：none = 只开串口读，绝不碰 DTR/RTS。
+# 本板是原生 USB-Serial/JTAG，DTR/RTS 会被外设当作 EN/IO0 的电平合成复位，
+# 实测一碰就可能把芯片按进 ROM 下载模式（boot:0x23 = IO0 低），再也读不到 app 日志。
+# 所以跑完 flash 后，本工具只做被动观测；要复位就人工按一下板上的 RST/EN。
+reset_method: none
+
+# 报告目录（相对 --project，即 platform/esp32/project/autodebug_reports）
+report_dir: autodebug_reports

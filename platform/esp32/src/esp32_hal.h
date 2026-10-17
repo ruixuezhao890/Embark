@@ -8,9 +8,10 @@
  * 唯一的差异：宿主的外设（显示/输入）由入口按需 attach 进来，真机的显示与输入就是板载
  * ST7789 + CST328，直接是 Esp32Hal 的成员 —— 少一次装配，也少一处可能忘记挂的地方。
  *
- * 初始化顺序：日志最先（后面每一步失败都要有出口），然后时间/系统，再存储与总线，
- * 显示与输入（要动 GPIO / SPI / I2C，放在能打日志之后出问题才看得见），最后挂 SD 卡
- * （issue 25：插卡是可选路径，挂在最后，失败只记日志、不挡启动）。
+ * 初始化顺序：日志最先（后面每一步失败都要有出口），然后总线与时间（时间后端要借板载
+ * I2C 读 RTC，所以总线必须在它之前；2026-10-17 起这个次序比"时间/系统再总线"要紧），
+ * 再系统与存储，接着显示与输入（要动 GPIO / SPI / I2C，放在能打日志之后出问题才看得见），
+ * 最后挂 SD 卡（issue 25：插卡是可选路径，挂在最后，失败只记日志、不挡启动）。
  */
 #ifndef EMBARK_PLATFORM_ESP32_HAL_H
 #define EMBARK_PLATFORM_ESP32_HAL_H
@@ -39,7 +40,8 @@ class Esp32Hal {
   Esp32Hal& operator=(const Esp32Hal&) = delete;
 
   /// 依次初始化各后端并装好默认 logger。返回第一个失败项；none = 全部就绪；幂等。
-  /// 顺序：log → time → system → storage → bus → display → input → sd。
+  /// 顺序：log → bus → time → system → storage → display → input → sd。
+  /// （bus 在 time 之前：时间后端要用板载 I2C 读 PCF85063，见 time_.init(&bus_)。）
   /// SD 挂载失败（没配置引脚 / 没插卡 / 认不出卡）不算失败：只记日志，Context::filesystem
   /// 保持 nullptr，运行时字库服务据此返回 not_ready。
   [[nodiscard]] Error init() noexcept;

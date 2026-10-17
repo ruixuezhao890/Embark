@@ -3,7 +3,11 @@
 # REQUIRES embark 是为了拿到它的 PUBLIC 头文件（embark/*.h、各 App 的 {h,cpp} 等），
 # 以及它 **PUBLIC** 传下来的 `-include config/embark_config.h`
 # （ETL 锁宏、日志开关、平台宏的唯一开关；少了它 callback_timer.h 会直接 #error）。
-idf_component_register(SRCS "main.cpp" INCLUDE_DIRS "." REQUIRES embark)
+idf_component_register(SRCS "main.cpp" INCLUDE_DIRS "." REQUIRES embark autodebug)
+
+# autodebug = esp32-autodebug 的固件后门组件（platform/esp32/project/components/autodebug，随工程
+# 一起提交）。要用宿主闭环调试时 main.cpp 会调 autodebug_init / autodebug_pass；不用了就把 REQUIRES
+# 里的 autodebug 去掉、连同 main.cpp 里那几处调用一起删。
 
 # 入口 TU 也按内核口径编译：C++17、无异常、无 RTTI —— 与 embark 组件同一套语言口径，
 # 免得同一个头文件在两个 TU 里按不同标准/异常模型编出不一致的 inline 代码。

@@ -31,10 +31,14 @@ void show();
 /// 刷新屏上读数，并在按下沿打一条串口日志。show() 之前调用是 no-op。
 void pump_touch();
 
-/// SD 卡 + 运行时字库自检（issue 25）：挂载了 SD 就加载 sd_font_probe_file、量一次
-/// sd_font_probe_text 的尺寸、真渲染一个字形，然后释放并核对记账与 PSRAM 池归零；
-/// 没挂载只打一行日志。必须在 framework.boot()（lv_init）之后调用，只需调一次。
-void check_sd_font();
+/// SD 卡 + 运行时字库自检（issue 25）：加载 sd_font_probe_file、量 sd_font_probe_text 的
+/// 尺寸、真渲染一个字形，然后释放并核对记账与字库池归零。
+///
+/// 返回值 = 这一项到底过没过：只有「卡挂载 + 字库服务起来 + 文件加载 + 尺寸落在期望窗口 +
+/// 渲染没炸 + 释放后记账归零」全过才是 true；没插卡、没配引脚、文件不在、字号不对、账目
+/// 没归零都返回 false（"没插卡就当通过"等于这轮白测）。调用方 main.cpp 拿它决定发通过
+/// 令牌还是 fatal。必须在 framework.boot()（lv_init）之后调用，只需调一次。
+[[nodiscard]] bool check_sd_font();
 
 }  // namespace embark::platform::esp32::bringup
 

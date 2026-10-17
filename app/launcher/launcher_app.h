@@ -76,8 +76,9 @@ class LauncherApp final : public App {
   /// 屏每次装载后都要调（控件是新的对象，磁贴得重新长出来）。
   void rebuild_tiles();
 
-  /// 把本地墙钟写进屏上的 L_Time（大表）/ L_Clock0（右上角小表）。
-  /// 只在值变化时写；控件不存在（屏未装载）时静默跳过。
+  /// 把本地墙钟写进屏上的 L_Time（大表）/ L_Clock0（右上角小表），以及日期行 L_Date
+  /// （「2026年10月17日 星期六」—— 设计稿初值是画死的某一天，必须由这里覆盖）。
+  /// 只在值变化时写（时间看分钟、日期看天）；控件不存在（屏未装载）时静默跳过。
   void refresh_clock();
 
   /// 把主屏天气卡（Card_Weather 的四个文案）刷成 hal().storage 里记住的那个城市。
@@ -93,6 +94,9 @@ class LauncherApp final : public App {
   // 上次刷新的分钟（同分钟不重写）；repaint_screen 会清成 0xFFFFFFFFU —— 屏是重建的，
   // label 已被打回设计稿初值，不清缓存就会一直停在那个初值上。
   std::uint32_t last_minute_ = 0xFFFFFFFFU;
+  // 上次刷新的「本地天数」（1970-01-01 起）。同样每天才重写一次日期行；
+  // repaint_screen 清成 INT64_MIN —— 新屏的 L_Date 又回到设计稿那一天了。
+  std::int64_t last_day_ = INT64_MIN;
   std::uint8_t shown_city_ = 0xFFU;  // 上次画上卡片的城市（0xFF = 屏刚建、必须重画）
   Framework* fw_ = nullptr;          // onCreate 记下；hal().time 是取墙钟的唯一入口
 };

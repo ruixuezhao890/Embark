@@ -98,8 +98,8 @@ cmake -S . -B build -DEMBARK_BUILD_ESP32=ON   # 出现 embark_esp32_hint / embar
 | 能力 | 宿主（`platform/host/`） | 真机（`platform/esp32/src/`） |
 | --- | --- | --- |
 | `IDisplay` | SDL2 窗口 + 软件渲染 | ST7789 + `esp_lcd`：`draw_bitmap` 后**等 DMA 完成信号量**（HAL 的同步语义） |
-| `IInput` | SDL 事件 | CST328：10 ms 节流轮询、坐标去重、press/move/release 状态机 |
-| `ITime` | 墙钟（SDL） | `esp_timer`（`epoch_ms()` → `unsupported`：板载 RTC 未接） |
+| `IInput` | SDL 事件 | CST328：10 ms 节流轮询、坐标去重、press/move/release 状态机；**两个边沿都过 30 ms 去抖窗口**（按下要 3 拍里见 2 拍有点、抬起要连续 3 拍全无点），见 §5.9 |
+| `ITime` | 墙钟（SDL） | `esp_timer` 单调时基 + **板载 PCF85063 RTC**（`I2C_NUM_1`、地址 `0x51`）：开机读一次锚定 UTC epoch，之后用 tick 推算；RTC 不在 / 振荡器停走（OS 位=1）时 `epoch_ms()` 才 `unsupported` |
 | `IPersistence` | exe 同目录二进制文件（32 定长槽） | NVS 命名空间 `embark`（键 ≤15、值 ≤64 字节，写入必 `nvs_commit`） |
 | `IFileSystem` | 可执行文件旁的 `embark_host_fs/`（或 `EMBARK_HOST_FS_ROOT`），定长 4 槽 | SD 卡挂载点 `/sdcard`（SPI2 + FATFS）；`EMBARK_SD_ENABLED` 默认 0，没配引脚 / 没插卡 → `Context::filesystem` 是 `nullptr` |
 | `ILogSink` | stdout | stdout = UART0 控制台（整行 fwrite + fflush） |
@@ -113,10 +113,10 @@ cmake -S . -B build -DEMBARK_BUILD_ESP32=ON   # 出现 embark_esp32_hint / embar
 
 ## 5. 实机 bring-up 清单（上板前无法验证的项，全在这里）
 
-1. **屏幕方向**：烧上去第一屏就是 bring-up 自检屏（`src/esp32_board.h` 的 `bringup_self_test = true`，
-   代码在 `src/esp32_bringup.cpp`）：四角色标 TL/TR/BL/BR + R/G/B/W 四条纯色带 + 中央实时触摸坐标。
-   为什么需要它：真机**还没有 UI 后端**（`app/common/ui_backend.h` 的 `#else` 分支全是 no-op，
-   `kUiBackendName = "none"`），默认屏只是一片主题底 —— 方向/颜色没有任何可比对的画面。
+1. **屏幕方向**：现在**默认屏就是 AiDoGUI 生成的真界面**（`aidogui_ui_bridge`，ADR 0011；
+   `src/esp32_board.h` 的 `bringup_self_test` 已置 `false`），方向/颜色可以直接拿模拟器截图比对。
+   需要回到"纯色带 + 触摸坐标"的自检屏时把那开关改回 `true`（代码在 `src/esp32_bringup.cpp`：
+   四角色标 TL/TR/BL/BR + R/G/B/W 四条色带 + 中央实时触摸坐标）。
    判读：TL 不在左上角（跑出角外 / 色带变成竖条）→ 翻 `lcd_swap_xy`；左右镜像 → 翻 `lcd_mirror_x`；
    上下镜像 → 翻 `lcd_mirror_y`（默认 `false/true/false` = 厂商 ROT_NONE 配方，即 240×320 竖屏，与面板原生方向一致）。
 2. **颜色**：红蓝互换（第 1 条色带显蓝、第 3 条显红）→ 翻 `lcd_rgb_element_order_bgr`；画面"发花/像 16 位错位"
@@ -126,14 +126,14 @@ cmake -S . -B build -DEMBARK_BUILD_ESP32=ON   # 出现 embark_esp32_hint / embar
    点左上应 ≈(0,0)、点右下应 ≈(239,319)。x/y 互换 → `touch_swap_xy`；左右反 → `touch_mirror_x`；上下反 →
    `touch_mirror_y`。启动日志还会打 CST328 自报的 `RES_X / RES_Y`（例：`CST328 就绪：地址 0x1A，自报分辨率 X=240 / Y=320`），
    先用它确认轴方向（面板竖屏 ⇒ x 是短轴 0..239、y 是长轴 0..319）。
-   **核对完把 `bringup_self_test` 置 false**；接上 aidogui/EEZ UI 后端后 `src/esp32_bringup.{h,cpp}`
-   与 `main.cpp` 里的两处 `if constexpr` 调用可以整个删。
+   核对完把 `bringup_self_test` 置回 `false`（现在默认就是 false）；接上 aidogui UI 后端后
+   `src/esp32_bringup.{h,cpp}` 里除 `check_sd_font` 之外的部分与 `main.cpp` 里的色带自检调用可以整个删。
 4. **触摸复位时序**：`touch_reset_low_ms = 20` / `touch_reset_high_ms = 120`（先低后高，厂商口径）。
 5. **背光**：`backlight_pwm_hz = 5000` / `backlight_pwm_bits = 13` / `backlight_default_percent = 70`。
 6. **FreeRTOS 计时**：`CONFIG_FREERTOS_HZ=1000` 是硬要求（默认 100 Hz 下 `pdMS_TO_TICKS(5) == 0`，
    UI 循环会忙等）。改过 `sdkconfig.defaults` 之后要 `idf.py fullclean` 再构建。
-7. **v1 有意不做**（将来要就得先加 HAL 面）：`epoch_ms()`（PCF85063 RTC）、音频、
-   WiFi/BLE、`spi_transfer()`、低功耗与深睡。
+7. **v1 有意不做**（将来要就得先加 HAL 面）：RTC **写时间**（没有可信时间源，也别让固件瞎改芯片）、
+   RTC 秒中断、温度补偿校准、音频、WiFi/BLE、`spi_transfer()`、低功耗与深睡。
 8. **SD 卡（issue 25）**：默认**关**（`src/esp32_board.h` 的 `EMBARK_SD_ENABLED 0`，四个信号脚是 `-1`）。
    要用得先量接线：卡座的 CS / MOSI / MISO / CLK 各走哪个 GPIO（这块板的手册不给这组，照 2D/3D 图纸或
    万用表量；12PIN 排针上的 IO18 / IO15 / GPIO43 / GPIO44 只是候选），填进 `sd_pin_*` 再把开关置 1 ——
@@ -153,6 +153,61 @@ cmake -S . -B build -DEMBARK_BUILD_ESP32=ON   # 出现 embark_esp32_hint / embar
    `lv_font_conv` 产物；同一个心跳行里的 **LVGL 池未回收/峰值看不出变化**是对的（字库不占那 48 KB）。
    屏上还会多出一行黄字「启动」在底部中间（`check_sd_font` 真的渲染并刷了一帧），这是"字库文件能被
    解析并画出字形"的当场证据。
+
+   **自检没过时会怎样**：默认只打错误、**继续启动**（`src/esp32_board.h` 的 `sd_font_check_fatal = false`）——
+   界面缺字表现为空心方框，但设备能用、串口能看到原因；宿主工具那边因为没收到通过令牌，最终判
+   TIMEOUT（退出码 4）而不是 PANIC_DETECTED。把这个开关置 `true` 会让失败当场 `abort()`（panic 回溯 +
+   `addr2line` 回源码行），那只是"专门验收这一项"时的一次性手段；常开的话，没插卡/文件被删/卡槽接触
+   不良都会变成 panic 重启循环 —— 原因看不见，界面也进不去。
+
+9. **触摸判据与跟手（2026-10-17）**：CST328 在**手指静止**时会报"0 个触点"——原来的 poll 读 0xD005 的点数、
+   读到 0 就判松开，于是"按一下"被拆成几十次 press/release：真机 10 秒里按下计数从 56 涨到 259，
+   天气屏 0.2 秒内连切了 4 个城市（北京→上海→广州→深圳），主屏左右滑动也被当成点击。
+   现在判"还有没有手指"用的是 **0xD000 报文第 0 字节**（`src/esp32_input.cpp` 的 `touch_flag_byte`）：
+   真机实测按住期间恒为 `0x06`、抬手当拍就变 `0x00`，连"0xD005 读到 0"的那些拍也一直保持着 ——
+   所以抬起不必再等空窗，1 拍就够。`src/esp32_board.h` 的三个常量：
+
+   | 常量 | 值 | 含义 |
+   |---|---|---|
+   | `touch_poll_period_ms` | 5 | 驱动侧轮询周期（每拍一次 29 字节 I²C 读，约 0.8 ms） |
+   | `touch_press_confirm_hits` | 2 | 连续 2 拍"有手指"才承认按下（10 ms） |
+   | `touch_release_confirm_hits` | 2 | 连续 2 拍"没手指"才承认抬起（10 ms） |
+
+   配合 `config/lv_conf.h` 的 `LV_INDEV_DEF_READ_PERIOD = 10` / `LV_DISP_DEF_REFR_PERIOD = 20`：
+   按下到看见反应 ≈ 10（确认）+ 10（LVGL 取输入）+ 20（刷新）≈ **40 ms**，松手到 UI 收到 release ≈ 10~20 ms
+   （改之前按下 ≈65 ms、抬起 ≈75~105 ms）。还没确认的那一两拍被**静默吞掉**（不抬、不重按），
+   计入心跳里的"吞掉空拍"。**被证伪的路子：INT 脚不可用** —— IO4 在无上下拉/下拉/上拉三种配置下恒读 1，
+   一个边沿都读不到。心跳那一行现在长这样：
+
+   ```
+   触摸 按下 3 / 抬起 3 / 滑动 12 / 吞掉空拍 47 / 读失败 0；帧耗时 均值 5123 us / 峰值 41220 us；墙钟 已对时
+   ```
+
+   判读：按下与抬起应该**基本相等、且与你手点/滑的次数一致**；"吞掉空拍"通常只有个位数（每次按压 1~2 拍）；
+   这两个数再次爆到几十倍 → 手指标志也不是可靠信号了，得回去看 `touch_flag_byte` 的实测样本；
+   "读失败"非 0 → I²C 接触/上拉问题。
+   "帧耗时均值"才是"卡不卡"的判据 —— LVGL 自己的 FPS 浮层在 30 ms 刷新周期下报出过 123 FPS，明显偏乐观。
+
+10. **板载 RTC PCF85063（2026-10-17）**：走**板载 I²C**（`I2C_NUM_1`，SDA=IO11 / SCL=IO10 / INT=IO9，
+   地址 `0x51`，与 IMU 共用这条总线）。驱动在 `src/esp32_rtc.{h,cpp}`，只做三件事：读（0x04..0x0A
+    七个 BCD 寄存器）、判 OS 位、换算 UTC epoch 秒 —— **故意不写时间**（没有可信时间源，也不让固件瞎改芯片）。
+    `Esp32Time` 开机读一次把墙钟锚在本刻，之后用 `esp_timer` 推算（`epoch_ms()` 返回 **UTC 毫秒**，
+    时区由 App 自己加，`local_clock.h` 的 `kLocalOffsetSeconds = 8*3600`）。
+    **HAL 初始化顺序因此改成 `log → bus → time → system → …`**：时间后端要借总线，先起总线才能把
+    "总线没起来"和"RTC 读不到"分开报（同一块板只该有一个 `I2C_NUM_1` 的主人）。
+    启动日志三种结局：
+
+    ```
+    I (…) embark: 板载 RTC：0x51 原始 7 字节 = 45 32 09 17 17 10 26
+    I (…) embark: 墙钟：RTC 已对时，UTC epoch 1792195200 秒（1792195200000 ms），之后用 tick 推算
+    E (…) embark: 板载 RTC：0x51 读不到（…）—— PCF85063 没焊 / SDA IO11 SCL IO10 接反 / 上拉缺失
+    W (…) embark: 板载 RTC：时钟停过（OS 位=1，多半是没有纽扣电池）—— 墙钟不启用
+    ```
+
+    OS 位=1（芯片停过）时，板级开关 `rtc_seed_from_build_time = true` 会**用固件编译时刻播种一次**并清 OS 位：
+    误差 = 编译到上电那几分钟，没有纽扣电池时每次断电都会重播（有电池后播一次就不再写）。
+    播种被关掉或失败时 `epoch_ms()` 返回 `unsupported`，时钟屏显示「等待对时 / ----年--月--日」占位符
+    （不是驱动坏了 —— 芯片**真的不知道自己几点**）。心跳行末尾的"墙钟 …"就是当前状态。
 
 ## 6. 两条构建纪律
 

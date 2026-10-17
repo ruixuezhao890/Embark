@@ -36,7 +36,10 @@ idf_component_register(
         # driver/spi_master.h）。板级引脚默认没填，但驱动代码照样编译（见 esp32_sd.cpp）。
         # 注意 REQUIRES 写成**一行**：IDF 会把它们抄进 build_properties.temp.cmake，
         # 跨行/夹注释会让那份生成文件报 "Argument not separated from preceding token"。
-        REQUIRES lvgl embark_font nvs_flash esp_timer esp_lcd driver fatfs sdmmc esp_driver_sdspi esp_driver_sdmmc esp_driver_spi)
+        # embark_aidogui：AiDoGUI 导出代码（生成代码 + 配置期写出的 aidogui 表头）。
+        # 它只会在启用真机 UI 后端时被用到，但组件注册是静态的 —— 一直是依赖，走 GLOB，
+        # export/ 被重导出时自动重配。
+        REQUIRES lvgl embark_aidogui embark_font nvs_flash esp_timer esp_lcd driver fatfs sdmmc esp_driver_sdspi esp_driver_sdmmc esp_driver_spi)
 
 # 内核与 App 的编译口径（与宿主 embark_kernel_flags 对齐：C++17、无异常、无 RTTI）。
 set_property(TARGET ${COMPONENT_LIB} PROPERTY CXX_STANDARD 17)
@@ -70,3 +73,24 @@ target_compile_definitions(${COMPONENT_LIB} PUBLIC
         EMBARK_LOG_SERIALIZE=1
         EMBARK_PLATFORM_NAME="esp32"
         EMBARK_VERSION_STRING="0.1.0")
+
+# 真机 UI 后端（ADR 0011 的第 3 步，2026-10-17 接线）：`app/common/ui_backend.h` 里
+#   有 EMBARK_AIDOGUI_UI 才把 ui_backend_* 从"三句空实现"切到 AiDoGUI 桥。
+# 宿主在 app/CMakeLists.txt:73 打开同一个宏。
+# PRIVATE：这两个宏只对 embark 组件自己的 TU 有意义（PUBLIC 会传到最终 elf 目标，
+# 那个目标要编一个自动生成的纯 C 文件，别给它塞任何多余的东西）。
+#
+# EMBARK_AIDOGUI_RES_ROOT = 'S' 盘的根：生成代码把字体路径写死成 S:/fonts/*.bin，
+# 真机这份资源就躺在 SD 卡挂载点下（卡上 fonts/ 目录，run19 已就位）。
+target_compile_definitions(${COMPONENT_LIB} PRIVATE
+        EMBARK_AIDOGUI_UI=1
+        "EMBARK_AIDOGUI_RES_ROOT=\"/sdcard\"")
+
+# 固件编译时刻（UTC 秒），2026-10-17 起给板载 RTC 播种用（platform/esp32/src/esp32_time.cpp
+# 的 seed_from_build_time）：芯片报 OS=1 时用它把时间写回芯片并清 OS 位。板子没有可信时间源，
+# 但"这份固件什么时候编的"是已知的 —— 误差 = 编译到上电那几分钟，日志里会明写这是近似值。
+#
+# 求值时机是 cmake **配置**阶段（不是每次编译），所以只改代码不重配时这个数会停在上次配置
+# 的时刻。对"播种"这个用途来说几分钟偏差无所谓；真要精确对时得等上位机下发时间的通道。
+string(TIMESTAMP EMBARK_BUILD_EPOCH "%s" UTC)
+target_compile_definitions(${COMPONENT_LIB} PRIVATE EMBARK_BUILD_EPOCH=${EMBARK_BUILD_EPOCH})

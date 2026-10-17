@@ -24,6 +24,15 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 # frames visibly.
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 
+# --- SD card ------------------------------------------------------------------
+# Runtime fonts and images are read from the SD card under the names the export
+# pipeline generates (fonts/ui_font_ui_heiti_14.bin) -- i.e. long file names.
+# IDF defaults to CONFIG_FATFS_LFN_NONE, where FATFS only sees the 8.3 aliases,
+# so every such fopen() fails with not_found: the bringup font self-test printed
+# "error 3" on real hardware until this was switched on (issue 25).
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=255
+
 # --- FreeRTOS -----------------------------------------------------------------
 # 1 tick = 1 ms. This is a hard requirement, not tuning: the framework UI loop
 # ticks every 5 ms (config/embark_limits.h: ui_loop_period_ms) and

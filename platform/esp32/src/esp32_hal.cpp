@@ -27,7 +27,17 @@ Error Esp32Hal::init() noexcept {
     log_installed_ = (logger != nullptr);
   }
 
-  const Error time_error = time_.init();
+  // 总线先起：2026-10-17 起时间后端要借它读板载 RTC（I2C_NUM_1，IMU 与 RTC 共用）。
+  // 建总线本身不发任何事务，失败只可能是引脚/控制器被占 —— 放在时间之前，"总线没起来"
+  // 与"RTC 读不到"才分得开。
+  const Error bus_error = bus_.init();
+  if (bus_error != Error::none) {
+    return bus_error;
+  }
+
+  // 时间：now_ms/delay_ms 本来不需要初始化，这一步实际做的是"探 RTC 并把墙钟锚在本刻"。
+  // 传 &bus_ 而不是让它自己建总线：同一块板只该有一个 I2C_NUM_1 的主人（句柄也是复用的）。
+  const Error time_error = time_.init(&bus_);
   if (time_error != Error::none) {
     return time_error;
   }
@@ -38,10 +48,6 @@ Error Esp32Hal::init() noexcept {
   const Error storage_error = storage_.init();
   if (storage_error != Error::none) {
     return storage_error;
-  }
-  const Error bus_error = bus_.init();
-  if (bus_error != Error::none) {
-    return bus_error;
   }
 
   // 显示与输入：真机上都在（板载屏与触摸），但还是按 Context 的可空语义判空 ——

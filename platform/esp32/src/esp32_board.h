@@ -82,9 +82,24 @@ inline constexpr std::uint16_t touch_reg_res_x = 0xD1F8;  // 面板 X 分辨率�
 inline constexpr std::uint16_t touch_reg_res_y = 0xD1FA;  // 面板 Y 分辨率
 inline constexpr std::uint8_t touch_max_points = 5;
 inline constexpr std::uint16_t touch_point_bytes = 27;  // 0xD000 一次读回的字节数
-// 轮询周期：10 ms（100 Hz）。触摸不需要更快 —— CST328 自己也有内部滤波，
-// 而每次读都是两次 I2C 事务，采样再密只会白占 CPU 与总线。
-inline constexpr std::uint32_t touch_poll_period_ms = 10;
+// 轮询周期：5 ms（200 Hz）。2026-10-17 从 10 ms 减半 —— 判抬手的依据已经换成报文里的
+// 手指标志（见 esp32_input.cpp 的 read_point），不再靠"数空拍"，所以这个周期直接就是跟手
+// 延迟本身，越快越跟手。每拍一次 I2C 读（29 字节，400 kHz 下约 0.8 ms），200 Hz 的开销可忽略。
+inline constexpr std::uint32_t touch_poll_period_ms = 5;
+// 去抖（2026-10-17 真机实测：一次按压被拆成几十次 press/release —— 10 秒里"触摸按下"从
+// 56 次涨到 259 次，一次点击在天气屏上连切了 4 个城市）。机制是 CST328 在手指不动时会报
+// "0 个触点"（那是"没有新报告"，不是"抬手"），驱动每拍读完又清中断，于是空拍被当成抬起、
+// 下一拍又当成重新按下。
+// 现在判据是 0xD000 报文里的**第 0 字节**（手指标志）：真机实测按住时恒为 0x06、抬手当即变
+// 0x00，连"0xD005 读到 0"的那些拍也一直保持着 —— 抬起不必再等空窗，1 拍就够（5 ms）。
+// （INT 脚那条路已排除：三种上下拉配置下 GPIO4 恒读 1，见 .scratch 里的探测记录。）
+// 下面两个计数只用来挡单拍杂点（总线抖一下、状态切换那一拍里的半旧数据）：
+//   * 按下 —— 连续 touch_press_confirm_hits 拍都"有手指"才算（2 拍 = 10 ms）；
+//   * 抬起 —— 连续 touch_release_confirm_hits 拍都"没手指"才算（2 拍 = 10 ms）。
+// 中间那些"还没确认"的拍被静默吞掉（计数见 Esp32Input::swallowed_gaps()），不抬也不重按。
+// 对照：改之前抬起要等 6 拍（60 ms），按下到看见反应约 65 ms、松手到抬起约 75~105 ms。
+inline constexpr std::uint8_t touch_press_confirm_hits = 2;
+inline constexpr std::uint8_t touch_release_confirm_hits = 2;
 // CST328 原始坐标与面板同向（竖屏）：x 是短轴（0..239）、y 是长轴（0..319）。
 // 实机若 x/y 互换 → 打开 touch_swap_xy；方向反了 → 打开对应的 touch_mirror_*。
 // 启动日志会打印 CST328 自报的 RES_X / RES_Y，先用它判定轴方向再动这几个开关。
@@ -95,41 +110,57 @@ inline constexpr bool touch_mirror_y = false;
 // --- bring-up 自检屏 ----------------------------------------------------------
 // 上板核对「方向 / 颜色 / 触摸」用的最小证据屏（platform/esp32/src/esp32_bringup.cpp）：
 // 四角色标 TL/TR/BL/BR + R/G/B/W 四条纯色带 + 中央实时触摸坐标。
-// 为什么默认开：真机还没有 UI 后端（app/common/ui_backend.h 的 #else 全是 no-op），
-// 烧上去本是一屏空白，bring-up 清单里的方向/颜色两项没有可比对的画面。
-// 接上 aidogui/EEZ UI 后端后把它置 false（esp32_bringup.{h,cpp} 可整个删，
-// main.cpp 的两处 if constexpr 一起删）。
-inline constexpr bool bringup_self_test = true;
+// 为什么曾默认开：2026-10-06 那些天真机还没有 UI 后端（app/common/ui_backend.h 的 #else
+// 全是 no-op），烧上去本是一屏空白，bring-up 清单里的方向/颜色两项没有可比对的画面。
+// 2026-10-17 起真机接上了 AiDoGUI UI 后端（components/embark_aidogui + EMBARK_AIDOGUI_UI），
+// 默认屏就是 launcher 的真实界面 ⇒ 这张自检屏改回 false（它占着默认屏，会挡住界面）。
+// 要重新核对方向/颜色/触摸时临时置 true，看完再关；彻底不用了就把 esp32_bringup.{h,cpp}
+// 连同 main.cpp 的两处 if constexpr 一起删。
+inline constexpr bool bringup_self_test = false;
 
 // --- SD 卡（issue 25）----------------------------------------------------------
-// 板上确实有 Micro SD 卡座（微雪官方 wiki 列了它），但卡座的信号线没出现在任何官方
-// 页面里（只有 2D/3D 图纸），所以四个信号脚先留成 -1 占位：照原理图查出来、或者在卡座
-// 焊点与排针之间用万用表量通断，填完再把 EMBARK_SD_ENABLED 改成 1。填之前下面末段的
-// static_assert 会挡下来 —— 与其让一个引脚写错的固件跑起来，不如编译期就报错。
+// 接线已量：卡座的四根 SPI 线走 IO14（SCLK）/ IO16（MISO）/ IO17（MOSI）/ IO21（CS）
+// —— 微雪板 SD 引脚表逐脚核对过。IO15（D2）与 IO18（D1）是 4-bit SD 模式的数据线，
+// 1-bit SPI 用不到，留空不接。
 //
 // 走 SPI 而不是 SDMMC：SPI 对引脚没有额外要求，任意四个 GPIO 都能接；SDMMC 要求卡座
-// 的信号走在固定的 IO_MUX 引脚上，而这一点在查到接线之前无法确认。SPI 主机用 SPI2
-// （SPI3 归屏幕，见 esp32_display.cpp），驱动是 IDF 的 sdspi（fatfs 之上那一层与 SDMMC 共用）。
-// 想外接模块的话：板上 12PIN 多功能接口给出的 IO18 / IO15 / GPIO43 / GPIO44 正好四根。
-#define EMBARK_SD_ENABLED 0
+// 的信号走在固定的 IO_MUX 引脚上。SPI 主机用 SPI2（SPI3 归屏幕，见 esp32_display.cpp），
+// 驱动是 IDF 的 sdspi（fatfs 之上那一层与 SDMMC 共用）。
+#define EMBARK_SD_ENABLED 1
 inline constexpr bool sd_enabled = (EMBARK_SD_ENABLED != 0);
-inline constexpr int sd_pin_cs = -1;
-inline constexpr int sd_pin_mosi = -1;
-inline constexpr int sd_pin_miso = -1;
-inline constexpr int sd_pin_clk = -1;
+inline constexpr int sd_pin_cs = 21;    // IO21 → SD_CS
+inline constexpr int sd_pin_mosi = 17;  // IO17 → SD_MOSI
+inline constexpr int sd_pin_miso = 16;  // IO16 → SD_MISO
+inline constexpr int sd_pin_clk = 14;   // IO14 → SD_SCLK
 // 卡检测脚（卡座上的 CD）：-1 = 没接。填了就只在启动日志里报一行电平 —— 极性随卡座
 // 而定，确认之前不拿它做判断（挂载失败同样能得出"没插卡"的结论）。
 inline constexpr int sd_pin_detect = -1;
-inline constexpr int sd_spi_host = 2;  // = SPI2_HOST
+// 主机号是 spi_host_device_t 的**枚举值**，不是名字里的数字（IDF
+// components/hal/include/hal/spi_types.h：SPI1_HOST=0、SPI2_HOST=1、SPI3_HOST=2）。
+// 这里曾写 2 —— 那落到的正是屏幕占着的 SPI3，spi_bus_initialize 直接回
+// ESP_ERR_INVALID_STATE（"SPI bus already initialized"），SD 挂不上。实机 2026-10-17 撞过。
+inline constexpr int sd_spi_host = 1;  // = SPI2_HOST
 // 10 MHz：杜邦线/长线也能跑稳；卡与线都短且质量好时可以往上加。
 inline constexpr std::uint32_t sd_spi_hz = 10U * 1000U * 1000U;
 inline constexpr const char* sd_mount_point = "/sdcard";
-// 运行时字库自检（bringup::check_sd_font）：卡上要放的文件 + 用来量宽度的两个字。路径
+// 运行时字库自检（bringup::check_sd_font）：卡上要放的文件 + 用来量尺寸的两个字。路径
 // 相对挂载点，与宿主同一个口径（'F' 盘 = IFileSystem 的根）。卡上建个 fonts/ 目录，把
 // app/aidogui_ui/export/font/ui_font_ui_heiti_14.bin 抄进去即可（任意 lv_font_conv 出的
-// .bin 都行）；文件不在只是这一项跳过，不是故障。
+// .bin 都行）。文件不在 = 这一项没过（返回 false），不是"跳过"。
 inline constexpr const char* sd_font_probe_file = "fonts/ui_font_ui_heiti_14.bin";
 inline constexpr const char* sd_font_probe_text = "启动";
+// 期望尺寸：_14 这份字库声明的字号是 14 px，「启动」两个字全角 ⇒ 宽 ≈ 2×14 = 28 px；
+// 高是字库自己的 line_height（LVGL 口径 = ascent − descent，这份字库 13 − (−3) = 16 px，
+// 见 third_party/lvgl/src/font/lv_font_loader.c:504），所以判据给的是 [字号, 字号+3] 这个
+// 窗口而不是写死 28×14：窗口挡得住"把别的字号改名成 _14"（_11 会量到 12、_22 量到 25，
+// 都在窗口外），又不会被 ascender/descender 的口径差打偏。
+inline constexpr int sd_font_probe_size = 14;
+inline constexpr int sd_font_probe_height_slack = 3;
+// 自检没过时的策略：默认**只报错、继续启动**（2026-10-17 改）。以前这里是 true —— 当场 abort()
+// 走 IDF panic handler 打回溯，是"专门验收这一项"时的一次性手段。设备到了日常使用，卡没插好、
+// 文件被删、卡槽接触不良都会让它 abort → panic → 重启 → 再 abort，无限重启循环：既看不到原因，
+// 也没法降级使用（界面缺字总比一直重启好）。要当场取证时再临时置 true。
+inline constexpr bool sd_font_check_fatal = false;
 
 // --- 板载 I2C（IMU / RTC 共用）——框架 hal::IBus 走这条 ----------------------
 inline constexpr int bus_pin_sda = 11;
@@ -141,6 +172,21 @@ inline constexpr int bus_i2c_port = 1;
 inline constexpr std::uint32_t bus_i2c_timeout_ms = 100;
 // 这条总线上最多挂几个从设备（IMU + RTC + 以后要加的，4 个够；句柄是懒创建的）。
 inline constexpr std::size_t bus_max_devices = 4;
+
+// --- 板载 RTC：PCF85063ATL（挂上面那条 I2C_NUM_1）-----------------------------
+// 引脚（2026-10-17 用户按图纸确认，芯片已焊）：IO9 = RTC_INT / IO10 = SCL / IO11 = SDA
+// —— SCL/SDA 与上面的 bus_pin_scl / bus_pin_sda 是同一对，所以 RTC 不是"另一条总线"，
+// 而是 I2C_NUM_1 上的第二个从设备（第一个是 IMU QMI8658）。
+inline constexpr std::uint8_t rtc_address = 0x51;
+// 中断脚只记录、不驱动：本驱动开机读一次 + 之后用 tick 推算，不需要秒中断。
+// 将来要做"每秒由 RTC 唤醒"时，把它接成 GPIO 中断再改 Esp32Time。
+inline constexpr int rtc_pin_int = 9;
+// 开机可以用"固件编译时刻"给 RTC 播种（2026-10-17 定的策略，见 esp32_time.cpp 的
+// seed_from_build_time()）：板子没有可信时间源，但"这份固件是什么时候编出来的"是已知的，
+// 用它把芯片从 2000-01-01 拉回现在、顺手清掉 OS 位。
+// 误差 = 编译到上电那几分钟；没有纽扣电池时每次开机都会重新播种（这也是当前的实情）。
+// 有电池之后播种一次就能一直走，那时把这个开关留着也无害（OS=0 就不会再写）。
+inline constexpr bool rtc_seed_from_build_time = true;
 
 // --- 任务落核 ----------------------------------------------------------------
 // UI 任务落 core 1（IDF 自己的任务基本都在 core 0），后台 own task 落 core 0，

@@ -99,11 +99,51 @@ void on_band_scrolled(lv_event_t* event) {
   paint_dots();
 }
 
+/// 点击容差（px）：按下到抬起的位移超过它就算"拖"，不算点击。
+/// 真机上 LVGL 偶尔没来得及把这段位移当成滚动（采样太稀 → 攒不够滚动阈值），
+/// 于是一次快速轻划会在手指松开时派发 CLICKED，直接进了 App。滚动这条路修好之后
+/// 这条兜底仍在：只要位移超过容差就不认这一下点击。
+constexpr lv_coord_t kTapSlopPx = 12;
+
+lv_point_t g_press_point = {0, 0};
+bool g_press_point_valid = false;
+
+void on_tile_pressed(lv_event_t* event) {
+  (void)event;
+  lv_indev_t* indev = lv_indev_get_act();
+  if (indev == nullptr) {
+    g_press_point_valid = false;
+    return;
+  }
+  lv_indev_get_point(indev, &g_press_point);
+  g_press_point_valid = true;
+}
+
 void on_tile_clicked(lv_event_t* event) {
   const auto* slot = static_cast<const TileSlot*>(lv_event_get_user_data(event));
   if (slot == nullptr || slot->app == nullptr) {
     return;
   }
+
+  // 拖过就不算点击（容差内才算）。取不到按下点时不拦（fail-open），宁可按旧行为点击。
+  const bool had_press_point = g_press_point_valid;
+  const lv_point_t press_point = g_press_point;
+  g_press_point_valid = false;
+  if (had_press_point) {
+    lv_indev_t* indev = lv_indev_get_act();
+    if (indev != nullptr) {
+      lv_point_t now = press_point;
+      lv_indev_get_point(indev, &now);
+      const lv_coord_t dx = now.x - press_point.x;
+      const lv_coord_t dy = now.y - press_point.y;
+      if (dx * dx + dy * dy > kTapSlopPx * kTapSlopPx) {
+        ELOG_INFO("主屏磁贴：位移 {}×{} px 超过点击容差，忽略这次点击（{}）",
+                  static_cast<int>(dx), static_cast<int>(dy), slot->app);
+        return;
+      }
+    }
+  }
+
   ELOG_INFO("主屏磁贴点击：{}", slot->app);
   (void)aidogui_ui_nav_request_app(slot->app);  // 与设计器事件同一条导航路
 }
@@ -172,6 +212,7 @@ std::size_t launcher_tiles_rebuild(const char* screen_name, const LauncherTile* 
     lv_obj_set_style_radius(tile, design_tokens::tile_radius, 0);
     g_tiles[index].app = tiles[index].app_name;
     g_tiles[index].obj = tile;
+    lv_obj_add_event_cb(tile, &on_tile_pressed, LV_EVENT_PRESSED, &g_tiles[index]);
     lv_obj_add_event_cb(tile, &on_tile_clicked, LV_EVENT_CLICKED, &g_tiles[index]);
 
     lv_obj_t* label = lv_label_create(tile);

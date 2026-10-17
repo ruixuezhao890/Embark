@@ -1,0 +1,7 @@
+## esp32-autodebug 固件后门组件清单(manifest version 1.0)
+version: "0.1.0"
+description: "UART self-report backdoor for esp32-autodebug host loop"
+targets:
+  - esp32s3
+dependencies:
+  idf: ">=5.0"

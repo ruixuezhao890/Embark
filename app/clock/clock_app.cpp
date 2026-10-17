@@ -111,38 +111,8 @@ constexpr const char* kBtnNextWidget = "Btn_Next";
   return kDim[m - 1];
 }
 
-[[nodiscard]] std::int64_t floor_div(std::int64_t a, std::int64_t b) noexcept {
-  const std::int64_t q = a / b;
-  return ((a % b != 0) && ((a < 0) != (b < 0))) ? q - 1 : q;
-}
-
-/// Howard Hinnant 的 civil-from-days：把「1970-01-01 起的天数」换成公历年月日。
-[[nodiscard]] std::int64_t days_from_civil(int y, int m, int d) noexcept {
-  const std::int64_t yy = (m <= 2) ? static_cast<std::int64_t>(y) - 1 : y;
-  const std::int64_t era = floor_div(yy, 400);
-  const std::int64_t yoe = yy - era * 400;                                  // [0, 399]
-  const std::int64_t doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;  // [0, 365]
-  const std::int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;           // [0, 146096]
-  return era * 146097 + doe - 719468;
-}
-
-void civil_from_days(std::int64_t z, int& y, int& m, int& d) noexcept {
-  z += 719468;
-  const std::int64_t era = floor_div(z, 146097);
-  const std::int64_t doe = z - era * 146097;                                       // [0, 146096]
-  const std::int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;  // [0, 399]
-  const std::int64_t yy = yoe + era * 400;
-  const std::int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);  // [0, 365]
-  const std::int64_t mp = (5 * doy + 2) / 153;                       // [0, 11]
-  d = static_cast<int>(doy - (153 * mp + 2) / 5 + 1);
-  m = static_cast<int>(mp + (mp < 10 ? 3 : -9));
-  y = static_cast<int>(yy + (m <= 2 ? 1 : 0));
-}
-
-/// 星期（0 = 周日）—— 1970-01-01 是周四，所以偏移 11。
-[[nodiscard]] int weekday_sun0(std::int64_t days) noexcept {
-  return static_cast<int>(((days % 7) + 11) % 7);
-}
+// floor_div / days_from_civil / civil_from_days / weekday_sun0 都在
+// local_clock.h（launcher 的日期行也要用同一份换算，两处各写一份迟早对不上）。
 
 [[nodiscard]] int day_of_year(int y, int m, int d) noexcept {
   int n = d;

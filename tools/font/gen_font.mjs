@@ -87,10 +87,13 @@
  * 本脚本在 lv_font_conv 输出后对 4bpp 位图做线性提升 v' = min(15, round(v*GAIN))，
  * 保持边缘抗锯齿梯度、把笔画主体抬到接近 15，逼近 FreeType 效果，同时继续用
  * Noto Sans SC（OFL，可随仓库分发；simhei/msyh 的实心效果来自专有字体，不用）。
- * 字形几何（adv_w / box / ofs / kerning / cmap）一概不动，只重写 glyph_bitmap[]
- * 载荷，并用与 third_party/lvgl/src/font/lv_font_fmt_txt.c:514-572 解码状态机
- * 逐位对应的编码器（预滤波 XOR + RLE）回写；回写后对每个字形做
- * 「解码(编码(提升后)) == 提升后」回环断言，不满足直接抛错。
+ * 字形几何（adv_w / box / ofs / kerning / cmap）一概不动，但 glyph_bitmap[]
+ * 载荷重编码后**每个字形的流长会变**（RLE 不是等长编码），所以 glyph_dsc[] 的
+ * bitmap_index 必须按新流重新计算并一起回写。历史 bug（2026-10-17 修）：只写载荷
+ * 不改索引 ⇒ LVGL 仍按旧偏移取流，从第一个变长的字形之后整体错位，屏幕上就是乱码
+ * （实测 185 个字形里 168 个解不出来）。编码器与
+ * third_party/lvgl/src/font/lv_font_fmt_txt.c:514-572 的解码状态机逐位对应
+ * （预滤波 XOR + RLE），回写后对每个字形做「解码(编码(提升后)) == 提升后」回环断言。
  * 开关：ALPHA_GAIN = 0 关闭提升。
  * ---------------------------------------------------------------------
  */
@@ -284,6 +287,54 @@ function parseCmaps(src) {
   return cmaps;
 }
 
+/**
+ * 逐字形校验「RLE 流长度 vs glyph_dsc.bitmap_index 间距」。
+ * 解码该字形的 w*h 个像素后消耗的位数必须落在 [segBits-7, segBits]（每段末尾最多
+ * 7 位按字节对齐）。这条不变量就是 2026-10-17 乱码事故的防线：载荷重编码后长度变了
+ * 却没改写索引，这里会立刻报出来。
+ */
+function checkGlyphStreamAlignment(src) {
+  const bppM = src.match(/\.bpp\s*=\s*(\d+)/);
+  const bpp = bppM ? Number(bppM[1]) : BPP;
+  const fmtM = src.match(/\.bitmap_format\s*=\s*(\d+)/);
+  const compressed = fmtM ? Number(fmtM[1]) !== 0 : false;
+  if (!compressed) return { ok: true, detail: 'skipped (bitmap_format = 0, PLAIN)', mismatches: [] };
+
+  const gdHead = src.indexOf('glyph_dsc[] = {');
+  const bHead = src.indexOf('glyph_bitmap[] = {');
+  if (gdHead < 0 || bHead < 0) return { ok: false, detail: 'glyph_dsc[]/glyph_bitmap[] not found', mismatches: [] };
+
+  const gdBody = src.slice(gdHead, src.indexOf('};', gdHead));
+  const glyphs = [...gdBody.matchAll(
+    /\.bitmap_index\s*=\s*(\d+),\s*\.adv_w\s*=\s*\d+,\s*\.box_w\s*=\s*(\d+),\s*\.box_h\s*=\s*(\d+)/g,
+  )].map((m) => ({ bi: Number(m[1]), w: Number(m[2]), h: Number(m[3]) }));
+
+  const bStart = src.indexOf('{', bHead) + 1;
+  const bytes = Uint8Array.from(
+    (src.slice(bStart, src.indexOf('};', bStart)).match(/0x[0-9a-fA-F]{1,2}/g) || []).map((t) => parseInt(t, 16)),
+  );
+
+  const mismatches = [];
+  for (let i = 0; i < glyphs.length; i++) {
+    const g = glyphs[i];
+    if (g.w === 0 || g.h === 0) continue; // 空格之类：没有流
+    const next = i + 1 < glyphs.length ? glyphs[i + 1].bi : bytes.length;
+    const segBits = (next - g.bi) * 8;
+    const rd = makeBitReader(bytes.subarray(g.bi));
+    rleDecode(rd, bpp, g.w, g.h);
+    if (rd.pos > segBits || segBits - rd.pos > 7) {
+      mismatches.push({ index: i, bitmap_index: g.bi, box: g.w + 'x' + g.h, segBits, consumedBits: rd.pos });
+    }
+  }
+  return {
+    ok: mismatches.length === 0,
+    detail: mismatches.length === 0
+      ? 'all ' + glyphs.length + ' glyph streams align'
+      : mismatches.length + ' of ' + glyphs.length + ': ' + JSON.stringify(mismatches.slice(0, 3)),
+    mismatches,
+  };
+}
+
 /** 校验生成的 .c。返回 { checks, facts }，任一 check 失败即抛错。 */
 function verify(cRel) {
   const cPath = path.join(REPO_ROOT, cRel);
@@ -358,6 +409,10 @@ function verify(cRel) {
     dscEntries === EXPECTED_GLYPH_COUNT + 1,
     'actual=' + dscEntries,
   );
+
+  // 7b) 每个字形的 RLE 流长度必须与 bitmap_index 间距一致
+  const align = checkGlyphStreamAlignment(src);
+  check('glyph streams align with bitmap_index', align.ok, align.detail);
 
   // 8) cmaps：ASCII 走 FORMAT0_TINY（unicode_list = NULL，覆盖 = range_length），
   //    非 ASCII 走 SPARSE_TINY（覆盖 = list_length）。
@@ -621,6 +676,13 @@ function boostAlphaInPlace(cRel) {
   const segLen = (i) => (i + 1 < glyphs.length ? glyphs[i + 1].bi - glyphs[i].bi : oldBytes.length - glyphs[i].bi);
   oldTotal = glyphs.reduce((a, _g, i) => a + segLen(i), 0);
 
+  // 新偏移表：重编码后的每段长度与原段不同，glyph_dsc[].bitmap_index 必须同步改写。
+  const newIndex = [];
+  for (let i = 0, acc = 0; i < parts.length; i++) {
+    newIndex.push(acc);
+    acc += parts[i].length;
+  }
+
   const newBytesTotal = parts.reduce((a, b) => a + b.length, 0);
   const fmtHex = (arr) => {
     const rows = [];
@@ -630,12 +692,22 @@ function boostAlphaInPlace(cRel) {
     return rows.join(',\n');
   };
   srcText = srcText.slice(0, bStart) + '\n' + fmtHex(parts.flatMap((p) => [...p])) + '\n' + srcText.slice(bEnd);
+
+  // 回写 glyph_dsc[] 的 bitmap_index（.bitmap_index 只出现在这张表里，按出现顺序替换）。
+  let hit = 0;
+  srcText = srcText.replace(/\.bitmap_index\s*=\s*\d+/g, (m) =>
+    hit < newIndex.length ? '.bitmap_index = ' + String(newIndex[hit++]) : m,
+  );
+  if (hit !== glyphs.length) {
+    throw new Error('bitmap_index rewrite count mismatch: ' + hit + ' vs ' + glyphs.length);
+  }
   writeFileSync(cPath, srcText, 'utf8');
 
   return {
     bpp,
     format: fmt,
     prefilter,
+    indexesRewritten: hit,
     glyphs: glyphs.length,
     changedGlyphs,
     boostedPixels,

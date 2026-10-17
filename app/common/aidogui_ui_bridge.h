@@ -79,6 +79,15 @@ AidoguiFontReport aidogui_ui_bridge_font_report();
 /// 只能走这里 —— 生成代码的 ui_font_* 符号不泄进 App 编译面（见本文件头）。
 lv_font_t* aidogui_ui_bridge_font(int size);
 
+/// 字库分配作用域钩子（可选，平台在第一次装载屏之前登记一次；不登记 = 直接走 LVGL 的堆）。
+/// 为什么需要：BIN 字契是运行时 lv_font_load() 出来的，7 个字号合计 57 KB，全落 LVGL 池会把
+/// 48 KB 的静态池撞穿。真机的字库单独走一块 PSRAM 池（platform/common/font_alloc_scope.h），
+/// 但那是平台头，桥是平台中立层 —— 于是只留两个"进/出"回调，由 main.cpp 转发过去。
+/// 桥只在「加载 BIN 字体」那一段里成对调用 begin/end；释放（lv_font_free）不需要作用域：
+/// 真机的池按地址判归属，谁的指针回谁的池。
+using AidoguiFontScopeHook = void (*)();
+void aidogui_ui_bridge_set_font_scope(AidoguiFontScopeHook begin, AidoguiFontScopeHook end);
+
 // --- 屏表 -------------------------------------------------------------------
 int aidogui_ui_bridge_screen_count();
 const char* aidogui_ui_bridge_screen_name(int index);

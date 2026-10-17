@@ -10,6 +10,7 @@
  */
 #include "esp32_sd.h"
 
+#include <cstdint>
 #include <cstdio>
 
 #include <driver/gpio.h>
@@ -44,9 +45,12 @@ Error SdCard::mount() noexcept {
 
   // 卡检测脚：只在日志里报一行电平。极性随卡座而定，确认之前不拿它做判断 ——
   // 挂载失败同样能得出"没插卡"的结论。
-  if (sd_pin_detect >= 0) {
+  if (sd_pin_detect >= 0 && sd_pin_detect < 64) {
     gpio_config_t detect = {};
-    detect.pin_bit_mask = 1ULL << static_cast<unsigned>(sd_pin_detect);
+    // & 63 是给编译器的：sd_pin_detect 是 constexpr，本板填 -1 时这行仍会被常量求值，
+    // 直接写 1ULL << static_cast<unsigned>(-1) 会报 -Wshift-count-overflow（虽然走不到）。
+    // 真引脚 0..63 经 & 63 后不变。
+    detect.pin_bit_mask = 1ULL << (static_cast<unsigned>(sd_pin_detect) & 63U);
     detect.mode = GPIO_MODE_INPUT;
     detect.pull_up_en = GPIO_PULLUP_ENABLE;
     static_cast<void>(gpio_config(&detect));
@@ -80,9 +84,12 @@ Error SdCard::mount() noexcept {
   slot.gpio_wp = SDSPI_SLOT_NO_WP;
 
   esp_vfs_fat_mount_config_t mount_config = {};
-  mount_config.format_if_mount_failed = false;  // 绝不格式化别人的卡
+  // 绝不替用户格式化卡：挂不上就是挂不上（返回 not_ready，自检如实报"未挂载"）。
+  // 挂载失败时自动格式化会把卡上原有内容全抹掉 —— 那不是本工具该做的决定。
+  mount_config.format_if_mount_failed = false;
   mount_config.max_files = mount_max_files;
-  mount_config.allocation_unit_size = 0;  // 0 = 驱动自选（FATFS 的分配已偏好 PSRAM）
+  // 0 = 交回 IDF 的默认簇算法（按卡容量算，3.4 GB 的卡会得到 4 KB 簇）。
+  mount_config.allocation_unit_size = 0;
 
   sdmmc_card_t* card = nullptr;
   err = esp_vfs_fat_sdspi_mount(sd_mount_point, &host, &slot, &mount_config, &card);

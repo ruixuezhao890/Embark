@@ -54,8 +54,15 @@
  *========================================================================*/
 /* 我们都是自己在 UI 循环 / UI 任务里驱动：先 lv_tick_inc(delta)，再 lv_timer_handler()。 */
 #define LV_TICK_CUSTOM 0
-#define LV_DISP_DEF_REFR_PERIOD 30
-#define LV_INDEV_DEF_READ_PERIOD 30
+/* 刷新周期 30 → 20 ms（2026-10-17）：这是"状态变了到屏幕变"的最后一段延迟，按下确认之后
+   还要等它；S3 上按脏区重绘，实测帧耗时均值 <1 ms、峰值也只有切屏那一帧几十 ms，50 Hz 的
+   预算够用。注意真正的重绘耗时由 SPI 80 MHz 决定（整屏约 15 ms），别指望把它压到个位数。 */
+#define LV_DISP_DEF_REFR_PERIOD 20
+/* 触摸按 10 ms 采一次（2026-10-17 真机：30 ms 时快速轻划只被采到两三个点，LVGL 攒不够
+   滚动阈值就把一次滑动当成点击；30→15 之后又跟着驱动侧一起收到 10 ms，跟手延迟里这一段
+   只剩 10 ms）。驱动侧 poll 是 5 ms 一拍、事件排队不会丢，这里调小只是让 LVGL 更早把队列
+   里的移动取走。空队列时这次读几乎没有开销。 */
+#define LV_INDEV_DEF_READ_PERIOD 10
 
 /* 240×320 的 2.8 寸屏约 143 dpi；取默认 130 让默认控件尺寸不至于过小。 */
 #define LV_DPI_DEF 130

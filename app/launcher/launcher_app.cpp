@@ -127,6 +127,7 @@ void LauncherApp::repaint_screen() {
   // 屏是新的：label 回设计稿初值（时间 "11:31"、天气卡是默认城市），缓存的"上次画过什么"
   // 全部作废，然后重建磁贴、最后跳回上次停留的页（磁贴带要先有新内容再跳）。
   last_minute_ = 0xFFFFFFFFU;
+  last_day_ = INT64_MIN;  // 同上：日期行也回到设计稿那一天，必须重推
   shown_city_ = 0xFFU;
   refresh_clock();
   refresh_weather();  // 在天气屏里换了城市，回主屏时卡片跟着变（值没变就不写控件）
@@ -171,18 +172,39 @@ void LauncherApp::refresh_clock() {
   const std::int64_t local_s =
       static_cast<std::int64_t>(epoch.value() / 1000U) + kLocalOffsetSeconds;
   const std::int64_t days = local_s / kSecondsPerDay;
-  const int sod = static_cast<int>(local_s - days * kSecondsPerDay);
+  // 当日秒数归一化到 [0, 86399]：C++ 整除向零截断，偏移为负（1970 之前 / 负时区）时
+  // local_s - days*kSecondsPerDay 会是负数，直接拿去格式化成 "-1:59" 还过不了真机的
+  // -Werror=all（-Wformat-truncation 认为 %02d 可能吐出负号）。
+  const int sod =
+      static_cast<int>(((local_s - days * kSecondsPerDay) + kSecondsPerDay) % kSecondsPerDay);
   const std::uint32_t minute = static_cast<std::uint32_t>(sod / 60);
   if (minute == last_minute_)
     return;
   last_minute_ = minute;
 
-  char buf[8];
-  std::snprintf(buf, sizeof buf, "%02d:%02d", sod / 3600, (sod / 60) % 60);
+  // 16 字节而不是 8：真机按 -Werror=all 编（-Wformat-truncation），而两个 %02d 的理论上限
+  // 在编译器眼里是 12 字节 —— 给足余量它才肯证明"不会截断"。
+  char buf[16];
+  std::snprintf(buf, sizeof buf, "%02d:%02d", (sod / 3600) % 24, (sod / 60) % 60);
   for (const char* widget : {"L_Time", "L_Clock0"}) {
     if (lv_obj_t* label = aidogui_ui_bridge_widget("launcher", widget); label != nullptr) {
       lv_label_set_text(label, buf);  // 这两个 label 不染色，不需要 recolor 开关
     }
+  }
+
+  // 日期行（L_Date）：设计稿初值是画死的「2026年10月12日 星期一」，谁也不会替它变，
+  // 所以真机与宿主都一直显示那一天。按天刷新，格式与设计稿同款（星期X，不是 clock 屏的周X）。
+  const std::int64_t day = floor_div(local_s, kSecondsPerDay);
+  if (day == last_day_) {
+    return;
+  }
+  last_day_ = day;
+  char date_buf[48];
+  format_local_date(local_s, date_buf, sizeof date_buf);
+  if (lv_obj_t* label = aidogui_ui_bridge_widget("launcher", "L_Date"); label != nullptr) {
+    lv_label_set_text(label, date_buf);
+    // 一天一次，留一行串口证据：日期行错通常是墙钟/RTC 的问题，不是控件的问题。
+    ELOG_INFO("主屏日期行：{}", date_buf);
   }
 #endif
 }

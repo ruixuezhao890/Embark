@@ -51,8 +51,11 @@ set(EMBARK_KERNEL_SOURCES
 
 # --- 宿主 App 全量（app/<App 名>/ 与 app/common/） -----------------------------
 # 真机只编其中一部分（EMBARK_APP_SOURCES_DEVICE，见下）：真机 main.cpp 的 APP_TABLE
-# 现在只注册 launcher/clock/settings 三个 App，另外三个（weather/music/album）与四个
-# 薄桥都依赖 UI 后端 —— 真机还没有它（app/common/ui_backend.h 的 #else 是空实现）。
+# 宿主注册全部 App（六个）与两个薄桥。真机走下面的 DEVICE 子集：2026-10-17 起真机也编了
+# AiDoGUI UI 后端（components/embark_aidogui + EMBARK_AIDOGUI_UI），所以 launcher_tiles 与两个
+# aidogui 胶水都进了真机。weather/music/album 三个 App 原本在真机外（它们的屏要靠生成代码装），
+# 2026-10-17 也放进来了 —— 三个 .cpp 只依赖 framework/log/ui_backend 与本地桩数据，没有平台
+# 后端；补齐之后真机主屏的磁贴数与页数才和模拟器一致（此前 2 磁贴 1 页 vs 4 磁贴 2 页）。
 # 2026-10-06 目录化后每个 App 各占一个目录，缺一个目录就会让裸头名 #include 失手。
 set(EMBARK_APP_SOURCES
         "${EMBARK_ROOT}/app/launcher/launcher_app.cpp"
@@ -70,12 +73,21 @@ set(EMBARK_APP_SOURCES
         )
 
 # --- 真机 App 子集（必须 ⊆ 上面那份） -----------------------------------------
-# launcher_tiles.cpp 不进真机：它直接 include aidogui_ui_bridge.h / aidogui_ui_nav.h，
-# 真机没有那套生成代码（launcher_app.cpp:88 的调用点在同一个宏下面，见该处注释）。
+# launcher_tiles.cpp 直接 include aidogui_ui_bridge.h / aidogui_ui_nav.h：真机自 2026-10-17 起
+# 也编 AiDoGUI 生成代码（components/embark_aidogui），于是这两个胶水与它一起进真机。
+# 打开它们的宏是 components/embark 上的 EMBARK_AIDOGUI_UI=1（与宿主 app/CMakeLists.txt:73 同口径）。
+# 2026-10-17 补齐 weather/music/album：真机注册表的六个 App 与宿主同序 ⇒ 主屏磁贴数/页数/
+# 天气卡与模拟器一致（用户验收口径「真机画面 = 模拟器画面」）。这三份源码零平台依赖。
 set(EMBARK_APP_SOURCES_DEVICE
         "${EMBARK_ROOT}/app/launcher/launcher_app.cpp"
+        "${EMBARK_ROOT}/app/launcher/launcher_tiles.cpp"
         "${EMBARK_ROOT}/app/clock/clock_app.cpp"
-        "${EMBARK_ROOT}/app/settings/settings_app.cpp")
+        "${EMBARK_ROOT}/app/settings/settings_app.cpp"
+        "${EMBARK_ROOT}/app/weather/weather_app.cpp"
+        "${EMBARK_ROOT}/app/music/music_app.cpp"
+        "${EMBARK_ROOT}/app/album/album_app.cpp"
+        "${EMBARK_ROOT}/app/common/aidogui_ui_bridge.cpp"
+        "${EMBARK_ROOT}/app/common/aidogui_ui_nav.cpp")
 
 # --- 平台共用层（不认平台类型的胶水；宿主把它拆成三个库） ---------------------
 # 定容静态池：两侧都编（真机 esp32_lvgl_mem.cpp 用它做 LVGL 静态池）。
@@ -98,14 +110,16 @@ set(EMBARK_COMMON_UI_SOURCES
 # 靠 Context::filesystem == nullptr 让它自然失效，不需要在源清单里区分平台。
 set(EMBARK_COMMON_UI_HOST_ONLY_SOURCES)
 set(EMBARK_COMMON_AIDOGUI_RES_SOURCES
-        # AiDoGUI 资源盘（'S' 盘，ADR 0011）：宿主根 = 仓库里的导出目录；
-        # 真机没有这份目录（要挂得先有 SD/flash 上的资源分区，另开 issue）。
+        # AiDoGUI 资源盘（'S' 盘，ADR 0011）：宿主根 = 仓库里的导出目录（EMBARK_AIDOGUI_RES_ROOT
+        # 在宿主 platform/common/CMakeLists.txt 定义）；真机根 = SD 卡挂载点 /sdcard
+        # （components/embark 上的同名宏），字体路径就是生成代码写死的 S:/fonts/*.bin。
         "${EMBARK_ROOT}/platform/common/aidogui_res_fs.cpp")
 
-# 真机要编的共用胶水 = 上面两份（定容池 + LVGL/UI 端口），由减法得到。
+# 真机要编的共用胶水 = 定容池 + LVGL/UI 端口 + AiDoGUI 资源盘（'S' 盘 → /sdcard）。
 set(EMBARK_COMMON_SOURCES_DEVICE
         ${EMBARK_COMMON_STATIC_POOL_SOURCES}
-        ${EMBARK_COMMON_UI_SOURCES})
+        ${EMBARK_COMMON_UI_SOURCES}
+        ${EMBARK_COMMON_AIDOGUI_RES_SOURCES})
 
 # --- 中文字库（lv_font_conv 生成物；两侧同一个文件，各成一个独立目标） --------
 # 宿主 = platform/common 的 embark_zh_font，真机 = components/embark_font。
@@ -122,6 +136,9 @@ set(EMBARK_ESP32_SOURCES
         "${EMBARK_ROOT}/platform/esp32/src/esp32_system.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_persistence.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_bus.cpp"
+        # 板载 RTC PCF85063（2026-10-17 接上）：走上面那条 I2C_NUM_1，给 Esp32Time::epoch_ms()
+        # 提供开机锚点。芯片不在 / 没电池时只让 epoch_ms() 报 unsupported，不影响启动。
+        "${EMBARK_ROOT}/platform/esp32/src/esp32_rtc.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_display.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_input.cpp"
         # SD 卡（issue 25）：挂载 + hal::IFileSystem 后端。板级引脚默认没填，

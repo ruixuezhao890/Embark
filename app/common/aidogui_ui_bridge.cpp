@@ -25,6 +25,10 @@ AidoguiScreenObserver g_observer = nullptr;
 void* g_observer_user = nullptr;
 AidoguiFontReport g_font_report{0, 0};
 
+/// 字体加载期的分配作用域（见 aidogui_ui_bridge_set_font_scope）。空 = 不切池。
+AidoguiFontScopeHook g_font_scope_begin = nullptr;
+AidoguiFontScopeHook g_font_scope_end = nullptr;
+
 /// 空屏：显示器上的兜底当前屏（懒建，桥终身持有，destroy 也不删）。
 /// 为什么必须有：LVGL 8 的 lv_scr_load() 假定 lv_scr_act() 非空 —— 删掉当前屏后
 /// disp->act_scr 会归 NULL（lv_obj_tree.c:72），再装载时 lv_disp.c 会对 NULL 调
@@ -120,6 +124,11 @@ bool load_entry(const aidogui_screen_entry_t* entry, bool notify) {
 
 }  // namespace
 
+void aidogui_ui_bridge_set_font_scope(AidoguiFontScopeHook begin, AidoguiFontScopeHook end) {
+  g_font_scope_begin = begin;
+  g_font_scope_end = end;
+}
+
 bool aidogui_ui_bridge_init() {
   if (g_initialized) {
     return true;
@@ -141,6 +150,11 @@ bool aidogui_ui_bridge_init() {
   // 生成代码的 ui_comp_get_child() 依赖这个事件号，本来由 aidogui_init() 注册。
   LV_EVENT_GET_COMP_CHILD = lv_event_register_id();
 
+  // 字库加载期：平台登记了作用域就把这段里的分配路由到它的池（真机 = PSRAM 字库区，
+  // 不进 LVGL 静态池）；没登记 = 走 LVGL 自己的堆，行为与宿主一致。
+  if (g_font_scope_begin != nullptr) {
+    g_font_scope_begin();
+  }
   int loaded = 0;
   for (int i = 0; i < AIDOGUI_FONT_COUNT; ++i) {
     const aidogui_font_entry_t& font = kAidoguiFonts[i];
@@ -150,6 +164,9 @@ bool aidogui_ui_bridge_init() {
     } else {
       ELOG_WARN("AiDoGUI 字体加载失败：{}（该字号退回 LVGL 内置字体）", font.bin_path);
     }
+  }
+  if (g_font_scope_end != nullptr) {
+    g_font_scope_end();
   }
   g_font_report.total = AIDOGUI_FONT_COUNT;
   g_font_report.loaded = loaded;

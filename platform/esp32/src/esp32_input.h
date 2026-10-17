@@ -21,9 +21,14 @@ namespace embark::platform::esp32 {
  * CST328 触摸（单点）。
  *
  * 只上报 **按下的位置变化**：
- *   - 第一帧有触摸      → press
+ *   - 确认按下          → press
  *   - 按住且位置变了    → move（位置没变就不发事件，省掉框架侧的去重）
- *   - 从有到无          → release（坐标用最后按下的位置）
+ *   - 确认抬起          → release（坐标用最后按下的位置）
+ *
+ * "有没有手指"取自 0xD000 报文的**第 0 字节**，不看 0xD005 的点数：CST328 手指静止时会报
+ * "0 个触点"（那是"没有新报告"），而报文里的手指标志在整个按住期间恒为非 0、抬手当即归 0
+ * （2026-10-17 真机实测 799 条探测样本）。所以抬起只要 1 拍确认，不会再把一次按住切成几十次
+ * 点击，也不会为此多等 60 ms。两个边沿各留 touch_press/release_confirm_hits 拍挡单拍杂点。
  * 坐标在读取时就按 `esp32_board.h` 的换轴/镜像开关换算好，再夹到屏幕范围内。
  */
 class Esp32Input final : public hal::IInput {
@@ -40,6 +45,10 @@ class Esp32Input final : public hal::IInput {
   /// 按下/抬起次数（用来判断"手在板子上划了半天却一次都没按下"这类问题）。
   [[nodiscard]] std::uint32_t presses() const noexcept { return presses_; }
   [[nodiscard]] std::uint32_t releases() const noexcept { return releases_; }
+  /// 滑动次数（按住期间上报的位置变化数）。
+  [[nodiscard]] std::uint32_t moves() const noexcept { return moves_; }
+  /// 按住期间被去抖窗口吞掉的空拍数：这个数远大于 presses() 才说明面板在"静止时报 0 点"。
+  [[nodiscard]] std::uint32_t swallowed_gaps() const noexcept { return swallowed_gaps_; }
   /// I2C 读取失败次数（含超时）。频繁非零 = 总线接触/上拉/速率有问题。
   [[nodiscard]] std::uint32_t read_failures() const noexcept { return read_failures_; }
 
@@ -61,8 +70,22 @@ class Esp32Input final : public hal::IInput {
   std::uint16_t pressed_x_ = 0;
   std::uint16_t pressed_y_ = 0;
 
+  /// 连续"有手指"/"没手指"的拍数：确认按下、确认抬起各要够 touch_*_confirm_hits 拍，
+  /// 单拍杂点（总线抖一下、状态切换那一拍里的半旧数据）凑不够，不会变成一次点击。
+  std::uint8_t press_streak_ = 0;
+  std::uint8_t release_streak_ = 0;
+
+  /// 还没确认按下时，**最早**见手指的那一拍。按下事件报这个坐标而不是"确认那一刻"的坐标：
+  /// 确认要等 2 拍（10 ms），这段时间手指已经移开一截，报当前位置会让 LVGL 只看到最后那一
+  /// 小段位移（真机实测快速轻划只剩 3 px），攒不够滚动阈值 → 滑动被当成点击。
+  std::uint16_t pending_x_ = 0;
+  std::uint16_t pending_y_ = 0;
+  bool pending_valid_ = false;
+
   std::uint32_t presses_ = 0;
   std::uint32_t releases_ = 0;
+  std::uint32_t moves_ = 0;
+  std::uint32_t swallowed_gaps_ = 0;
   std::uint32_t read_failures_ = 0;
 };
 

@@ -21,6 +21,13 @@ namespace {
 /// 单次 I2C 事务超时（毫秒）：400 kHz 下 29 字节远不到 1 ms，50 ms 已经是"设备掉了"。
 constexpr int i2c_timeout_ms = 50;
 
+/// 报文的第 0 字节 = 手指标志：按住时非 0（真机实测 0x06），抬手当即归 0。
+/// 这是唯一可靠的"现在还按着吗"信号：
+///   * 0xD005 的点数在按住期间 0x01/0x00 交替（它表示"有没有新报告"，不是"有没有手指"）；
+///   * INT 脚恒为高（无上下拉/下拉/上拉三种配置都读 1），根本读不出边沿。
+/// 拿点数判抬手就得靠"连续 N 拍没点"去猜，代价是抬起晚 60 ms，还会把一次按住切成几十次点击。
+constexpr std::size_t touch_flag_byte = 0U;
+
 /// 27 字节点报文里第 0 点的位置（单点 UI 用不上其余 4 个点）。
 constexpr std::size_t point0_x_high_byte = 1U;
 constexpr std::size_t point0_y_high_byte = 2U;
@@ -186,20 +193,9 @@ void Esp32Input::clear_interrupt() noexcept {
 Error Esp32Input::read_point(std::uint16_t& x, std::uint16_t& y, bool& touched) noexcept {
   touched = false;
 
-  std::uint8_t count = 0;
-  const Error count_error = read_registers(touch_reg_count, &count, 1U);
-  if (count_error != Error::none) {
-    ++read_failures_;
-    return count_error;
-  }
-
-  const std::uint8_t points = static_cast<std::uint8_t>(count & 0x0FU);
-  if (points == 0U || points > touch_max_points) {
-    // 没触摸；或者报了个不合理的点数（I2C 抖一下也会这样）—— 清中断，当这一拍没有手指。
-    clear_interrupt();
-    return Error::none;
-  }
-
+  // 每一拍都无条件把 27 字节报文读回来：判"还按着吗"靠的是它第 0 字节的手指标志。
+  // 以前只在 0xD005 说"有点数"时才读报文，于是"这一拍没有新报告"的几十拍只能当空拍处理，
+  // 抬起就只能靠 6 拍空窗去猜（60 ms 延迟 + 假抬起）。
   std::uint8_t packet[touch_point_bytes] = {};
   const Error read_error = read_registers(touch_reg_points, packet, sizeof(packet));
   // 读没读成都要清中断：厂商驱动的顺序就是"读点 → 写 0"，不清下一拍就不来了。
@@ -207,6 +203,12 @@ Error Esp32Input::read_point(std::uint16_t& x, std::uint16_t& y, bool& touched) 
   if (read_error != Error::none) {
     ++read_failures_;
     return read_error;
+  }
+
+  // 手指标志为 0 就是"这一拍没有手指"。报文里的 x/y 抬手后仍是上一次的旧值（实测抬手后
+  // 还留着 32,283），所以坐标只在 touched 为真时才可信。
+  if (packet[touch_flag_byte] == 0U) {
+    return Error::none;
   }
 
   // 第 0 点：x = packet[1] << 4 | packet[3] >> 4；y = packet[2] << 4 | packet[3] & 0x0F。
@@ -242,8 +244,9 @@ etl::expected<bool, Error> Esp32Input::poll(hal::InputEvent& event) noexcept {
     return embark::unexpected(Error::not_ready);
   }
 
-  // 触摸是"电平"语义，而 poll 每帧都会被叫（UI 循环 5 ms）—— 按 10 ms 节流，
-  // 既给 I2C 让路，也避免把同一次按住刷成几百个事件。
+  // 触摸是"电平"语义，而 poll 每帧都会被叫（UI 循环 5 ms）—— 按 touch_poll_period_ms
+  // 节流：既给 I2C 让路，也避免把同一次按住刷成几百个事件。2026-10-17 从 10 ms 收到 5 ms
+  // （跟手延迟就花在这一段上；每拍一次 29 字节 I2C 读，400 kHz 下约 0.8 ms）。
   const std::uint32_t stamp = now_ms();
   if (last_poll_ms_ != 0U && (stamp - last_poll_ms_) < touch_poll_period_ms) {
     return false;
@@ -263,39 +266,78 @@ etl::expected<bool, Error> Esp32Input::poll(hal::InputEvent& event) noexcept {
     return false;
   }
 
+  // 两个连续拍数：确认按下要 touch_press_confirm_hits 拍"有手指"，确认抬起要
+  // touch_release_confirm_hits 拍"没手指"。报文的手指标志本身很干净（按住恒非 0、抬手恒 0），
+  // 这两拍只用来挡总线抖一下时读到的半旧数据。
+  if (touched) {
+    if (press_streak_ < 0xFFU) {
+      ++press_streak_;
+    }
+    release_streak_ = 0;
+    // 留住"这一串里的第一拍"：确认按下要等 2 拍，这段时间手指可能已经移开，按下事件必须报
+    // 起点而不是当前位置（理由见 esp32_input.h 的 pending_*）。
+    if (!pending_valid_) {
+      pending_valid_ = true;
+      pending_x_ = x;
+      pending_y_ = y;
+    }
+  } else {
+    if (release_streak_ < 0xFFU) {
+      ++release_streak_;
+    }
+    press_streak_ = 0;
+    pending_valid_ = false;  // 没有手指的拍之后再见点，就是新的起点
+  }
+
   event.timestamp_ms = stamp;
   event.key = 0;  // 指针事件：按约定 key 恒 0
 
-  if (touched && !pressed_) {
+  if (!pressed_) {
+    // 还没按下：连续见点足够多才承认这次按下（单拍杂点凑不够，不会变成一次点击）。
+    if (press_streak_ < touch_press_confirm_hits) {
+      return false;
+    }
+    const std::uint16_t press_x = pending_valid_ ? pending_x_ : x;
+    const std::uint16_t press_y = pending_valid_ ? pending_y_ : y;
     pressed_ = true;
-    pressed_x_ = x;
-    pressed_y_ = y;
+    pressed_x_ = press_x;
+    pressed_y_ = press_y;
+    pending_valid_ = false;
+    release_streak_ = 0;
     ++presses_;
     event.kind = hal::InputEventKind::press;
-    event.x = x;
-    event.y = y;
+    event.x = press_x;
+    event.y = press_y;
     return true;
   }
-  if (touched && pressed_) {
-    if (x == pressed_x_ && y == pressed_y_) {
-      return false;  // 位置没变就没有新事件（框架与 LVGL 都不需要重复点）
+
+  if (!touched) {
+    if (release_streak_ < touch_release_confirm_hits) {
+      // 刚读到"没手指"，还差一拍才下结论：可能是状态切换那一拍里的半旧数据。静默吞掉 ——
+      // 不抬、不重按，按住状态与坐标都不动。这是 2026-10-17 那次"一次点击连切 4 个城市 /
+      // 一滑就进 App" 的最后一道防线。
+      ++swallowed_gaps_;
+      return false;
     }
-    pressed_x_ = x;
-    pressed_y_ = y;
-    event.kind = hal::InputEventKind::move;
-    event.x = x;
-    event.y = y;
-    return true;
-  }
-  if (!touched && pressed_) {
     pressed_ = false;
+    release_streak_ = 0;
     ++releases_;
     event.kind = hal::InputEventKind::release;
     event.x = pressed_x_;
     event.y = pressed_y_;
     return true;
   }
-  return false;  // 一直没触摸
+
+  if (x == pressed_x_ && y == pressed_y_) {
+    return false;  // 位置没变就没有新事件（框架与 LVGL 都不需要重复点）
+  }
+  pressed_x_ = x;
+  pressed_y_ = y;
+  ++moves_;
+  event.kind = hal::InputEventKind::move;
+  event.x = x;
+  event.y = y;
+  return true;
 }
 
 }  // namespace embark::platform::esp32
