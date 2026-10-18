@@ -24,6 +24,7 @@ cd build/platform/host
 
 **每天只碰三个地方**：界面 → `app/aidogui_ui/screen.aid`（改完 `pwsh -File tools/aidogui/export.ps1` 再编）；
 App 逻辑 → `app/<名>/<名>_app.cpp`（直接编）；让 AI 画界面 → 一份 HTML 草稿走 `node tools/aidogui/html_to_aid.mjs`。
+**不想敲命令**：双击 `tools/devpanel/start.cmd`，构建 / 导出 / 运行 / 看画面 / 跑验收 / 加 App 都在浏览器里点。
 `app/aidogui_ui/export/` 是导出产物，**别手改**。**其余文档等卡住了再查**，不读也能开始。
 
 ---
@@ -77,6 +78,7 @@ agent 默认**只做基建**：不替你写 App 的业务逻辑与界面（要�
 | --- | --- |
 | [guides/quickstart.md](guides/quickstart.md) | **从零跑起来**：装工具 → clone → 构建 → 跑 → 最短验收 → 加一个 App 的入口 |
 | [guides/daily-loop.md](guides/daily-loop.md) | **日常循环（每天都用）**：一条命令起循环 → 「我要改什么 → 去哪」表 → 改界面的三条路 → 改完跑哪几条 → 提交前四条自检 → 「改了没反应」速查 |
+| [guides/tools.md](guides/tools.md) | 十二个脚本各自干什么、验收开关全表、**开发台（网页面板：构建 / 运行 / 加退 App / 换界面工程 / 烧真机 / 看串口）**、给仓库加新脚本的规矩 |
 | [guides/settings-and-preferences.md](guides/settings-and-preferences.md) | **设置中心（当前）**：设置屏三段版面、一个设置项怎么工作、偏好键表、加一个设置项的三步、验收命令与五个坑 |
 | [guides/new-app-guide.md](guides/new-app-guide.md) | **新手指南（当前）**：30 分钟加一个带界面的 App（一条命令 `tools/new_app.mjs` 起步）（跑起来 → C++ 薄壳 → AiDoGUI 设计工程里画同名屏 + 补字符表 → 重导出 → 构建验收，端到端） |
 | [guides/state-machine-and-messages.md](guides/state-machine-and-messages.md) | 状态机与消息：`etl::fsm` 怎么接进 App 契约（收消息即切状态、事件从 `onBackgroundTick` 喂、运行语义与坑） |
@@ -92,7 +94,6 @@ agent 默认**只做基建**：不替你写 App 的业务逻辑与界面（要�
 | [adr/0019-service-layer-and-public-hardware.md](adr/0019-service-layer-and-public-hardware.md) | **服务层（当前，取代 [0002](adr/0002-hal-capability-granularity.md)）**：HAL 之上加设备服务 + 公共资源（`IImu` / `IAudio` / `INetwork` / `IGpio`），业务服务不进基建；硬规则 **HAL 里不许出现芯片型号名** |
 | [adr/0015-app-retention-and-refresh.md](adr/0015-app-retention-and-refresh.md) | **留存与刷新（当前）**：三条正交轴（留存申请 / 视图留存 / 数据新鲜度）+ 五类 App；后台变成显式申请的例外（今天全仓无人声明）、clock 与 launcher 退役 `tick` 走前台节拍、控件值由 `ui_backend_bind_repaint` 在屏装载后重推 |
 | [guides/hal-backend-guide.md](guides/hal-backend-guide.md) | 怎么写一个 HAL 后端：宿主骨架（照 `platform/host/`）、共享层（`platform/common/`）与真机实现（`platform/esp32/`，含 IDF 坑清单） |
-| [guides/tools.md](guides/tools.md) | 脚本与工具：验收开关与退出码、界面无头重导出、字体缺字审计、给仓库加新脚本的规矩 |
 
 ### reference —— 查表
 

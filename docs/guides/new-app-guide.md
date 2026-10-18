@@ -152,15 +152,28 @@ void MyApp::onForegroundTick(std::uint32_t) { /* 有数据时在这里 ui_backen
 > 推导，不用手工补。`platform/host/ui_tour.cpp` 与 `user_main.cpp` 是精简系统用例，也不必加。
 
 **一条命令做完**：`node tools/new_app.mjs my_app --title 我的应用 --apply`
-（先不带 `--apply` 跑一次，它只打印「要写哪两个文件、要在哪 5 行插什么」，不落盘）。
+（先不带 `--apply` 跑一次，它只打印「要写哪两个文件、要在哪 5 行插什么、`.aid` 里补哪张屏」，不落盘）。
 
 脚本**不内嵌模板**：它运行期读 `app/music/music_app.{h,cpp}` 做标识符与文案替换，
 所以模板只有一份真相 —— music 的形状变了脚本跟着变，不会出现「脚本模板与真 App 走偏」。
-`node tools/new_app.mjs --self-check` 就是这条的硬检查：模板标记或 4 处登记锚点缺一个就报错退出。
-生成物落盘后**不自动 `git add`**，先 `git diff` 看一眼。
+`node tools/new_app.mjs --self-check` 就是这条的硬检查：模板标记、4 处登记锚点、`.aid` 里那块占位屏
+缺一个就报错退出。生成物落盘后**不自动 `git add`**，先 `git diff` 看一眼。
 
-它**不生成 `.aid` / 屏代码**（那是设计器的活，见 §3），也不动 `ui_tour.cpp` / `user_main.cpp` /
+**屏也一起补**：`--apply` 还会往 `.aid` 里加一张同名占位屏 —— 抄 `album` 那块「界面还没做」的 7 个控件
+（`Desk` / `Btn_Back` / `L_Title` / `Card_Placeholder` + 两行字），id 前缀换成新 App 名，返回键连着
+`embark_ui_open_launcher`。所以 `--apply` 之后 `--screen my_app` 就能进去看，不必先去设计器手工克隆。
+目标是哪份 `.aid` 由 `--aid` 指定，缺省 `app/aidogui_ui/screen.aid`（开发台记住过就用它那份）。
+**屏的 C 代码仍然要跑一次 `export.ps1` 才生成** —— 脚本只改 `.aid`，不生成代码。
+
+它**不生成屏的 C 代码**（那是设计器的活，见 §3），也不动 `ui_tour.cpp` / `user_main.cpp` /
 真机 `main.cpp` 那三张精简 App 表 —— 那三张不是「所有 App 都该进」。
+
+**退掉一个 App**：同一个脚本加 `--delete`
+（`node tools/new_app.mjs my_app --delete` 先看计划，`--apply` 才真删）——
+它把当初加的 5 行登记**原样撤回**（按整行精确比对，找不到就报错而不是猜），再删掉 `app/<名>/` 整个目录。
+`launcher` 不给删（删了就回不到桌面）。`.aid` 里那张同名屏也一起撤，**但只在它还是「脚本当初建的那张
+占位屏」时才撤**：屏是空的、或控件名与顺序跟生成的占位屏一致 → 删；你动过它 → 留着，并打印
+「看着像你改过了，我不动它」。删完照样要跑一次 `export.ps1`，否则 export/ 里那份 C 代码还在。
 
 **还没画屏时会怎样**：`ui_backend_load_for_app` 找不到同名屏 → 保持当前屏 + 一行 INFO 日志
 （`AiDoGUI 工程里还没有 App my 的屏（约定：screen == App 名）`），**不会黑屏**。
@@ -177,7 +190,8 @@ void MyApp::onForegroundTick(std::uint32_t) { /* 有数据时在这里 ui_backen
 - 控件 **id 必须是 `屏id_控件名`**（如 `my_Btn_Back`），**parentId 必须是同屏已存在的控件 id**
   —— 这两条是生成器的硬校验，违反时导出直接失败并报
   `控件"Card_Time"：ID 必须为屏幕ID_控件名称`；
-- 最省事的做法：**克隆一个占位屏**（music / album 的 7 个控件：`Desk` / `Btn_Back` + 文字 /
+- 用 `new_app.mjs --apply` 建的 App **屏已经在那儿了**（就是那张占位屏），这一节只要把它画成真界面；
+- 手工建屏时最省事的做法仍是**克隆一个占位屏**（music / album 的 7 个控件：`Desk` / `Btn_Back` + 文字 /
   `L_Title` / `Card_Placeholder` + 卡内两行字），逐个改 id 前缀与文案 —— 颜色、字号、圆角照抄。
 
 **C. 挂导航**：选中按钮 → 添加事件 → 动作选「**调用函数**」→ 函数名 `embark_ui_open_launcher`

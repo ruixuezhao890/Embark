@@ -32,9 +32,12 @@ cd build/platform/host
 | 界面（让 AI 画，绕开 GUI） | 一份 HTML 草稿 | `node tools/aidogui/html_to_aid.mjs --html x.html --screen clock --apply`，再导出 |
 | App 逻辑 | `app/music/music_app.cpp` 这类薄壳（`app/<名>/`） | 直接编，不用导出 |
 
+- **不想敲命令**：双击 `tools/devpanel/start.cmd` —— 浏览器里点按钮：构建 / 导出屏 / 运行 / 看实时画面 / 跑验收 / 加 App / 退 App / 换界面工程 / **烧真机 + 看串口**。
 - **别手改 `app/aidogui_ui/export/`** —— 那是导出产物，下次导出就覆盖。
 - **改完就想看见**：`pwsh -NoProfile -File tools/aidogui/dev.ps1 -Screen clock`（改源码自动重编、屏变了自动重载、不重启窗口）。
-- **加 App**：`node tools/new_app.mjs my_app --title 短标题 --apply`（标题 ≤5 汉字，超了主屏磁贴会裁）。
+- **加 / 退 App**：`node tools/new_app.mjs my_app --title 短标题 --apply`（标题 ≤5 汉字，超了主屏磁贴会裁；
+  顺带往 `.aid` 里补一张同名占位屏，所以建完就有页面）；退掉是同一个脚本加 `--delete --apply`。
+- **烧到板子上**：面板「真机」组，或 `pwsh -NoProfile -File tools/esp/idf.ps1 -Task flash -Port COM3`（端口按实际选，本机板子通常是 COM3）。
 - **卡住了**：[docs/guides/daily-loop.md](docs/guides/daily-loop.md) 的「我改了没反应」；concepts / reference / adr 是查手册用的。
 
 ---

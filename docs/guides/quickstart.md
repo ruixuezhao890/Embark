@@ -34,7 +34,7 @@
 
 ```sh
 node tools/new_app.mjs my_app --title 我的应用             # 只看计划：写哪两个文件、在哪 5 行插什么
-node tools/new_app.mjs my_app --title 我的应用 --apply     # 真写 + 登记，然后构建
+node tools/new_app.mjs my_app --title 我的应用 --apply     # 真写 + 登记（连 .aid 里的占位屏），然后重新导出 + 构建
 ```
 
 它读 `app/music/`（121 行的最薄样板：薄壳 + 同名屏 + 值重推）当模板做替换 —— **脚本不内嵌模板**，

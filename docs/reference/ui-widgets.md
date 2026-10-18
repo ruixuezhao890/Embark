@@ -31,16 +31,16 @@
 | `L_Title` | lv_label 14px | 14,5 100×20 | `启动器` | — | — |
 | `L_Clock0` | lv_label 14px | 120,5 106×20 | `11:31` | — | app/launcher/launcher_app.cpp:187（表/常量） |
 | `Card_Clock` | lv_obj | 14,30 212×96 | — | — | app/launcher/launcher_app.cpp:60 |
-| `L_Time` | lv_label 56px | 12,10 188×64 | `11:31` | — | app/launcher/launcher_app.cpp:187（表/常量）<br>platform/host/ui_demo.cpp:563（验收）<br>+3 |
+| `L_Time` | lv_label 56px | 12,10 188×64 | `11:31` | — | app/launcher/launcher_app.cpp:187（表/常量）<br>platform/host/ui_demo.cpp:592（验收）<br>+3 |
 | `L_Date` | lv_label 12px | 14,77 184×18 | `2026年10月12日 星期一` | — | app/launcher/launcher_app.cpp:202 |
 | `Band_Apps` | lv_obj | 0,202 240×56 | — | — | app/launcher/launcher_tiles.cpp:174 |
 | `Dots_Row` | lv_obj | 0,258 240×6 | — | — | app/launcher/launcher_tiles.cpp:175 |
 | `Card_Weather` | lv_obj | 14,134 212×56 | — | CLICKED→`embark_ui_open_weather` | 设计器事件 |
-| `L_WIcon` | lv_label 22px | 12,12 46×30 | `晴` | — | app/launcher/launcher_app.cpp:227（表/常量）<br>platform/host/ui_demo.cpp:1083（验收） |
+| `L_WIcon` | lv_label 22px | 12,12 46×30 | `晴` | — | app/launcher/launcher_app.cpp:227（表/常量）<br>platform/host/ui_demo.cpp:1112（验收） |
 | `L_WTemp` | lv_label 28px | 60,8 68×36 | `26°` | — | app/launcher/launcher_app.cpp:226（表/常量） |
 | `L_WCity` | lv_label 14px | 134,10 66×20 | `北京` | — | app/launcher/launcher_app.cpp:225（表/常量） |
 | `L_WDesc` | lv_label 11px | 134,30 66×18 | `空气优` | — | app/launcher/launcher_app.cpp:228（表/常量） |
-| `L_Hint` | lv_label 12px | 14,278 212×18 | `左右滑动翻页` | — | platform/host/ui_demo.cpp:851（验收） |
+| `L_Hint` | lv_label 12px | 14,278 212×18 | `左右滑动翻页` | — | platform/host/ui_demo.cpp:880（验收） |
 
 ## clock
 
@@ -54,15 +54,15 @@
 | `L_Title` | lv_label 14px | 84,8 72×20 | `时钟` | — | — |
 | `Feed` | lv_obj | 0,36 240×284 | — | — | — |
 | `Card_Time` | lv_obj | 12,8 216×92 | — | — | — |
-| `L_Time` | lv_label 48px | 12,6 192×62 | `11:31` | — | app/clock/clock_app.cpp:69（表/常量）<br>platform/host/ui_demo.cpp:606（验收） |
+| `L_Time` | lv_label 48px | 12,6 192×62 | `11:31` | — | app/clock/clock_app.cpp:69（表/常量）<br>platform/host/ui_demo.cpp:635（验收） |
 | `L_SW` | lv_label 12px | 12,68 192×18 | `秒 07，第 42 周` | — | app/clock/clock_app.cpp:69（表/常量） |
 | `Card_Date` | lv_obj | 12,108 216×40 | — | — | — |
 | `L_Date` | lv_label 14px | 12,10 192×20 | `2026年10月12日 周一` | — | app/clock/clock_app.cpp:69（表/常量） |
 | `Card_Cal` | lv_obj | 12,156 216×184 | — | — | — |
-| `L_MH` | lv_label 14px | 40,12 136×20 | `2026年10月` | — | app/clock/clock_app.cpp:70（表/常量）<br>platform/host/ui_demo.cpp:667（验收） |
+| `L_MH` | lv_label 14px | 40,12 136×20 | `2026年10月` | — | app/clock/clock_app.cpp:70（表/常量）<br>platform/host/ui_demo.cpp:696（验收） |
 | `Card_Year` | lv_obj | 12,348 216×84 | — | — | — |
 | `L_Doy` | lv_label 12px | 12,8 192×18 | `第 285 天` | — | app/clock/clock_app.cpp:70（表/常量） |
-| `Bar_Prog` | lv_bar | 12,30 192×10 | — | — | app/clock/clock_app.cpp:73（表/常量）<br>platform/host/ui_demo.cpp:608（验收） |
+| `Bar_Prog` | lv_bar | 12,30 192×10 | — | — | app/clock/clock_app.cpp:73（表/常量）<br>platform/host/ui_demo.cpp:637（验收） |
 | `L_P1` | lv_label 12px | 12,46 192×18 | `剩 80 / 365 天` | — | app/clock/clock_app.cpp:70（表/常量） |
 | `L_P2` | lv_label 12px | 12,64 192×16 | `距年末 80 天` | — | app/clock/clock_app.cpp:71（表/常量） |
 | `Card_Tom` | lv_obj | 12,440 216×44 | — | — | — |
@@ -72,7 +72,7 @@
 | `L_Dim` | lv_label 14px | 12,12 60×20 | `31 天` | — | app/clock/clock_app.cpp:72（表/常量） |
 | `L_Fd` | lv_label 11px | 78,14 76×18 | `首日 周四` | — | app/clock/clock_app.cpp:72（表/常量） |
 | `L_Fw` | lv_label 11px | 158,14 46×18 | `第 42 周` | — | app/clock/clock_app.cpp:72（表/常量） |
-| `Cal` | lv_calendar 12px | 12,32 192×144 | — | — | app/clock/clock_app.cpp:402<br>platform/host/ui_demo.cpp:654（验收） |
+| `Cal` | lv_calendar 12px | 12,32 192×144 | — | — | app/clock/clock_app.cpp:402<br>platform/host/ui_demo.cpp:683（验收） |
 | `Btn_Prev` | lv_label 14px | 12,12 24×20 | `<` | 可点（没绑动作） | app/clock/clock_app.cpp:440 |
 | `Btn_Next` | lv_label 14px | 180,12 24×20 | `>` | 可点（没绑动作） | app/clock/clock_app.cpp:441 |
 
@@ -158,13 +158,13 @@
 | `Btn_Back` | lv_obj | 8,4 64×28 | — | CLICKED→`embark_ui_open_launcher` | 设计器事件 |
 | `Btn_Back_L` | lv_label 14px | 0,5 64×18 | `返回` | — | — |
 | `L_Title` | lv_label 14px | 84,8 72×20 | `设置` | — | — |
-| `Body` | lv_obj | 0,36 240×276 | — | 可点（没绑动作） | platform/host/ui_demo.cpp:940（验收）<br>platform/host/ui_demo.cpp:984（验收）<br>+2 |
+| `Body` | lv_obj | 0,36 240×276 | — | 可点（没绑动作） | platform/host/ui_demo.cpp:969（验收）<br>platform/host/ui_demo.cpp:1013（验收）<br>+2 |
 | `L_SecDisplay` | lv_label 11px | 14,0 212×16 | `显示` | — | — |
 | `Card_Bright` | lv_obj | 14,18 212×56 | — | — | — |
 | `L_BrightTitle` | lv_label 14px | 14,18 56×20 | `亮度` | — | — |
 | `Btn_Minus` | lv_obj | 72,12 34×32 | — | 可点（没绑动作） | app/settings/settings_app.cpp:53（表/常量） |
 | `Btn_Minus_L` | lv_label 14px | 0,7 34×18 | `-` | — | — |
-| `L_BrightVal` | lv_label 14px | 110,19 48×20 | `70%` | — | app/settings/settings_app.cpp:323（表/常量）<br>platform/host/ui_demo.cpp:938（验收） |
+| `L_BrightVal` | lv_label 14px | 110,19 48×20 | `70%` | — | app/settings/settings_app.cpp:323（表/常量）<br>platform/host/ui_demo.cpp:967（验收） |
 | `Btn_Plus` | lv_obj | 162,12 34×32 | — | 可点（没绑动作） | app/settings/settings_app.cpp:54（表/常量） |
 | `Btn_Plus_L` | lv_label 14px | 0,7 34×18 | `+` | — | — |
 | `L_SecTime` | lv_label 11px | 14,82 212×16 | `时间` | — | — |
@@ -179,7 +179,7 @@
 | `Btn_TimeNext_L` | lv_label 12px | 0,4 66×18 | `下一字段` | — | — |
 | `L_SecAbout` | lv_label 11px | 14,192 212×16 | `关于本机` | — | — |
 | `Card_Info` | lv_obj | 14,210 212×212 | — | — | — |
-| `L_Platform` | lv_label 12px | 12,10 188×18 | `平台：host` | — | app/settings/settings_app.cpp:358（表/常量）<br>platform/host/ui_demo.cpp:939（验收） |
+| `L_Platform` | lv_label 12px | 12,10 188×18 | `平台：host` | — | app/settings/settings_app.cpp:358（表/常量）<br>platform/host/ui_demo.cpp:968（验收） |
 | `L_Version` | lv_label 12px | 12,40 188×18 | `版本：0.1.0` | — | app/settings/settings_app.cpp:359（表/常量） |
 | `L_Heap` | lv_label 12px | 12,70 188×18 | `可用堆：-- KB` | — | app/settings/settings_app.cpp:365（表/常量） |
 | `L_Font` | lv_label 12px | 12,100 188×18 | `字库：--/-- 份` | — | app/settings/settings_app.cpp:373（表/常量） |
@@ -249,8 +249,8 @@
 
 | 屏 | 控件 | 谁在用 |
 | --- | --- | --- |
-| `launcher` | `L_Hint` | platform/host/ui_demo.cpp:851（验收） |
-| `settings` | `Body` | platform/host/ui_demo.cpp:940（验收）<br>platform/host/ui_demo.cpp:984（验收）<br>+2 |
+| `launcher` | `L_Hint` | platform/host/ui_demo.cpp:880（验收） |
+| `settings` | `Body` | platform/host/ui_demo.cpp:969（验收）<br>platform/host/ui_demo.cpp:1013（验收）<br>+2 |
 
 ## 孤儿引用（代码里取了，设计器里没有）
 
@@ -268,8 +268,8 @@
 | `app/settings/settings_app.cpp` | 130 | `aidogui_ui_bridge_widget(kScreen, sink.widget)` |
 | `app/settings/settings_app.cpp` | 305 | `aidogui_ui_bridge_widget(kScreen, widget_name)` |
 | `app/weather/weather_app.cpp` | 134 | `aidogui_ui_bridge_widget(kScreen, widget_name)` |
-| `platform/host/ui_demo.cpp` | 1008 | `aidogui_ui_bridge_widget("weather", widget)` |
-| `platform/host/ui_demo.cpp` | 1067 | `aidogui_ui_bridge_widget("launcher", widget)` |
+| `platform/host/ui_demo.cpp` | 1037 | `aidogui_ui_bridge_widget("weather", widget)` |
+| `platform/host/ui_demo.cpp` | 1096 | `aidogui_ui_bridge_widget("launcher", widget)` |
 
 ## 导出目录过期（.aid 里有，生成的 C 里没这个符号）
 

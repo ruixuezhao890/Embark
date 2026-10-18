@@ -72,7 +72,13 @@ app/aidogui_ui/.ai-workspace/
 .scratch/*.json
 .scratch/*.bin
 .scratch/screen.aid.bak-*
+# 一次性的探查/验证临时文件（.aid 副本、探针脚本、提交信息草稿），整目录不入库
+.scratch/tmp/
 
 # 本地备份（git bundle + 回滚说明），不入库
 .backup/
 
+
+# 开发台上传 HTML 草稿时的临时文件（tools/devpanel/server.mjs 用完即删，留个兜底）
+tools/devpanel/.upload-*.html
+tools/devpanel/.state.json

@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Embark 开发台</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1c1f26; --panel2: #232733; --line: #2f3542;
+    --fg: #e6e9ef; --dim: #98a0b3; --accent: #4c9ffe; --ok: #43c96b;
+    --warn: #e2b341; --err: #f2635f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 14px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+           border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  #status { font-size: 12px; color: var(--dim); border: 1px solid var(--line);
+            border-radius: 999px; padding: 3px 10px; }
+  #status.on { color: var(--ok); border-color: #2c5138; }
+  #status.busy { color: var(--warn); border-color: #4d4322; }
+  #aidnow { font-size: 12px; color: var(--dim); }
+  main { display: grid; grid-template-columns: 340px 1fr; gap: 14px; padding: 14px; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .group { margin-bottom: 16px; }
+  .group:last-child { margin-bottom: 0; }
+  .group h2 { font-size: 12px; margin: 0 0 8px; color: var(--dim); font-weight: 600;
+              letter-spacing: .04em; text-transform: uppercase; }
+  label { display: block; font-size: 12px; color: var(--dim); margin: 8px 0 3px; }
+  select, input { width: 100%; background: var(--panel2); color: var(--fg);
+                  border: 1px solid var(--line); border-radius: 7px; padding: 7px 8px; font: inherit; }
+  input[type=file] { padding: 5px; }
+  button { background: var(--panel2); color: var(--fg); border: 1px solid var(--line);
+           border-radius: 7px; padding: 8px 10px; font: inherit; cursor: pointer; }
+  button:hover { border-color: #46506a; background: #2a3040; }
+  button:active { transform: translateY(1px); }
+  button.primary { background: #24405f; border-color: #35597f; color: #cfe4ff; }
+  button.primary:hover { background: #2a4c72; }
+  button.danger { background: #4a2427; border-color: #6d3336; color: #ffd9d8; }
+  button.danger:hover { background: #5a2b2f; }
+  button.ghost { color: var(--dim); }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .btns button { flex: 1 1 auto; }
+  .right { display: grid; grid-template-rows: auto 1fr; gap: 14px; }
+  .stage { display: flex; gap: 14px; align-items: flex-start; }
+  .screenbox { background: #0b0c0f; border: 1px solid var(--line); border-radius: 10px;
+               padding: 10px; }
+  #preview { display: block; width: 240px; height: 320px; image-rendering: pixelated;
+             background: #000; border-radius: 4px; }
+  #preview.off { opacity: .25; }
+  .meta { font-size: 12px; color: var(--dim); line-height: 1.7; }
+  .meta code { color: #b9c6de; }
+  .logbox { background: #0f1115; border: 1px solid var(--line); border-radius: 10px;
+            display: flex; flex-direction: column; min-height: 260px; }
+  .loghead { display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+             border-bottom: 1px solid var(--line); font-size: 12px; color: var(--dim); }
+  .loghead button { padding: 3px 8px; font-size: 12px; }
+  #log { flex: 1; overflow: auto; padding: 8px 10px; font: 12px/1.55 Consolas, "Cascadia Mono", monospace;
+         white-space: pre-wrap; word-break: break-word; max-height: 46vh; }
+  #log div { padding: 1px 0; }
+  .ch-cmd { color: #7f8aa3; }
+  .ch-panel { color: #7fb4ff; }
+  .ch-host { color: #c9d4e6; }
+  .ch-out { color: #c9d4e6; }
+  .ch-serial { color: #8fd3a8; }
+  .ch-error { color: var(--err); }
+  a { color: var(--accent); }
+  .hint { font-size: 12px; color: var(--dim); margin-top: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Embark 开发台</h1>
+  <span id="status">连不上后端</span>
+  <span id="aidnow"></span>
+</header>
+
+<main>
+  <section class="panel">
+    <div class="group">
+      <h2>界面工程</h2>
+      <label for="aid">用哪份 .aid</label>
+      <select id="aid"></select>
+      <div class="btns">
+        <button id="aidApply" class="primary">用它</button>
+        <button id="openFolder" class="ghost">打开文件夹</button>
+        <button id="openDesigner" class="ghost">用设计器打开</button>
+      </div>
+      <div class="hint">换 .aid 只换「源文件」，导出目录永远是 <code>app/aidogui_ui/export/</code>（构建只认那里）。换完要点「重新导出屏」。</div>
+    </div>
+
+    <div class="group">
+      <h2>跑起来（模拟器）</h2>
+      <label for="screen">看哪块屏</label>
+      <select id="screen"></select>
+      <div class="btns">
+        <button id="run" class="primary">▶ 运行</button>
+        <button id="stop" class="ghost">■ 停止</button>
+      </div>
+      <div class="hint">窗口起来后直接用鼠标点它；右边预览每 0.5 秒跟着刷新。</div>
+    </div>
+
+    <div class="group">
+      <h2>让它生效</h2>
+      <div class="btns">
+        <button id="build">构建</button>
+        <button id="export">重新导出屏</button>
+      </div>
+      <div class="btns">
+        <button id="accept">跑五条验收</button>
+      </div>
+      <div class="hint">改 C++ → 构建；改界面 → 重新导出屏（会接着自动构建）。</div>
+    </div>
+
+    <div class="group">
+      <h2>真机（ESP32-S3）</h2>
+      <label for="port">串口</label>
+      <select id="port"></select>
+      <div class="btns">
+        <button id="portRefresh" class="ghost">刷新端口</button>
+        <button id="espBuild">构建真机</button>
+      </div>
+      <div class="btns">
+        <button id="espFlash" class="primary">烧到板子上</button>
+        <button id="espSerial">看串口</button>
+        <button id="espSerialStop" class="ghost">停串口</button>
+      </div>
+      <div class="hint">真机没有画面回传（板上没这条通道），画面看板子本身，日志在下面这块。烧录要先停串口 —— 串口是独占的。</div>
+    </div>
+
+    <div class="group">
+      <h2>加 / 退一个 App</h2>
+      <label for="appname">App 名（小写，英文）</label>
+      <input id="appname" placeholder="my_app">
+      <label for="apptitle">标题（≤5 个汉字，超了磁贴会裁）</label>
+      <input id="apptitle" placeholder="我的应用">
+      <label for="appicon">图标（可留空）</label>
+      <input id="appicon" placeholder="LV_SYMBOL_FILE">
+      <div class="btns">
+        <button id="newPreview">预览要改什么</button>
+        <button id="newApply" class="primary">真的建出来</button>
+      </div>
+      <div class="btns">
+        <button id="delPreview" class="ghost">预览退掉它</button>
+        <button id="delApply" class="danger">真的删掉</button>
+      </div>
+      <div class="hint">退 App 只撤「C++ 侧那 5 行登记 + 目录」，.aid 里那张同名屏要你自己删。launcher 不给删。</div>
+    </div>
+
+    <div class="group">
+      <h2>HTML 草稿 → 屏</h2>
+      <label for="htmlfile">选一个 .html 草稿</label>
+      <input type="file" id="htmlfile" accept=".html,.htm,text/html">
+      <label for="htmlscreen">改成哪块屏</label>
+      <input id="htmlscreen" placeholder="my_app">
+      <div class="btns">
+        <button id="htmlApply">量坐标并写进 .aid</button>
+      </div>
+      <div class="hint">只改 .aid，还要点「重新导出屏」才上屏。</div>
+    </div>
+
+    <div class="group">
+      <h2>看文档</h2>
+      <div class="meta">
+        <a href="/doc/daily-loop.md" target="_blank">日常循环</a> ·
+        <a href="/doc/quickstart.md" target="_blank">快速开始</a> ·
+        <a href="/doc/new-app-guide.md" target="_blank">写一个 App</a> ·
+        <a href="/doc/html-to-screen.md" target="_blank">HTML 转屏</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="right">
+    <div class="panel stage">
+      <div class="screenbox">
+        <img id="preview" class="off" alt="设备画面" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
+      </div>
+      <div class="meta">
+        <div><strong>模拟器画面</strong>（240×320，1:1 不缩放）</div>
+        <div id="liveinfo">还没跑起来</div>
+        <div id="devinfo"></div>
+        <div class="hint">点「运行」后这里每 0.5 秒刷新一张。窗口里用鼠标点的效果，下一张就能看到。</div>
+      </div>
+    </div>
+
+    <div class="logbox">
+      <div class="loghead">
+        <span>日志</span>
+        <span id="busy" style="color:var(--warn)"></span>
+        <span style="flex:1"></span>
+        <button id="clearLog" class="ghost">清空</button>
+      </div>
+      <div id="log"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var logBox = document.getElementById("log");
+  var preview = document.getElementById("preview");
+  var statusEl = document.getElementById("status");
+  var liveinfo = document.getElementById("liveinfo");
+  var devinfo = document.getElementById("devinfo");
+  var aidnow = document.getElementById("aidnow");
+  var busyEl = document.getElementById("busy");
+  var lastLogId = 0;
+
+  // 记住上次选的屏 / 端口（浏览器本地，不占后端）
+  function remember(key, value) { try { localStorage.setItem("embark." + key, value); } catch (e) { } }
+  function recall(key) { try { return localStorage.getItem("embark." + key) || ""; } catch (e) { return ""; } }
+
+  function api(p, body) {
+    return fetch(p, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {})
+    }).then(function (r) { return r.json().catch(function () { return {}; }); });
+  }
+
+  function addLine(rec) {
+    if (rec.id && rec.id <= lastLogId) return;
+    if (rec.id) lastLogId = rec.id;
+    var atBottom = logBox.scrollTop + logBox.clientHeight >= logBox.scrollHeight - 30;
+    var div = document.createElement("div");
+    div.className = "ch-" + (rec.ch || "out");
+    div.textContent = rec.text;
+    logBox.appendChild(div);
+    while (logBox.childElementCount > 900) logBox.removeChild(logBox.firstChild);
+    if (atBottom) logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  // 日志：先补历史，再走 SSE 实时收
+  fetch("/api/logs").then(function (r) { return r.json(); }).then(function (data) {
+    (data.lines || []).forEach(addLine);
+  });
+  var es = new EventSource("/api/events");
+  es.onmessage = function (ev) {
+    try { addLine(JSON.parse(ev.data)); } catch (e) { /* 忽略坏包 */ }
+  };
+
+  // 端口：按需刷新（枚举串口要起一个进程，不适合每 2 秒拉一次）
+  function refreshPorts() {
+    fetch("/api/ports").then(function (r) { return r.json(); }).then(function (d) {
+      var sel = document.getElementById("port");
+      var keep = sel.value || recall("port") || d.port || "";
+      sel.innerHTML = "";
+      (d.ports || []).forEach(function (name) {
+        var opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        sel.appendChild(opt);
+      });
+      if (keep) {
+        var hit = false;
+        for (var i = 0; i < sel.options.length; i += 1) { if (sel.options[i].value === keep) hit = true; }
+        if (!hit) {
+          var opt2 = document.createElement("option");
+          opt2.value = keep;
+          opt2.textContent = keep + "（上次用的，现在没插？）";
+          sel.appendChild(opt2);
+        }
+        sel.value = keep;
+      }
+      if (!d.ports || d.ports.length === 0) {
+        var opt3 = document.createElement("option");
+        opt3.value = "";
+        opt3.textContent = "（没发现串口 —— 板子插好了吗）";
+        sel.appendChild(opt3);
+      }
+    });
+  }
+  refreshPorts();
+
+  // 状态：下拉框 + 状态灯
+  function refreshState() {
+    fetch("/api/state").then(function (r) { return r.json(); }).then(function (s) {
+      var sel = document.getElementById("screen");
+      var keep = sel.value || recall("screen") || "";
+      var list = s.screens && s.screens.length ? s.screens : (s.apps || []);
+      sel.innerHTML = "";
+      list.forEach(function (name) {
+        var opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        sel.appendChild(opt);
+      });
+      if (keep && list.indexOf(keep) >= 0) sel.value = keep;
+
+      var aidSel = document.getElementById("aid");
+      var aids = s.aids || [];
+      var aidKeep = s.aid || "";
+      aidSel.innerHTML = "";
+      aids.forEach(function (rel) {
+        var opt = document.createElement("option");
+        opt.value = rel;
+        opt.textContent = rel;
+        aidSel.appendChild(opt);
+      });
+      if (aidKeep) aidSel.value = aidKeep;
+      aidnow.textContent = s.aid ? ("界面工程：" + s.aid) : "";
+
+      var appInput = document.getElementById("appname");
+      if (!appInput.value) appInput.value = recall("appname") || "";
+
+      statusEl.className = "";
+      if (s.busy) {
+        statusEl.className = "busy";
+        statusEl.textContent = "正在" + (s.busyName || "处理");
+        busyEl.textContent = "…";
+      } else if (s.host && s.host.running) {
+        statusEl.className = "on";
+        statusEl.textContent = "运行中：" + s.host.screen;
+        busyEl.textContent = "";
+      } else {
+        statusEl.textContent = s.exe ? "空闲（未运行）" : "还没构建过";
+        busyEl.textContent = "";
+      }
+      liveinfo.textContent = s.host && s.host.running
+        ? ("正在看：" + s.host.screen + " · 预览" + (s.liveAt ? "已连上" : "等待第一张"))
+        : "还没跑起来";
+      var dev = [];
+      if (s.host && s.host.running) dev.push("前台 App：" + (s.foreground || s.host.screen));
+      if (s.esp && s.esp.running) dev.push("真机串口：" + s.esp.port + " 连着");
+      devinfo.textContent = dev.join(" · ");
+      if (!s.host || !s.host.running) preview.className = "off";
+    }).catch(function () {
+      statusEl.textContent = "连不上后端（开发台窗口关了？）";
+    });
+  }
+  refreshState();
+  setInterval(refreshState, 2000);
+
+  // 预览：每 0.5 秒拉一张 BMP
+  setInterval(function () {
+    preview.src = "/api/live.bmp?t=" + Date.now();
+  }, 500);
+  preview.onload = function () { preview.className = ""; };
+
+  // ---- 界面工程 ----
+  document.getElementById("aidApply").onclick = function () {
+    var rel = document.getElementById("aid").value;
+    if (!rel) { alert("没选中 .aid"); return; }
+    api("/api/aid", { rel: rel });
+  };
+  document.getElementById("openFolder").onclick = function () {
+    api("/api/openfolder", { rel: "app/aidogui_ui" });
+  };
+  document.getElementById("openDesigner").onclick = function () {
+    api("/api/designer").then(function (r) { if (r && r.ok === false) alert(r.error); });
+  };
+
+  // ---- 模拟器 ----
+  document.getElementById("run").onclick = function () {
+    var screen = document.getElementById("screen").value;
+    remember("screen", screen);
+    api("/api/run", { screen: screen });
+    setTimeout(refreshState, 400);
+  };
+  document.getElementById("stop").onclick = function () {
+    api("/api/stop");
+    setTimeout(refreshState, 400);
+  };
+  document.getElementById("build").onclick = function () { api("/api/build"); };
+  document.getElementById("export").onclick = function () { api("/api/export"); };
+  document.getElementById("accept").onclick = function () { api("/api/accept"); };
+  document.getElementById("clearLog").onclick = function () { logBox.innerHTML = ""; };
+
+  // ---- 真机 ----
+  document.getElementById("portRefresh").onclick = refreshPorts;
+  document.getElementById("espBuild").onclick = function () { api("/api/esp", { action: "build" }); };
+  document.getElementById("espFlash").onclick = function () {
+    var port = document.getElementById("port").value;
+    if (!port) { alert("先选串口（点「刷新端口」）"); return; }
+    remember("port", port);
+    if (!confirm("烧到 " + port + "？会先停掉串口、全量编一遍真机固件，大约 1~3 分钟。")) return;
+    api("/api/esp", { action: "flash", port: port });
+  };
+  document.getElementById("espSerial").onclick = function () {
+    var port = document.getElementById("port").value;
+    if (!port) { alert("先选串口"); return; }
+    remember("port", port);
+    api("/api/esp", { action: "serial", port: port });
+  };
+  document.getElementById("espSerialStop").onclick = function () { api("/api/esp", { action: "stopserial" }); };
+
+  // ---- 加 / 退 App ----
+  function nameValue() {
+    var name = (document.getElementById("appname").value || "").trim();
+    if (name) remember("appname", name);
+    return name;
+  }
+  document.getElementById("newPreview").onclick = function () {
+    var name = nameValue();
+    if (!name) { alert("先填 App 名"); return; }
+    api("/api/newapp", {
+      name: name,
+      title: (document.getElementById("apptitle").value || "").trim(),
+      icon: (document.getElementById("appicon").value || "").trim(),
+      apply: false
+    });
+  };
+  document.getElementById("newApply").onclick = function () {
+    var name = nameValue();
+    if (!name) { alert("先填 App 名"); return; }
+    if (!confirm("会在 app/" + name + "/ 建目录，并改动 3 个登记文件。继续？")) return;
+    api("/api/newapp", {
+      name: name,
+      title: (document.getElementById("apptitle").value || "").trim(),
+      icon: (document.getElementById("appicon").value || "").trim(),
+      apply: true
+    });
+  };
+  document.getElementById("delPreview").onclick = function () {
+    var name = nameValue();
+    if (!name) { alert("先在「App 名」里填要退掉的那个"); return; }
+    api("/api/deleteapp", { name: name, apply: false });
+  };
+  document.getElementById("delApply").onclick = function () {
+    var name = nameValue();
+    if (!name) { alert("先在「App 名」里填要退掉的那个"); return; }
+    if (!confirm("要删掉 app/" + name + "/ 整个目录，并撤掉 5 行登记。git 里还能找回，但工作区就没了。继续？")) return;
+    api("/api/deleteapp", { name: name, apply: true });
+  };
+
+  document.getElementById("htmlApply").onclick = function () {
+    var file = document.getElementById("htmlfile").files[0];
+    var screen = (document.getElementById("htmlscreen").value || "").trim();
+    if (!file) { alert("先选一个 .html 草稿"); return; }
+    if (!screen) { alert("填一下要改成哪块屏"); return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      api("/api/html", { html: String(reader.result), screen: screen });
+    };
+    reader.readAsText(file, "utf-8");
+  };
+})();
+</script>
+</body>
+</html>
