@@ -9,6 +9,7 @@
 
 | 脚本 | 作用 | 何时跑 | 会写什么 |
 | --- | --- | --- | --- |
+| `tools/new_app.mjs` | **新 App 薄壳**：读 `app/music/` 当模板 → 生成 `app/<名>/<名>_app.{h,cpp}`，并登记 5 行（见 [new-app-guide.md](new-app-guide.md) §2） | 想加一个 App 时 | 默认不写盘；`--apply` 才写 2 个新文件 + 改 3 个既有文件 |
 | `tools/aidogui/dev.ps1` | **日常开发循环**：导出 → 构建 → 起 `embark_host_ui --screen <屏> --watch`，盯源码变了就重建重启（见 §2） | 想「改一行就看见结果」的时候 | 同 export.ps1 + 构建产物 |
 | `tools/aidogui/export.ps1` | **无头重导出** AiDoGUI 界面代码（不开设计器） | 没开 GUI / CI / 想敲一条命令重生成 | 清空并重建 `app/aidogui_ui/export/` |
 | `tools/aidogui/gen_ui.cjs` | 上面那个的**内核**：借 AiDoGUI 自己的 Node 跑它自己的生成器 | 一般不直接调 | 同上 |
@@ -17,10 +18,13 @@
 | `tools/aidogui/gen_widget_doc.mjs` | **控件对照表**：把 `screen.aid` 的控件与 `app/`、`platform/host/` 里的调用点 join 起来 → `docs/reference/ui-widgets.md`（详见 [reference/ui-widgets.md](../reference/ui-widgets.md)） | 改完屏（尤其控件改名 / 删控件）后 | 只写 `docs/reference/ui-widgets.md`；`--check` 只比对不写 |
 | `tools/font/gen_font.mjs` | 生成 **LVGL 静态子集字库** `embark_zh_14`（内置默认字体） | 内置字库要加字时 | `assets/fonts/embark_zh_14.c` + `tools/font/embark_zh_14.json` |
 | `tools/font/audit_glyphs.mjs` | **缺字审计**（CI 门禁） | 加/改界面文案后 | 只读；缺字打印码点 + `文件:行号` 并 `exit 1` |
+| `tools/check_docs.mjs` | **文档过期自检**：文档里的路径 / `embark_host_ui` 开关 / 脚本参数 / 锚注释还对不对得上（见 §6） | 改了工具、开关或文档之后（[AGENTS.md](../../AGENTS.md) 也这么要求） | 只读；有过期就打印 `文件:行号` 并 `exit 1` |
 
-八个脚本都遵守同一条纪律：**默认不写盘 / 可重复跑 / 找锚点失败就报错退出**，绝不"尽力而为"地半改文件。
+十个脚本都遵守同一条纪律：**默认不写盘 / 可重复跑 / 找锚点失败就报错退出**，绝不"尽力而为"地半改文件。
 
-**加 App 没有一键脚本**——照 `app/music/` 抄一份薄壳，见 [new-app-guide.md](new-app-guide.md) §2。
+**加 App 有脚本了**：`node tools/new_app.mjs my_app --title 我的应用 --apply`（先不带 `--apply` 跑一次，只打印计划）。
+它**不内嵌模板**——运行期读 `app/music/music_app.{h,cpp}` 做替换，模板只有一份真相；
+`node tools/new_app.mjs --self-check` 检查那份模板与 4 处锚点还在不在。详见 [new-app-guide.md](new-app-guide.md) §2。
 
 ---
 
@@ -119,7 +123,7 @@ pwsh -NoProfile -File tools/aidogui/export.ps1 -Project app/aidogui_ui/screen.ai
 | `embark_zh_14`（静态子集，184 字形） | LVGL **默认字体**：没显式设字体的文本 | `tools/font/gen_font.mjs` 构建期生成、随仓库入库 |
 | 卡上的整份 TTF `ui_heiti.ttf` | AiDoGUI 界面的每个字号槽（运行期栅格化） | 卡上 `fonts/`（宿主是 `app/aidogui_ui/export/`）；[ADR 0017](../adr/0017-font-ttf-from-sd.md) |
 
-### 3.1 生成内置子集字库
+### 4.1 生成内置子集字库
 
 ```sh
 node tools/font/gen_font.mjs      # 在仓库根执行
@@ -159,7 +163,7 @@ node tools/font/gen_font.mjs      # 在仓库根执行
 > 这个脚本是 Node，`.c` 由 lv_font_conv 自己写、`.json` 用 `fs.writeFileSync(..., 'utf8')` 写，
 > 末尾还会断言两个文件都**没有 BOM**。
 
-### 3.2 缺字审计（CI 门禁）
+### 4.2 缺字审计（CI 门禁）
 
 ```sh
 node tools/font/audit_glyphs.mjs                    # 审计 app/ src/ platform/，字体 cmap 里没有的字符就 exit 1
@@ -182,17 +186,46 @@ node tools/font/audit_glyphs.mjs --ttf 别的字体.ttf --include-symbols --root
 
 ## 5. 给仓库加一个新脚本时
 
-照现有四个的规矩来，评审时才不会被退：
+照现有脚本的规矩来，评审时才不会被退：
 
 1. **默认 dry-run**，`--apply` 才写盘；重复跑必须幂等；内容不一致**报错退出**，不要静默覆盖。
 2. **锚点找不到就 `die`**，不要"尽力而为"地半改——半改比不改更难查。
 3. **自带自测**（`tools/<名>_test.py`，或给脚本加 `--check` / `--selftest` 冒烟），能在临时目录跑，退出码 0 = 全过。
 4. **输出 UTF-8**：Python 脚本开头 `sys.stdout.reconfigure(encoding="utf-8")`（Windows 控制台）。
 5. **不要用 PowerShell 写文件**（见上）。
+6. **用 Node 写（`tools/*.mjs`）时**：结果放 `process.exitCode`，别用 `process.exit()` 硬切 —— 管道里的 stdout 会被截断；零依赖，只用 `node:*` 内置模块。
 
 ---
 
-## 6. 相关文档
+## 6. 文档自检：`check_docs.mjs`
+
+改了工具、开关或文档之后跑一次，五类检查：
+
+| # | 查什么 | 例子 |
+| --- | --- | --- |
+| ① | md 链接指向的文件还在不在 | `[tools](tools.md)` 里的 `tools.md` 被改名了 |
+| ② | 反引号里的仓库路径还在不在 | 写着 `tools/old_script.py`，文件早删了 |
+| ③ | `embark_host_ui` 的开关是不是真的 | 文档写 `--eez`，那开关随 issue 01 删了 |
+| ④ | 脚本参数是不是真的 | 文档写 `dev.ps1 -Fast`，脚本没这个参数 |
+| ⑤ | 锚注释还对不对得上 | 写着 `# 新 App 登记锚点`，源文件里那句被改了 |
+
+```sh
+node tools/check_docs.mjs            # 扫一遍；有过期就 exit 1
+node tools/check_docs.mjs --verbose  # 连「扫了多少文件、多少条检查」一起打
+node tools/check_docs.mjs --self-test # 用内存假样本验证五类检查真会报错、正向样本零误报
+```
+
+**它有三类东西不查**（都有理由，不是漏洞 —— 改检查逻辑前先看脚本头部注释）：
+
+- `docs/adr/**` 只查链接 —— ADR 是决策史，本来就该提那些已删掉的文件。
+- 行里写了 `check_docs:skip` 标记的 —— 那行在讲「这些文件已退役」这类历史。
+- `ALLOW_MISSING` 里的路径 —— 构建期生成、本来就不在仓库里（如 `include/embark_aidogui_ui_tables.h`）。
+
+> **误报比漏报更伤**：误报一次，这个脚本就没人跑了。加检查时宁可少一条，也不要把正常写法判成过期。
+
+---
+
+## 7. 相关文档
 
 - 新手路径：[quickstart.md](quickstart.md) → [new-app-guide.md](new-app-guide.md)
 - 界面代码从哪来、怎么改：[../../app/aidogui_ui/README.md](../../app/aidogui_ui/README.md)

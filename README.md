@@ -13,6 +13,32 @@
 
 ---
 
+## 30 秒上手
+
+先跑这三条。**其余文档等卡住了再查 —— 不读也能开始。**
+
+```sh
+cmake --build build --target embark_host_ui               # ① 编（build/ 已 Configure 过，不用再 cmake -G）
+cd build/platform/host
+./embark_host_ui.exe --frames 60 --screenshot probe.bmp   # ② 看（无头也看得见，240×320 BMP）
+./embark_host_ui.exe --ui --delay 40 --frames 40          # ③ 验（合成输入必须带 --delay 40）
+```
+
+**每天只碰这三个地方**
+
+| 想改什么 | 打开 | 改完 |
+| --- | --- | --- |
+| 界面（文字 / 坐标 / 颜色 / 控件） | `app/aidogui_ui/screen.aid`（设计器 GUI） | `pwsh -File tools/aidogui/export.ps1`，再编 |
+| 界面（让 AI 画，绕开 GUI） | 一份 HTML 草稿 | `node tools/aidogui/html_to_aid.mjs --html x.html --screen clock --apply`，再导出 |
+| App 逻辑 | `app/music/music_app.cpp` 这类薄壳（`app/<名>/`） | 直接编，不用导出 |
+
+- **别手改 `app/aidogui_ui/export/`** —— 那是导出产物，下次导出就覆盖。
+- **改完就想看见**：`pwsh -NoProfile -File tools/aidogui/dev.ps1 -Screen clock`（改源码自动重编、屏变了自动重载、不重启窗口）。
+- **加 App**：`node tools/new_app.mjs my_app --title 短标题 --apply`（标题 ≤5 汉字，超了主屏磁贴会裁）。
+- **卡住了**：[docs/guides/daily-loop.md](docs/guides/daily-loop.md) 的「我改了没反应」；concepts / reference / adr 是查手册用的。
+
+---
+
 ## 它解决什么问题
 
 嵌入式 UI 项目通常会在三个地方翻车：
@@ -67,7 +93,7 @@ cmake -G Ninja -B build && cmake --build build --target embark_example_minimal
 
 ---
 
-## 快速开始
+## 从零 clone 一次
 
 **前置**：Git、CMake ≥ 3.24、Ninja、C++17 编译器（GCC / Clang / MSVC）。
 想看窗口还要 SDL2 —— Windows 装 `SDL2-devel-*-mingw`，Linux `sudo apt install libsdl2-dev`。
@@ -75,20 +101,19 @@ cmake -G Ninja -B build && cmake --build build --target embark_example_minimal
 ```sh
 git clone --recursive https://github.com/ruixuezhao890/Embark.git
 cd Embark
-cmake -G Ninja -B build
+cmake -G Ninja -B build      # 只在这一步需要 -G；之后一律 cmake --build build
 cmake --build build
 ctest --test-dir build --output-on-failure
-
-./build/platform/host/embark_host_ui        # Windows: .\build\platform\host\embark_host_ui.exe
 ```
 
 看到 240×320 的竖屏窗口、里面是 launcher 屏、点按钮能切到 clock 屏 —— 就算跑起来了。
 
 > 已经 clone 过但没带子模块：`git submodule update --init --recursive`。
-> 工具安装的逐步说明（含 Windows 上的踩坑）在
-> [docs/guides/quickstart.md](docs/guides/quickstart.md)。
+> 装工具的逐步说明（含 Windows 上的踩坑）在 [docs/guides/quickstart.md](docs/guides/quickstart.md)。
 
-**下一步**：[加一个自己的 App](docs/guides/new-app-guide.md)（30 分钟端到端，含画界面屏）。
+**下一步**：[加一个自己的 App](docs/guides/new-app-guide.md)（30 分钟端到端，含画界面屏），
+或者先让脚本把骨架搭出来：`node tools/new_app.mjs my_app --title 短标题 --apply`。
+**每天怎么干活**（改哪儿、跑哪条验收、提交前自检什么）：[docs/guides/daily-loop.md](docs/guides/daily-loop.md)。
 
 ---
 
@@ -98,14 +123,14 @@ ctest --test-dir build --output-on-failure
 | --- | --- |
 | `include/embark/` | 框架公开头文件 —— **上层只依赖这里** |
 | `src/` | 内核实现（Framework、Bus、AppRegistry、任务池、日志） |
-| `platform/host/` | 宿主后端：SDL2 显示/输入、LVGL 端口、文件存储、FreeRTOS、UI 任务、三个入口 |
+| `platform/host/` | 宿主后端：SDL2 显示/输入、LVGL 端口、文件存储、FreeRTOS、UI 任务、四个入口 |
 | `platform/esp32/` | ESP32-S3 后端（ESP-IDF 组件形式接入） |
 | `platform/common/` | 两端共享的端口层（LVGL 端口、静态池、任务池） |
-| `app/` | 自带示例 App（launcher / clock / settings / weather）+ AiDoGUI 生成代码 + 薄桥 |
+| `app/` | 自带示例 App（launcher / clock / settings / weather / music / album）+ AiDoGUI 生成代码 + 薄桥 |
 | `examples/minimal/` | 不依赖界面生成器的最小可运行 App —— **从这读起** |
 | `tests/` | doctest 用例：`hal/` 按能力分、`kernel/` 是内核契约、`fakes/` 是 HAL 假后端 |
 | `config/` | 编译期宏、`lv_conf.h` 与**全部容量上限**（单一事实来源） |
-| `tools/` | 界面无头重导出、字库生成、缺字审计 |
+| `tools/` | `new_app.mjs`（一条命令加 App）、`aidogui/`（无头重导出、HTML 稿编译成屏、控件对照表、`dev.ps1` 日常循环、`check_docs.mjs` 文档自检）、`font/`（字库生成、缺字审计） |
 | `docs/` | 文档三层：[docs/index.md](docs/index.md)（concepts / guides / reference）+ ADR |
 | `.scratch/` | 规格书与 issue 追踪（随仓库提交，是设计决策的一手记录） |
 
@@ -118,7 +143,7 @@ ctest --test-dir build --output-on-failure
 | 层 | 回答 | 入口 |
 | --- | --- | --- |
 | **concepts** | 为什么这么设计 | [分层总图 + 一帧数据流](docs/concepts/index.md) |
-| **guides** | 怎么用 | [5 分钟跑起来](docs/guides/quickstart.md) → [加一个 App](docs/guides/new-app-guide.md) |
+| **guides** | 怎么用 | [5 分钟跑起来](docs/guides/quickstart.md) → [加一个 App](docs/guides/new-app-guide.md) → [每天怎么干活](docs/guides/daily-loop.md) |
 | **reference** | 具体是多少 / 叫什么 | [8 个钩子的契约表 + API 全集](docs/reference/hooks-and-api.md) |
 
 另外：架构决策记录在 [docs/adr/](docs/adr/)（每条都写了被否决的方案），
@@ -126,14 +151,14 @@ ctest --test-dir build --output-on-failure
 
 ---
 
-## 三个宿主入口
+## 四个宿主入口
 
 同一个内核、同一套 App，三个不同用途的可执行文件：
 
 | 目标 | 用途 |
 | --- | --- |
 | `embark_host` | 无窗口，走一遍 HAL 自检（时间 / 持久化 / 总线 / 系统） |
-| `embark_host_ui` | **演示 + 自动验收**二合一：`--click` / `--launch` / `--drag` / `--ui`（AiDoGUI 界面冒烟验收）各是一段脚本化故事 |
+| `embark_host_ui` | **演示 + 自动验收**二合一：`--click` / `--launch` / `--drag` / `--ui` / `--ui-nav` / `--ui-weather` / `--ui-launcher-pages` 各是一段脚本化故事；另有 `--screen NAME`（直进某屏）、`--screenshot FILE`（无头看屏）、`--watch`（屏级热重载）、`--delay`（合成输入必带 40） |
 | `embark_host_tour` | 一条用例看完整系统：按 ①→⑨ 走完进程入口到关窗，17 项自检清单全过退出码 0 |
 | `embark_host_user` | **你自己的程序**：干净入口 [platform/host/user_main.cpp](platform/host/user_main.cpp)，改 `EMBARK_APP_TABLE` 即得 |
 
@@ -163,6 +188,7 @@ idf.py -C platform/esp32/project -B build-esp32 -p COM5 flash monitor
 **v0.1.0，可以用了，但还不是 1.0。** 诚实的边界：
 
 - ✅ 内核（App 契约、编译期注册表、唯一 UI 任务、前后台切换）、消息总线、三种后台策略、own task 运行期生命周期
+- ✅ 服务层三块都接上了：`IImu`（QMI8658）、`IAudio`（PCM5101 + I2S，只播 WAV）、`INetwork`（esp_wifi STA + 明文 HTTP + SNTP）
 - ✅ 宿主与 ESP32-S3 两个后端、LVGL 8.3.11、AiDoGUI Designer 适配（含屏生命周期回收）
 - ✅ 零堆审计、CI 三个 job（宿主构建测试 / 真机构建 / clang-format）
 - ⚠️ **真机上的界面观感还没确认**（屏幕方向/颜色、触摸方向）—— 需要板子到手

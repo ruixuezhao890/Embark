@@ -183,7 +183,11 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
   `clock_app.h: No such file or directory`。清单自带**配置期审计**（每次 cmake 配置跑一次）：
   登记的路径不存在、归口目录里有 `.cpp` 没登记、真机 App 子集不在全量里、真机 main.cpp
   的裸头名找不到 include 目录 —— 四条都在配置期 `FATAL_ERROR`，不再拖到真机链接期。
-  新加 `.cpp` 必须手工登记到 `cmake/embark_sources.cmake` 的 `EMBARK_APP_SOURCES`。
+  **新加 App 不必手工登记**：`node tools/new_app.mjs <名> --apply` 一次改完 5 行 / 3 个文件
+  （两份源清单 + `platform/host/ui_demo.cpp` 的 include 与 App 表 + `aidogui_ui_hooks.h`）。
+  手工加就得自己补齐这 5 处：漏一份清单的表现是「宿主能跑、真机编不到」或反过来；
+  漏 include 是编译期 `'XxxApp' is not a member of 'embark::demo'`。
+  **加普通 `.cpp`（不是 App）仍必须手工登记**到 `EMBARK_APP_SOURCES` 或对应的源清单。
 - **组件的 `PUBLIC` 编译选项会漏到 IDF 生成的纯 C 文件上**：`PUBLIC` 选项会跟着
   组件传播给最终链接目标 `embark_esp32.elf`，而那个目标要编一个自动生成的
   `project_elf_src_esp32s3.c`（**纯 C**）。于是 `-include config/embark_config.h`
@@ -206,6 +210,15 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
   ——那是红鲱鱼。
 - `EMBARK_PLATFORM_HAS_FREERTOS` 这类 `option()` 不会自愈已有 cache 条目：
   改默认值后要删 cache 或显式 `-D...=ON` 重配。
+## `--screenshot` 写不进仓库外的绝对路径（实测，2026-10-18）
+
+- **用相对路径**：`./embark_host_ui.exe --frames 60 --screenshot probe.bmp` 落到当前目录，稳。
+- 写仓库外的绝对路径（`E:/…`、`C:/Users/…/Temp/…`）在本机实测会失败，报
+  `截图失败：写不进 <路径>（Couldn't open <路径>）` —— 而同一个目录用 shell / node 写是好的，
+  所以别怀疑权限；大概率是这台机器的沙箱/杀软对宿主进程的转手限制（未定论）。
+- 无论哪种失败，日志都会带上完整路径（`platform/host/ui_demo.cpp` 的 `save_screenshot`），
+  照路径改就行 —— 这一条就是为了不再出现「`Couldn't open` 但不告诉你是哪个路径」。
+
 ## 宿主特有
 
 - SDL2 找不到：`embark_host_ui` 目标被跳过（STATUS 提示），内核与测试照常

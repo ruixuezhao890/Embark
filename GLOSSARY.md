@@ -232,7 +232,7 @@ _Avoid_: 文件系统、SD 驱动
 
 **Font ledger（字库记账）**：
 **已退役**（ADR 0017）：它记的是「路径 + 文件字节」，而 TTF 时代记账对象是**字形缓存字节 + 字号**（Glyph cache budget），路径概念整个消失；它唯一的消费者是 `platform/esp32/src/esp32_bringup.cpp:130` 的探针，桥从来没走过。以下为历史形态（保留作参照）——
-当时的形态：字节预算 + 引用计数，包装 `lv_font_load` 与 `lv_font_free`，独立于 LVGL 全局堆预算；超预算返回 `no_space`。内核层 `include/embark/font_ledger.h` + `src/embark/font_ledger.cpp`（零堆、定长表、不依赖 LVGL）+ 平台侧 `platform/common/font_service.{h,cpp}`（把 LVGL 的 `'F'` 盘注册到 `hal::IFileSystem`；同路径复用只 +1 引用，引用归零才 free）。容量见 `config/embark_limits.h`：`font_budget_bytes` 100 KB、`font_max_loaded` 4、`font_path_bytes` 64。真机侧曾映射到 **PSRAM 定容池**（见 Font alloc scope）：字库不占 LVGL 的 48 KB 静态池，加载前后 `lvgl_peak_bytes` 不变。**issue 04 已把这四个文件与三个常量一起删掉**（含 `tests/kernel/test_font_ledger.cpp`、`tests/host/test_font_service.cpp`）。
+当时的形态：字节预算 + 引用计数，包装 `lv_font_load` 与 `lv_font_free`，独立于 LVGL 全局堆预算；超预算返回 `no_space`。内核层 `include/embark/font_ledger.h` + `src/embark/font_ledger.cpp`（零堆、定长表、不依赖 LVGL）+ 平台侧 `platform/common/font_service.{h,cpp}`（把 LVGL 的 `'F'` 盘注册到 `hal::IFileSystem`；同路径复用只 +1 引用，引用归零才 free）。容量见 `config/embark_limits.h`：`font_budget_bytes` 100 KB、`font_max_loaded` 4、`font_path_bytes` 64。真机侧曾映射到 **PSRAM 定容池**（见 Font alloc scope）：字库不占 LVGL 的 48 KB 静态池，加载前后 `lvgl_peak_bytes` 不变。**issue 04 已把这四个文件与三个常量一起删掉**（含 `tests/kernel/test_font_ledger.cpp`、`tests/host/test_font_service.cpp`）。<!-- check_docs:skip 这一行写的是已退役的历史形态 -->
 _Avoid_: 字体缓存、字库池
 
 **Font alloc scope（字库分配作用域）**：

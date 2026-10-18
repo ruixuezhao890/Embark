@@ -1,7 +1,7 @@
 # 用 HTML 草稿画屏（`html_to_aid.mjs`）
 
 > **这一层回答「怎么不打开设计器、只写一段 HTML 就把屏改出来」**。
-> 界面代码从哪来 → [../app/aidogui_ui/README.md](../app/aidogui_ui/README.md)；工具全貌 → [tools.md](tools.md)。
+> 界面代码从哪来 → [../../app/aidogui_ui/README.md](../../app/aidogui_ui/README.md)；工具全貌 → [tools.md](tools.md)。
 
 ---
 
@@ -118,5 +118,5 @@ node tools/aidogui/html_to_aid.mjs --self-check --screen clock   # 换一屏
 ## 6. 相关
 
 - [tools.md](tools.md)：验收开关与退出码、`export.ps1` / 字体脚本、给仓库加新脚本的五条规矩；§2 的 `dev.ps1` 是「`--apply` 之后立刻看到界面」的那条命令
-- [../app/aidogui_ui/README.md](../app/aidogui_ui/README.md)：设计工程目录、字体与真机资源约定
+- [../../app/aidogui_ui/README.md](../../app/aidogui_ui/README.md)：设计工程目录、字体与真机资源约定
 - [new-app-guide.md](new-app-guide.md)：加一个带界面的 App（含屏侧待办）

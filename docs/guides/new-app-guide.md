@@ -88,7 +88,8 @@
 
 ## 2. 敲起来（10 分钟，C++ 侧）
 
-照 `app/music/` 抄两个文件（`music_app.h` / `music_app.cpp`），改名即可。最小形状：
+`node tools/new_app.mjs my_app --title 我的应用 --icon LV_SYMBOL_EDIT` 一条命令生成（模板就是
+`app/music/` 的那两个文件）。下面是它生成出来的最小形状，改逻辑就从这里往下写：
 
 ```cpp
 // app/my/my_app.h
@@ -134,11 +135,15 @@ void MyApp::onForegroundTick(std::uint32_t) { /* 有数据时在这里 ui_backen
 `ui_backend.h` 是**唯一接缝**（[ADR 0011](../adr/0011-aidogui-ui-source.md)）：宏选后端
 （`EMBARK_AIDOGUI_UI` 优先），真机当前没有 UI 后端时四个函数编译成空操作，App 照常编过。
 
-**注册（两处，别漏）**：
+**注册（5 行 / 3 个文件，别漏）**：
 
 1. `cmake/embark_sources.cmake` 的 `EMBARK_APP_SOURCES` 加
    `"${EMBARK_ROOT}/app/my/my_app.cpp"`（宿主与真机共用这一份清单 —— issue 20）；
-2. `platform/host/ui_demo.cpp` 的 `EMBARK_APP_TABLE(...)` 加 `embark::demo::MyApp`。
+2. 同一文件的 `EMBARK_APP_SOURCES_DEVICE` 也加一行（真机子集，不加则真机编不到它）；
+3. `platform/host/ui_demo.cpp` 顶部加 `#include "my/my_app.h"`（App 表引用类名，头不可见就编不过）；
+4. 同一文件的 `EMBARK_APP_TABLE(...)` 加 `embark::demo::MyApp`；
+5. `app/common/aidogui_ui_hooks.h` 的 `EMBARK_AIDOGUI_HOOK_APPS(X)` 宏体加 `X(my)`
+   —— 有了它设计器事件才能「调用函数」写 `embark_ui_open_my` 打开这个 App（纯按钮式 App 可以不加）。
 
 > **注册顺序就是主屏磁贴顺序**（第 0 个是主屏自己，不出磁贴），也是默认前台 App。
 > 排在后面 = 在第 2 页。`max_apps` 现在是 12（= 3 页），超了是编译期 `static_assert`。
@@ -146,9 +151,16 @@ void MyApp::onForegroundTick(std::uint32_t) { /* 有数据时在这里 ui_backen
 > 现在只有 launcher/clock/settings 三个在里面）；App 的 include 目录由清单从源文件位置
 > 推导，不用手工补。`platform/host/ui_tour.cpp` 与 `user_main.cpp` 是精简系统用例，也不必加。
 
-**没有一键生成脚本，照 `app/music/` 抄**：`app/music/music_app.{h,cpp}` 共 121 行（含注释），
-是完整的最薄样板 —— 复制目录、改类名与 `name()`/`title()`/`icon()`、再改上面两处登记即可。
-模板只有这一份真相：脚本模板会和真 App 走偏，样板本身就是编译通过的那份代码。
+**一条命令做完**：`node tools/new_app.mjs my_app --title 我的应用 --apply`
+（先不带 `--apply` 跑一次，它只打印「要写哪两个文件、要在哪 5 行插什么」，不落盘）。
+
+脚本**不内嵌模板**：它运行期读 `app/music/music_app.{h,cpp}` 做标识符与文案替换，
+所以模板只有一份真相 —— music 的形状变了脚本跟着变，不会出现「脚本模板与真 App 走偏」。
+`node tools/new_app.mjs --self-check` 就是这条的硬检查：模板标记或 4 处登记锚点缺一个就报错退出。
+生成物落盘后**不自动 `git add`**，先 `git diff` 看一眼。
+
+它**不生成 `.aid` / 屏代码**（那是设计器的活，见 §3），也不动 `ui_tour.cpp` / `user_main.cpp` /
+真机 `main.cpp` 那三张精简 App 表 —— 那三张不是「所有 App 都该进」。
 
 **还没画屏时会怎样**：`ui_backend_load_for_app` 找不到同名屏 → 保持当前屏 + 一行 INFO 日志
 （`AiDoGUI 工程里还没有 App my 的屏（约定：screen == App 名）`），**不会黑屏**。

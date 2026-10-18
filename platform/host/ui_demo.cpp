@@ -40,7 +40,7 @@
  *   --watch         每 200 ms 看一次 export/ 的指纹，变了就把当前屏卸了重装（不重启进程）。
  *                   能力边界：生成的是 C 代码、编进二进制 —— 改 .aid 的**文案/几何**仍要
  *                   重新导出 + 重新构建；本开关当场能看见的是运行期才从 S: 盘读的图片 BIN。
- *   --screenshot FILE 最后一帧把窗口内容存成 BMP（用 Python/Pillow 转 PNG 便于查看）
+ *   --screenshot FILE 最后一帧把窗口内容存成 BMP（**用相对路径**落到当前目录最稳；写不进去会报完整路径）
  *   --frames N / --scale S / --delay MS / --quit-at N / --help 同旧版。
  *
  * 界面文案：demo App 界面用卡上的 ui_heiti.ttf（ADR 0017 起字号由设计器决定）；
@@ -313,7 +313,7 @@ void print_usage() {
       "  --screen NAME       启动直接进这块屏（屏名 == App 名，如 clock / weather / settings）\n"
       "  --watch             每 200 ms 看一次 export/：变了就重建当前屏（开发循环用；改了文案\n"
       "                      或几何仍要重新导出 + 重新构建 —— 那些是编进二进制的 C 代码）\n"
-      "  --screenshot FILE  最后一帧存 BMP\n"
+      "  --screenshot FILE  最后一帧存 BMP（建议用相对路径；写不进去会报到具体路径）\n"
       "  --shot-frame N FILE 第 N 帧存 BMP（配各故事线抓中途屏）\n"
       "  --scale S           窗口放大倍数（默认 1 = 240×320 1:1）\n"
       "  --delay MS          每帧间隔（默认 5；选了合成点击/手势的验收模式时自动用 40 ——\n"
@@ -393,7 +393,7 @@ bool save_screenshot(embark::platform::host::HostDisplay& display, const char* p
   }
   const bool ok = SDL_SaveBMP(surface, path) == 0;
   if (!ok) {
-    ELOG_ERROR("截图失败：写文件失败（{}）", SDL_GetError());
+    ELOG_ERROR("截图失败：写不进 {}（{}）", path, SDL_GetError());
   }
   SDL_FreeSurface(surface);
   return ok;

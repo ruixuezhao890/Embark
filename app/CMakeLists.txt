@@ -15,8 +15,9 @@
 #      目录布局（2026-10-06 目录化）：app/<app名>/ 放各 App 的 {h,cpp}；
 #      app/common/ 放跨 App 共用代码：界面薄桥（aidogui_ui_bridge / aidogui_ui_nav /
 #      ui_screen_names）与共享消息 app_messages.h。每个 App 独立成目录，
-#      新 App 照 app/music/ 抄一份薄壳，再登记到 cmake/embark_sources.cmake 的
-#      EMBARK_APP_SOURCES 与 EMBARK_APP_TABLE（见 docs/guides/new-app-guide.md）。
+#      新 App：node tools/new_app.mjs <名> --apply —— 它读 app/music/ 生成薄壳，并顺手登记
+#      cmake 的两份清单、ui_demo.cpp 的 include 与 EMBARK_APP_TABLE、aidogui_ui_hooks.h
+#      （见 docs/guides/new-app-guide.md §2）。
 #
 # App 之间只通过框架消息通信，禁止互相 include（spec §4 / §7）。
 add_library(embark_apps INTERFACE)

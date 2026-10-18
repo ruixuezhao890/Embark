@@ -98,7 +98,7 @@ ctest --test-dir build --output-on-failure
 | 你想要 | 怎么做 |
 | --- | --- |
 | 一个**最小 App**（纯 LVGL 手写界面，不接界面工程） | 照 [examples/minimal/](examples/minimal/) 抄 —— 一个 `*_app.h/cpp` + 一个 `main.cpp`，约 250 行含注释 |
-| 一个**带设计器界面**的 App（推荐路径） | 照 [app/music/](app/music/) 抄薄壳，再照 [docs/guides/new-app-guide.md](docs/guides/new-app-guide.md) 在 AiDoGUI Designer 里画同名屏 |
+| 一个**带设计器界面**的 App（推荐路径） | `node tools/new_app.mjs my_app --title 我的应用 --apply` —— 它读 [app/music/](app/music/) 当模板生成薄壳、自动登记 5 行；再去 AiDoGUI Designer 里画同名屏（[new-app-guide.md](docs/guides/new-app-guide.md) §2） |
 
 加完 App 要动的地方、屏名/变量名约定、八个钩子各写什么，都在
 [docs/guides/new-app-guide.md](docs/guides/new-app-guide.md) 与

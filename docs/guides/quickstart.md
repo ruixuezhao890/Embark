@@ -25,30 +25,32 @@
 ## 第 2 分钟：最短验收
 
 ```sh
-./build/platform/host/embark_host_ui.exe --click   # 退出码 0 = launcher ⇄ clock 往返成功
-./build/platform/host/embark_host_ui.exe --ui      # 界面冒烟验收：屏表 / 控件表 / 字体 / 时钟文案
+./build/platform/host/embark_host_ui.exe --click --delay 40   # 退出码 0 = launcher ⇄ clock 往返成功
+./build/platform/host/embark_host_ui.exe --ui --delay 40      # 界面冒烟验收：屏表 / 控件表 / 字体 / 时钟文案
 ./build/platform/host/embark_host_tour.exe         # 一条用例看完整系统（17 项自检）
 ```
 
 ## 第 3–5 分钟：加一个自己的 App（薄壳 + AiDoGUI 屏）
 
-**照样板抄**（没有生成脚本：模板的唯一真相是编译通过的那份代码）：
-
 ```sh
-cp -r app/music app/my_app     # 121 行的最薄样板（薄壳 + 同名屏 + 值重推）
+node tools/new_app.mjs my_app --title 我的应用             # 只看计划：写哪两个文件、在哪 5 行插什么
+node tools/new_app.mjs my_app --title 我的应用 --apply     # 真写 + 登记，然后构建
 ```
 
-**手工**（想理解结构就这么做）：
+它读 `app/music/`（121 行的最薄样板：薄壳 + 同名屏 + 值重推）当模板做替换 —— **脚本不内嵌模板**，
+所以模板只有一份真相，不会出现「脚本模板与真 App 走偏」。落盘后 `cmake -S . -B build` 再
+`cmake --build build`，`--ui --frames 40 --delay 40` 应该仍绿。
 
-1. 复制 `app/music/` → `app/my_app/`，类名改 `MyApp`、`name()` 返回 `"my_app"`；
-2. `cmake/embark_sources.cmake`：`EMBARK_APP_SOURCES` 加 `"${EMBARK_ROOT}/app/my_app/my_app.cpp"`；
-3. `platform/host/ui_demo.cpp`：`EMBARK_APP_TABLE(...)` 加 `embark::demo::MyApp`
-   （`LauncherApp` 之后，首位必须是启动器）；
-4. `cmake --build build` 重新构建，`--frames 90 --click` 验收仍绿；
-5. 想要界面：**AiDoGUI Designer** 画一张同名屏（屏名 == App 名）导出到 `app/aidogui_ui/export/`，
-   重新 `cmake -B build` 即可生效（缺屏也能编译运行，只告警不崩）。
+**手工路线**（想理解结构就这么做）：照 `app/music/` 抄两个文件，然后**登记 5 行 / 3 个文件** ——
+`cmake/embark_sources.cmake` 的两份清单、`platform/host/ui_demo.cpp` 的 include 与 App 表、
+`app/common/aidogui_ui_hooks.h` 的宏。逐条清单与理由见 [new-app-guide.md](new-app-guide.md) §2，
+漏一处就编不过（漏 include 的报错是 `'MyApp' is not a member of 'embark::demo'`）。
+
+想要界面：**AiDoGUI Designer** 画一张同名屏（屏名 == App 名）导出到 `app/aidogui_ui/export/`，
+重新 `cmake -B build` 即可生效（缺屏也能编译运行，只告警不崩）。
 
 > 详细教程（30 分钟端到端）见 [new-app-guide.md](new-app-guide.md)；
+> **之后每天怎么干活**（改哪儿、跑哪条验收、提交前四条自检）见 [daily-loop.md](daily-loop.md)；
 > 界面链路与重导出见 [app/aidogui_ui/README.md](../../app/aidogui_ui/README.md)；
 > 桥接口见 [../reference/hooks-and-api.md](../reference/hooks-and-api.md) §5。
 
@@ -60,4 +62,4 @@ cp -r app/music app/my_app     # 121 行的最薄样板（薄壳 + 同名屏 + �
 | 改了屏不生效 | 屏表是**配置期**生成的：改动后要重新 `cmake -B build`（或用 `tools/aidogui/dev.ps1`，它把导出 + 配置 + 构建串成一条） |
 | 界面文字是方框 | 卡上的 `ui_heiti.ttf` 缺字——跑 `node tools/font/audit_glyphs.mjs` 看缺哪个字（ADR 0017） |
 | 想给自己的 App 加数据上屏 | 按控件名拿 `lv_obj_t*` 后直接写：`aidogui_ui_bridge_widget("my_app", "Label_Count")`；控件值会随屏重建丢失，所以用 `ui_backend_bind_repaint` 声明重推（ADR 0015）|
-| 真机上没有界面 | 真机当前没定义 `EMBARK_AIDOGUI_UI`（桥调用编译成空操作），见根 README 状态 |
+| 真机上没有界面 | **不是这个原因** —— 真机也定义了 `EMBARK_AIDOGUI_UI=1`（`platform/esp32/project/components/embark/CMakeLists.txt`）。先看串口有没有 `没有屏 <名>` 告警：真机没界面几乎都是屏名 ≠ App 名，或改了 `export/` 却没重新配置构建 |

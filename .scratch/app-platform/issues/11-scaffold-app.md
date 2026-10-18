@@ -1,6 +1,6 @@
 # 11 · 一键生成 App（AiDoGUI 版脚手架）
 
-Status: open
+Status: done（2026-10-18）
 Blocked by: —（但必须在 01 之后做：01 删掉了 EEZ 版脚本）
 
 ## 为什么
@@ -78,3 +78,87 @@ node tools/new_app.mjs --self-check
 - 生成物落盘后**不自动 git add** —— 让人先看一眼 diff。
 - 这一票做完之后，`docs/guides/tools.md` §0 的「加 App 没有一键脚本——照 `app/music/` 抄」要改成指向本脚本，
   同时保留「模板只有一份：app/music/」这句（它仍是这条设计的理由）。
+
+---
+
+## 收尾记录（2026-10-18）
+
+### 落地文件
+
+| 文件 | 说明 |
+| --- | --- |
+| `tools/new_app.mjs`（382 行） | 新建。零依赖 Node ESM，读 `app/music/music_app.{h,cpp}` 当模板 |
+| `docs/guides/tools.md` | §0 一览表加 `new_app.mjs` 行；「八个脚本」→「九个脚本」；「加 App 没有一键脚本」整段改写成指向脚本 + `--self-check` |
+| `docs/guides/new-app-guide.md` §2 | 「照 `app/music/` 抄」→ 一条命令生成；注册从「两处」改成「5 行 / 3 个文件」；模板唯一真相那段的理由保留并改写成「脚本不内嵌模板」 |
+| `app/CMakeLists.txt:18-19` | 注释里的「照 music 抄一份 + 登记」改成 `node tools/new_app.mjs <名> --apply` |
+
+### 与票面的偏离（一处，已落地）
+
+票面写「自动登记 **4 处**」，实际是 **5 行 / 3 个文件** —— 多出来的一行是
+`platform/host/ui_demo.cpp` 顶部的 `#include "<名>/<名>_app.h"`。
+理由：`EMBARK_APP_TABLE(...)` 引用的是**类名**，头不可见就编不过。
+实测第一次 `--apply` 后构建直接失败：
+
+```
+error: 'MyApp' is not a member of 'embark::demo'
+error: no matching function for call to 'app_registry<..., <expression error> >()'
+```
+
+所以第 3 处登记变成两行（include + 表项），其余三处不变：
+
+| # | 文件 | 位置 | 插什么 |
+| --- | --- | --- | --- |
+| 1 | `cmake/embark_sources.cmake` | `# 新 App 登记锚点（加在这里）` 之前 | `"${EMBARK_ROOT}/app/<名>/<名>_app.cpp"` |
+| 2 | `cmake/embark_sources.cmake` | `EMBARK_APP_SOURCES_DEVICE` 里胶水源 `aidogui_ui_nav.cpp` 之前 | 同上 |
+| 3 | `platform/host/ui_demo.cpp` | `#include "music/music_app.h"` 之后 | `#include "<名>/<名>_app.h"` |
+| 4 | `platform/host/ui_demo.cpp` | App 表收尾括号前（launcher 留第一位） | `, embark::demo::<Pascal>` |
+| 5 | `app/common/aidogui_ui_hooks.h` | `EMBARK_AIDOGUI_HOOK_APPS(X)` 宏体末 | `X(<名>)` |
+
+### 实现期三个决定（都不是票面写死的）
+
+1. **类名不叠 App**：模板类叫 `MusicApp`（music + App），若简单拼成 `pascal(name) + "App"`，
+   `my_app` 会得到 `MyAppApp`。规则改成「大驼峰后**已经以 App 结尾就不补**」⇒ `my_app` → `MyApp`（与票面期望一致）、
+   `clock` → `ClockApp`、`music` → `MusicApp`（与现有四个 App 一致）。
+2. **模板的头注释块整个换掉**：`music_app.h` 开头那段写的是「issue launcher-pages 需要第 5、6 个 App 来证明分页」——
+   对任何新 App 都是错的。脚本 `stripDocBlock()` 去掉后重写一段（生成日期 + 薄壳纪律 + 后台策略）。
+   顺带把正文里两处 music 专属措辞归一：`/// 占位 App：音乐。` → `/// App：<标题>。`、`界面 = AiDoGUI 占位屏` → `界面 = AiDoGUI 屏`。
+   这是**唯一**由脚本自带文案的地方；结构、生命周期、日志格式全部来自模板。
+3. **`--dry-run` 是默认**，`--apply` 才落盘；落盘后不自动 `git add`（票面备注）。
+
+### 验收实测
+
+| 验收项 | 结果 |
+| --- | --- |
+| `node tools/new_app.mjs my_app --dry-run` | 打印 2 个文件 + 5 行插入点，`git status` 只有 `?? tools/new_app.mjs`（未落盘） |
+| `node tools/new_app.mjs my_app --title 我的应用 --apply` | 写出 `app/my_app/my_app_app.{h,cpp}`（60 / 59 行，UTF-8 无 BOM）；`class MyApp final : public App`、`name()` 返回 `"my_app"` |
+| `git diff` | 恰好 5 行登记，分布在 `cmake/embark_sources.cmake`（2）、`platform/host/ui_demo.cpp`（2）、`app/common/aidogui_ui_hooks.h`（1） |
+| `cmake --build build` | 通过（第 3 处 include 就是这一步逼出来的） |
+| `--ui --frames 40 --delay 40` | exit 0，日志里 `App my_app onExit` 说明它真被注册进表并跑过后台生命周期 |
+| 其余四条故事 + tour | 全 exit 0；`--ui-launcher-pages` 从「磁贴 5」变「磁贴 6 / 页 2 / 点 2」仍通过（该断言是下限不是等号）—— **加 App 会改变主屏磁贴，验收日志里的数字会跟着变，别以为是回归** |
+| `node tools/new_app.mjs music --apply` | 拒绝：`app/music 已经存在 —— 不覆盖` |
+| 第二次 `my_app --apply` | 同上拒绝 |
+| `node tools/new_app.mjs foo_sub --apply` | 拒绝：`App 名不能以 _sub 结尾` |
+| `node tools/new_app.mjs MyApp --apply` | 拒绝：名字必须小写开头 |
+| `node tools/new_app.mjs zz --icon AUDIO --apply` | 拒绝：`--icon 要写成 LV_SYMBOL_XXX` |
+| `--self-check` | exit 0 |
+| 自检**真的在检查** | 把 `app/music/music_app.cpp` 里 `ui_backend_tick();` 临时改名 → `--self-check` exit 1 且指名「缺「ui_backend_tick();」（泵一帧）」；恢复后 exit 0 |
+| `git grep -n -i "eez\|scaffold_app\.py"` | 不因本票新增任何命中 |
+| 收尾清理 | 测试用的 `app/my_app/` 与 5 行登记已还原（`git checkout`），工作区只剩脚本与三份文档 |
+
+### 用法（写给下一个人）
+
+```
+node tools/new_app.mjs my_app --title 我的应用 --icon LV_SYMBOL_EDIT   # 只看计划（默认 dry-run）
+node tools/new_app.mjs my_app --apply                                  # 真写 + 登记 5 行
+node tools/new_app.mjs --self-check                                    # 模板与锚点还在吗
+```
+
+跑完 `--apply` 会打印「屏侧待办」：设计器里建同名屏、返回按钮写 `embark_ui_open_launcher`、
+别的屏要打开它就写 `embark_ui_open_<名>`、重导出、`gen_widget_doc.mjs`、`dev.ps1 -Screen <名>`。
+
+### 没做的（有意）
+
+- 不生成 `.aid` / 屏代码（设计器的活，见 04 号票的工具）
+- 不动 `platform/host/ui_tour.cpp`、`platform/host/user_main.cpp`、`platform/esp32/project/main/main.cpp` 三张精简 App 表
+- 不自动 `git add`、不自动构建、不自动导出
+- CI 不跑 `--self-check`（本仓 CI 不跑任何 Node 脚本），靠改 `app/music/` 的人手工跑一次

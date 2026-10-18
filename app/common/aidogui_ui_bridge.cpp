@@ -798,6 +798,8 @@ bool aidogui_ui_bridge_load_screen(const char* screen_name) {
   if (entry == nullptr) {
     ELOG_WARN("AiDoGUI 工程里没有屏 {}（屏名约定：screen == App 名）",
               screen_name != nullptr ? screen_name : "<null>");
+    ELOG_WARN("下一步：在 AiDoGUI 设计器里建一张名为 {} 的屏并导出，然后重新配置构建",
+              screen_name != nullptr ? screen_name : "<null>");
     return false;
   }
   return load_entry(entry, /*notify=*/true);

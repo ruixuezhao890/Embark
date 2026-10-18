@@ -13,6 +13,21 @@
 - [**adr/**](adr/)：架构决策记录 —— 每条决策当时的取舍与被否决的方案（"为什么不是另一种做法"）。
 - [**agents/**](agents/domain.md)：面向 AI agent 的仓库约定（领域模型、issue 追踪规则）。
 
+## 30 秒上手
+
+```sh
+cmake --build build --target embark_host_ui               # 编（build/ 已 Configure，不用再 -G）
+cd build/platform/host
+./embark_host_ui.exe --frames 60 --screenshot probe.bmp   # 看（无头也看得见）
+./embark_host_ui.exe --ui --delay 40 --frames 40          # 验（合成输入必须带 --delay 40）
+```
+
+**每天只碰三个地方**：界面 → `app/aidogui_ui/screen.aid`（改完 `pwsh -File tools/aidogui/export.ps1` 再编）；
+App 逻辑 → `app/<名>/<名>_app.cpp`（直接编）；让 AI 画界面 → 一份 HTML 草稿走 `node tools/aidogui/html_to_aid.mjs`。
+`app/aidogui_ui/export/` 是导出产物，**别手改**。**其余文档等卡住了再查**，不读也能开始。
+
+---
+
 ## 第一次来：三步
 
 **① 跑起来**（约 15 分钟，含装工具）→ [guides/quickstart.md](guides/quickstart.md)
@@ -20,6 +35,8 @@
 **② 看懂它是怎么跑的**（可选，但推荐）→ [concepts/index.md](concepts/index.md) 的分层总图 + 一帧数据流
 
 **③ 加一个自己的 App**（30 分钟，含画界面）→ [guides/new-app-guide.md](guides/new-app-guide.md)
+
+**之后每天**：要改某处动哪个文件、跑哪几条验收、提交前自检什么 → [guides/daily-loop.md](guides/daily-loop.md)
 
 ```sh
 cmake -G Ninja -B build
@@ -29,6 +46,19 @@ ctest --test-dir build --output-on-failure
 ```
 
 看到 240×320 的竖屏窗口、里面是 launcher 屏、点按钮能切到 clock 屏 —— 就算跑起来了。
+
+## 两条赛道：基建 vs App
+
+这个仓库有两条赛道，别混（决定「谁该动哪片代码」，见 [../AGENTS.md](../AGENTS.md) 与
+[adr/0019-service-layer-and-public-hardware.md](adr/0019-service-layer-and-public-hardware.md)）：
+
+| 赛道 | 归谁 | 动什么 |
+| --- | --- | --- |
+| **基建** | agent 做 | `include/embark/hal/`、服务层（`IImu` / `IAudio` / `INetwork`）、`platform/`、`cmake/`、`tools/`、`docs/` |
+| **App** | **你写** | `app/<名>/` 里的业务逻辑，与 `app/aidogui_ui/screen.aid` 里的界面 |
+
+agent 默认**只做基建**：不替你写 App 的业务逻辑与界面（要动必须你点名）。
+在你自己那条赛道上每天怎么干活，见 [guides/daily-loop.md](guides/daily-loop.md)。
 
 ## 索引
 
@@ -46,8 +76,9 @@ ctest --test-dir build --output-on-failure
 | 文档 | 内容 |
 | --- | --- |
 | [guides/quickstart.md](guides/quickstart.md) | **从零跑起来**：装工具 → clone → 构建 → 跑 → 最短验收 → 加一个 App 的入口 |
+| [guides/daily-loop.md](guides/daily-loop.md) | **日常循环（每天都用）**：一条命令起循环 → 「我要改什么 → 去哪」表 → 改界面的三条路 → 改完跑哪几条 → 提交前四条自检 → 「改了没反应」速查 |
 | [guides/settings-and-preferences.md](guides/settings-and-preferences.md) | **设置中心（当前）**：设置屏三段版面、一个设置项怎么工作、偏好键表、加一个设置项的三步、验收命令与五个坑 |
-| [guides/new-app-guide.md](guides/new-app-guide.md) | **新手指南（当前）**：30 分钟加一个带界面的 App（跑起来 → C++ 薄壳 → AiDoGUI 设计工程里画同名屏 + 补字符表 → 重导出 → 构建验收，端到端） |
+| [guides/new-app-guide.md](guides/new-app-guide.md) | **新手指南（当前）**：30 分钟加一个带界面的 App（一条命令 `tools/new_app.mjs` 起步）（跑起来 → C++ 薄壳 → AiDoGUI 设计工程里画同名屏 + 补字符表 → 重导出 → 构建验收，端到端） |
 | [guides/state-machine-and-messages.md](guides/state-machine-and-messages.md) | 状态机与消息：`etl::fsm` 怎么接进 App 契约（收消息即切状态、事件从 `onBackgroundTick` 喂、运行语义与坑） |
 | [../app/aidogui_ui/README.md](../app/aidogui_ui/README.md) | **界面怎么改（当前）**：AiDoGUI 设计工程 → 一条命令重生成 → 编译；目录、字体与真机资源约定 |
 | [guides/html-to-screen.md](guides/html-to-screen.md) | **画屏的另一条路（当前）**：写 HTML 草稿 → 无头浏览器量真坐标 → 合并进 `screen.aid` 的指定屏；`data-*` 方言、默认不写盘、六屏往返自检 |
