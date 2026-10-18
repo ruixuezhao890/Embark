@@ -1,11 +1,10 @@
 /**
  * AiDoGUI 屏 → App 的导航桥（ADR 0011）：把"AiDoGUI 里切屏"变成"框架切前台 App"。
- * 这是 `app/common/eez_ui_nav.h` 的继任者，签名刻意一一对应（迁移期两边并存）。
  *
  * 分工：
  *   - app/common/aidogui_ui_bridge.h 只管 UI 生成代码（启动/屏表/控件表/切屏/观察者）；
- *   - app/common/eez_ui_screen_names.h 管屏名→App 名的纯解析（可单测；约定同 EEZ：
- *     屏名 == App 名，子页 <app名>_<编号>_sub。第二步改名成 ui_screen_names.h）；
+ *   - app/common/ui_screen_names.h 管屏名→App 名的纯解析（可单测；约定：
+ *     屏名 == App 名，子页 <app名>_<编号>_sub）；
  *   - 本文件把两边接起来：装观察者 → 屏名解析成 App 名 → framework.request_switch。
  *
  * 屏幕→App 的导航有三条路：

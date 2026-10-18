@@ -17,11 +17,11 @@
 
 | 钩子 | 何时被调 / 几次 | 线程 | 该放什么 | 不该放什么 |
 | --- | --- | --- | --- | --- |
-| `onCreate(Framework&)` | boot 装配期，**恰好 1 次**；按注册顺序 | UI | 存 `fw_ = &fw`；注入 HAL 能力（`fw.hal()`）；`eez_ui_bridge_ensure_init()`；建静态资源 | **别 publish**——总线这时还没装配，发出去没人收（计 unknown + WARN，见 §3 第 1 条） |
-| `onEnter()` | **≤ 1 次**：第一次成为前台时 | UI | 挂自己的 EEZ 屏（`enter_app_screen(name())`）；启动计时状态机 | 别假设「每次回前台都会调」——那是 `onResume` |
+| `onCreate(Framework&)` | boot 装配期，**恰好 1 次**；按注册顺序 | UI | 存 `fw_ = &fw`；注入 HAL 能力（`fw.hal()`）；`ui_backend_attach_nav(fw)`（主屏 App 负责装屏观察者）；建静态资源 | **别 publish**——总线这时还没装配，发出去没人收（计 unknown + WARN，见 §3 第 1 条） |
+| `onEnter()` | **≤ 1 次**：第一次成为前台时 | UI | 挂自己的屏（`ui_backend_load_for_app(name())`）；启动计时状态机 | 别假设「每次回前台都会调」——那是 `onResume` |
 | `onPause()` | **每次**离开前台 | UI | 保存状态、停自己的节拍；打日志 | 碰 UI（框架不碰你的 UI，也不替你收尾） |
 | `onResume()` | **每次**回到前台 | UI | 恢复显示；**再挂一次屏**（你的屏可能已被别的 App 覆盖） | 以为「屏还在」 |
-| `onForegroundTick(now_ms)` | **每帧一次**，仅当前台 | UI | 推数据给 UI：先 `set_var_*` 再 `eez_ui_bridge_tick()`；EEZ App 驱动 `eez_flow_tick()` | 任何耗时工作——它就在 UI 循环里，卡住 = 掉帧 |
+| `onForegroundTick(now_ms)` | **每帧一次**，仅当前台 | UI | 推数据给 UI：按控件名拿到 `lv_obj_t*` 后直接写；再 `ui_backend_tick()` | 任何耗时工作——它就在 UI 循环里，卡住 = 掉帧 |
 | `onBackgroundTick(now_ms)` | 武装之后按 `settings().period_ms` 周期；**默认没被打开过 = 一次都不跑** | **tick 策略 = UI 任务；own_task 策略 = 独立任务** | 轻活（tick）；阻塞 / 重计算（own_task） | own_task 里**碰 UI**、**publish**——回 UI 只能 `post` 信封。**今天没有 App 声明后台体**，这个钩子今天一次都不会被调（[ADR 0015](../adr/0015-app-retention-and-refresh.md)） |
 | `onMessage(const Message&)` | 每条广播一次 | UI | 按 `msg.get_message_id()` 自分发 | 以为收不到自己发的消息——**v1 是广播，自己发的也会回来**（§3 第 2 条） |
 | `onExit()` | **恰好 1 次** | UI | 收尾、落盘、打日志 | 依赖它做日常清理——**v1 只有关机路径会触发**，没有别的退役路径 |
@@ -67,7 +67,7 @@
 
 | 成员 | 签名 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `name` | `[[nodiscard]] virtual const char* name() const = 0` | 无（**必须实现**） | 注册表键；**必须与 EEZ 屏名一致**；同名会编译期报错 |
+| `name` | `[[nodiscard]] virtual const char* name() const = 0` | 无（**必须实现**） | 注册表键；**必须与 AiDoGUI 屏名一致**（屏名约定）；同名会编译期报错 |
 | `title` | `virtual const char* title() const` | `name()` | 给人看的名字 |
 | `icon` | `virtual const char* icon() const` | `nullptr` | `LV_SYMBOL_*`；空则用标题首字符兜底 |
 | `accent` | `virtual std::uint32_t accent() const` | `design_tokens::accent` | 强调色。**禁止魔法颜色值**，从 design tokens 取 |
@@ -129,8 +129,8 @@ E_FMT_DERIVE(struct AppSettings {
 | `request_switch` | `[[nodiscard]] Error request_switch(const char* name)` | 按名字；名字无效 → `not_found` |
 | `request_home` | `[[nodiscard]] Error request_home()` | 回默认前台（注册表第 0 个） |
 
-> 导航壳已于 2026-10-06 退役：现在由 App 显式调用，或由 EEZ 屏观察者转成 `request_switch`
-> （`app/common/eez_ui_nav.cpp`，仓库里唯一的 `request_switch` 调用者）。
+> 导航壳已于 2026-10-06 退役：现在由 App 显式调用，或由 AiDoGUI 屏观察者转成 `request_switch`
+> （`app/common/aidogui_ui_nav.cpp`，仓库里唯一的 `request_switch` 调用者）。
 
 ### 消息
 
@@ -196,30 +196,45 @@ Framework(hal::Context& hal, AppRegistry apps,
 
 ---
 
-## 5. EEZ 薄桥 API（App 侧）
+## 5. 界面薄桥 API（App 侧）
 
-> 当前界面走 **AiDoGUI 桥**（[app/common/aidogui_ui_bridge.h](../../app/common/aidogui_ui_bridge.h) / `ui_backend.h`：`ui_backend_bind_click` / `ui_backend_bind_action` / `ui_backend_bind_repaint`），见 [app/aidogui_ui/README.md](../../app/aidogui_ui/README.md)；本节是 EEZ 老链路（历史）。
+界面走 **AiDoGUI 桥**，完整说明见 [app/aidogui_ui/README.md](../../app/aidogui_ui/README.md) 与
+[new-app-guide.md](../guides/new-app-guide.md)。App 只 include 两个头：`app/common/ui_backend.h`
+（六个 App 都认的接缝）与 `app/common/aidogui_ui_bridge.h`（按名查控件）。
 
-完整说明见 [guides/eez-ui-manual.md](../guides/eez-ui-manual.md) §8。
-声明在 [`app/common/eez_ui_bridge.h`](../../app/common/eez_ui_bridge.h)，命名空间 `embark::demo`。
+### 5.1 `ui_backend.h` —— 唯一接缝
+
+| 函数 | 何时调 | 说明 |
+| --- | --- | --- |
+| `ui_backend_attach_nav(fw)` | `onCreate`（主屏 App 负责） | 装屏观察者：AiDoGUI 切屏 → 屏名解析成 App 名 → `request_switch` |
+| `ui_backend_load_for_app(name)` | `onEnter` / `onResume` | 装载本 App 的同名屏；缺屏只记 INFO、保持当前屏 |
+| `ui_backend_tick()` | `onForegroundTick` | 给 UI 的每帧机会（AiDoGUI 不需要，留着对称） |
+| `ui_backend_bind_click(屏, 控件, App)` | `onCreate` | 备用路径：点控件 → 切 App（主路是设计器里的「调用函数」事件） |
+| `ui_backend_bind_action(屏, 控件, fn)` | `onCreate` | 备用路径：点控件 → 就地调 `fn`（不切 App） |
+| `ui_backend_bind_repaint(屏, fn)` | `onCreate` | 屏装载好后调 `fn` 重推控件值（屏每次都是新对象，ADR 0015） |
+
+没定义 `EMBARK_AIDOGUI_UI` 时全部编译成空操作（`examples/minimal` 这类不链 LVGL 的目标走这条）。
+
+### 5.2 `aidogui_ui_bridge.h` —— 生成代码侧
 
 | 组 | 函数 |
 | --- | --- |
-| 把 UI 跑起来 | `eez_ui_bridge_init()` / `ensure_init()`（幂等） / `tick()` / `load_current_screen()` / `current_screen()` |
-| 屏名 → App | `screen_count()` / `screen_name(int)` / `screen_id(const char*)` / `screen_created(const char*)` |
-| 切屏 | `load_screen(int)` / `load_screen_by_name(const char*)` / `load_screen_for_app(const char*)` / `enter_app_screen(const char*)` |
-| Flow 变量 | `var_count()` / `var_name(int)` / `var_index(const char*)` / `set_var_int/float/bool/string` / `get_var_int/float/bool` |
-| 反向通知 | `set_screen_observer(EezScreenObserver, void*)` |
+| 屏表 | `screen_count()` / `screen_name(int)` / `has_screen(const char*)` |
+| 装载 | `load_screen(int)` / `load_screen_for_app(const char*)` / `unload_current()` / `current_screen()` |
+| 控件表（**数据接口**） | `widget_count()` / `widget_name(int)` / `widget(屏, 控件名)` → `lv_obj_t*` |
+| 字体 | `aidogui_ui_bridge_font(int size)` |
+| 反向通知 | `set_screen_observer(fn, ctx)`、`set_boot_checks(...)` |
 
-哨兵值：`kEezScreenNone = -1`、`kEezVarNone = -1`。
+> **纪律**：屏切走即 destroy、回来即 init（ADR 0011 决策②）；所以**不要缓存 `lv_obj_t*`**，
+> 每次用 `widget()` 现取，控件值的重推交给 `ui_backend_bind_repaint`。
+> 设计器里的 CHANGE_SCREEN 动作**不要**用——它会绕过桥的按需 init/destroy，导航一律走
+> 「调用函数」`embark_ui_open_<App 名>`（`app/common/aidogui_ui_hooks.h`）。
 
-> **纪律**：变量名不存在、或 `ui_init()` 还没跑 → 一律返回 `false` 且**无副作用**。
-> 必须等 `ui_init()` 之后才能写变量（生成代码那时才分配全局变量的存储）。
-> `enter_app_screen` 缺屏时**保持当前屏 + 一条 ELOG_WARN**，不黑屏。
-> 桥自己发起的 `load_screen*` **不会**触发观察者回调。
+### 5.3 导航与屏名
 
-配套：`app/common/eez_ui_nav.h`（`attach(Framework&)` / `detach()` / `switch_requests()` / `last_screen()`）、
-`app/common/eez_ui_screen_names.h`（纯函数，可单测：`eez_ui_screen_is_subpage` / `eez_ui_app_name_for_screen`）。
+`app/common/aidogui_ui_nav.h`（`attach` / `detach` / `request_app` / `bind_click` / `bind_action` /
+`bind_repaint` + 验收计数）与 `app/common/ui_screen_names.h`（纯函数、可单测：`ui_screen_is_subpage` /
+`app_name_for_screen`；约定屏名 == App 名，子页 `<app名>_<编号>_sub`）。
 
 ---
 
@@ -240,8 +255,18 @@ Framework(hal::Context& hal, AppRegistry apps,
 > **指针事件 vs 按键事件**：`InputEvent.key` 为 0 = 指针（触摸/鼠标/触控板），非 0 = 按键（键号 0..255），
 > 此时 `x/y` 是"按键那一刻指针在哪"。**只看 `key` 就能分开两类**。
 
-`hal::Context` 是装配点：`{ ITime& time; IPersistence& storage; ILogSink& log; ISystem& system; IBus& bus; IDisplay* display; IInput* input; }`
-—— `display` / `input` 可空（v1 允许无屏平台）。
+`hal::Context` 是装配点（也是服务层的唯一注入面）：
+`{ ITime& time; IPersistence& storage; ILogSink& log; ISystem& system; IBus& bus; IDisplay* display; IInput* input; IFileSystem* filesystem; IImu* imu; IAudio* audio; INetwork* network; }`
+—— 后六个全是**可空指针**：没有这块硬件就是 `nullptr`，用到的模块自己判空并返回 `not_ready`。
+服务槽（三块硬件都已接上，ADR 0019）：
+
+| 槽 | 今天 | 能不能用 |
+| --- | --- | --- |
+| `imu` | **宿主与真机都已接上**（issue 08 落地）：宿主给可复现的合成曲线，真机探板载六轴，没芯片时 `read()` 返回 `not_ready` | 可以用；`#include <embark/hal/imu.h>` 拿完整类型 |
+| `audio` | **宿主与真机都已接上**（issue 09 落地）：宿主 `HostAudio` 用 SDL 出声，真机 `Esp32Audio` 走 I2S；只认 PCM WAV，`MP3` 返回 `unsupported`；`set_volume` 是软件采样衰减（芯片没有数字音量寄存器） | 可以用；`#include <embark/hal/audio.h>` 拿完整类型 |
+| `network` | **宿主与真机都已接上**（issue 10 落地）：宿主 `HostNetwork` 直通 socket（`connect()` 恒成功，验契约不发包），真机 `Esp32Network` 走 esp_wifi STA + esp_http_client + SNTP；只做明文 HTTP（`https://` → `unsupported`），`http_get()` 阻塞、写满返回 `no_space`，HTTP 4xx/5xx 不是 `Error`；凭据只存内存不落 NVS | 可以用；`#include <embark/hal/network.h>` 拿完整类型 |
+
+见 [ADR 0019](../adr/0019-service-layer-and-public-hardware.md)。
 
 > **宿主的 `IBus` 一律返回 `unsupported`**——不是"没实现"，而是"这台机器本来就没有物理总线"，
 > 正好让上层写好的错误分支在宿主机上被真跑一遍。写后端的完整指南见

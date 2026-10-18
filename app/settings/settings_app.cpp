@@ -21,7 +21,7 @@
 #include "settings_app.h"
 #include "settings_prefs.h"
 
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
 #include "ui_backend.h"
 #endif
 #if defined(EMBARK_AIDOGUI_UI)
@@ -149,7 +149,7 @@ void SettingsApp::onCreate(Framework& fw) {
   }
   ELOG_INFO("App {} onCreate（亮度 {}%，`后台策略 = suspend；界面 = 屏 {}）", name(),
             static_cast<unsigned>(percent_), kScreen);
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
   g_settings_for_ui = this;
   // 屏切走即 destroy、回来即 init（ADR 0011 决策②），新控件上是设计器初值；
   // 刷文本 + 重挂按钮都在这个钩子里做（ADR 0015）。
@@ -161,7 +161,7 @@ void SettingsApp::onEnter() {
   ++enters_;
   ELOG_INFO("App {} 进入前台（enter {}, resume {}, 累计 {} 次）", name(), enters_, resumes_,
             enters_ + resumes_);
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
   ui_backend_load_for_app(name());  // 屏装载后由桥回调 refresh_display()
 #endif
 }
@@ -173,7 +173,7 @@ void SettingsApp::onPause() {
 void SettingsApp::onResume() {
   ++resumes_;
   ELOG_INFO("App {} 回到前台（enter {}, resume {}）", name(), enters_, resumes_);
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
   ui_backend_load_for_app(name());  // 同 onEnter
 #endif
 }
@@ -184,7 +184,7 @@ void SettingsApp::onExit() {
 
 void SettingsApp::onForegroundTick(std::uint32_t now_ms) {
   (void)now_ms;
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
   ui_backend_tick();
 #endif
 }

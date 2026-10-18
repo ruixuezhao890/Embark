@@ -149,7 +149,7 @@ inline constexpr const char* sd_mount_point = "/sdcard";
 // 既看不到原因，也没法降级使用（字号退回内置 14 px 总比一直重启好）。要当场取证时再临时置 true。
 //
 // 自检本身在 main.cpp：ADR 0017 之后字体只有一条路 —— AiDoGUI 桥读卡上的 ui_heiti.ttf
-// 建 7 档字号，所以判据就是桥的字体报告（loaded == total），不再自己读字库文件。
+// 按字号建字体，所以判据就是桥的字体报告（loaded == total），不再自己读字库文件。
 inline constexpr bool sd_font_check_fatal = false;
 
 // --- 板载 I2C（IMU / RTC 共用）——框架 hal::IBus 走这条 ----------------------
@@ -162,6 +162,12 @@ inline constexpr int bus_i2c_port = 1;
 inline constexpr std::uint32_t bus_i2c_timeout_ms = 100;
 // 这条总线上最多挂几个从设备（IMU + RTC + 以后要加的，4 个够；句柄是懒创建的）。
 inline constexpr std::size_t bus_max_devices = 4;
+
+// --- 板载 IMU：QMI8658 六轴（挂上面那条 I2C_NUM_1）----------------------------
+// 引脚就是 bus_pin_sda / bus_pin_scl；INT1 = IO13 / INT2 = IO12 本驱动不用（轮询读取）。
+// **7 位地址不写死**：SA0 脚决定 0x6A 还是 0x6B，仓库里没有这块板的确切接法，
+// 所以 Esp32Imu::init 依次探这两个地址、用 WHO_AM_I == 0x05 做判据（见 esp32_imu.cpp）。
+// 谁哪天按图纸确认了，把驱动里的 kAddressCandidates 收成一项即可。
 
 // --- 板载 RTC：PCF85063ATL（挂上面那条 I2C_NUM_1）-----------------------------
 // 引脚（2026-10-17 用户按图纸确认，芯片已焊）：IO9 = RTC_INT / IO10 = SCL / IO11 = SDA
@@ -177,6 +183,19 @@ inline constexpr int rtc_pin_int = 9;
 // 误差 = 编译到上电那几分钟；没有纽扣电池时每次开机都会重新播种（这也是当前的实情）。
 // 有电池之后播种一次就能一直走，那时把这个开关留着也无害（OS=0 就不会再写）。
 inline constexpr bool rtc_seed_from_build_time = true;
+
+// --- 板载音频：PCM5101 DAC + 功放 + 喇叭座（I2S）-------------------------------
+// 引脚按微雪 wiki 的引脚表：LRCK(WS) = IO38 / DIN(接 DAC 的数据脚) = IO47 / BCK = IO48。
+// 板上没有 MCLK —— PCM5101 不需要。数据方向是 ESP32 → DAC，所以这里是 dout。
+//
+// **音量旋钮拧不动**：PCM5101 的规格页写死 `Control interface: HW`（没有 I2C/SPI 寄存器），
+// 板上那个旋钮接的是功放的模拟增益，MCU 既看不到也改不了。所以 hal::IAudio::set_volume 是
+// 软件采样衰减（见 platform/esp32/src/esp32_audio.cpp 与 include/embark/hal/audio.h）。
+//
+// -1 = 关掉音频（Esp32Audio::init 返回 unsupported，不影响启动）。
+inline constexpr int audio_pin_bclk = 48;
+inline constexpr int audio_pin_lrck = 38;
+inline constexpr int audio_pin_dout = 47;
 
 // --- 任务落核 ----------------------------------------------------------------
 // UI 任务落 core 1（IDF 自己的任务基本都在 core 0），后台 own task 落 core 0，
@@ -196,11 +215,11 @@ inline constexpr std::size_t lvgl_pool_bytes = 48U * 1024U;
 // 池是首次要用时才从 PSRAM 里显式分配出来的（heap_caps_malloc + MALLOC_CAP_SPIRAM，
 // 见 esp32_lvgl_mem.cpp），没人建字体就不占这块内存。0 = 关掉（字库与 LVGL 挤同一个池）。
 // 注意 TTF 字源本身不走这块池：3.85 MB 的整份字体用 font_buffer_alloc() 单独占 PSRAM。
-// ADR 0017 起这块池装的是 TTF 的**字形缓存**（7 个字号各一份 LRU，见
-// app/common/aidogui_ui_bridge.cpp 的 kCacheQuotaDefaults，实测定稿合计 118 KB）—— 每个缓存
-// 字形在池里实占"16 字节对齐的位图 + 48 字节块头"，比 LRU 记的字节数大约三成，所以留到
-// 192 KB。桥在 init 时按"池容量 × 3/4"收配额（fit_cache_quotas），所以池缩小也不会出现
-// "配额之和 > 池"那种每帧重栅格化。
+// ADR 0017 起这块池装的是 TTF 的**字形缓存**（每个字号各一份 LRU，配额 = max(4 KB, 8 × px²)，
+// 见 app/common/font_quota.h；today 7 档合计 66,176 B）—— 每个缓存字形在池里实占
+// "16 字节对齐的位图 + 48 字节块头"，比 LRU 记的字节数大约三成，所以留到 192 KB。
+// 桥在 init 时按"池容量 × 3/4"收配额（fit_cache_quotas），所以池缩小也不会出现
+// "配额之和 > 池"那种每帧重栅格化。加字号不用改这个数，额度跟着字号算。
 inline constexpr std::size_t font_psram_bytes = 192U * 1024U;
 
 // 任务栈预算。框架里的 *_stack_words 是按**宿主的字长**调的（x86-64 的 StackType_t = size_t

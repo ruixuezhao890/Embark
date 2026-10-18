@@ -23,7 +23,7 @@
    而目标是**自己**时 `aidogui_ui_nav_request_app()` 会因 `target == foreground` 早退成 no-op；
    App 也不能在 `onCreate` 里自己 `lv_obj_add_event_cb`——控件随屏 destroy 消失，回调必须由导航桥在
    **每次装载后**统一重挂。所以新动作与 `bind_click` 共用同一张表（上限 8 条，同一控件先后声明
-   两种绑定时后写生效），三个后端（aidogui / eez / null）同步加 `ui_backend_bind_action`。
+   两种绑定时后写生效），两个后端（aidogui / null）同步加 `ui_backend_bind_action`。
    否决「给设置屏再来一张子屏、靠切屏触发逻辑」：把一次逻辑动作变成一次切屏，还绕开桥的按需
    init/destroy（[0011](0011-aidogui-ui-source.md)）。
 

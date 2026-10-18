@@ -1,10 +1,10 @@
 /**
  * Embark · 最小示例 App（examples/minimal）
  *
- * 一个 App 到底要写什么？这个文件是完整答案 —— 不用 EEZ Studio，也不依赖 app/ 里的
+ * 一个 App 到底要写什么？这个文件是完整答案 —— 不用界面设计器，也不依赖 app/ 里的
  * demo App：
  *
- *   - name()            注册名（唯一即可；用 EEZ 时要求屏名与它同名）
+ *   - name()            注册名（唯一即可；挂屏时要求屏名与它同名）
  *   - onCreate          建自己的 LVGL 对象。框架只调钩子，不创建/不销毁/不隐藏 App 的界面
  *   - onEnter           第一次成为前台：把自己的屏挂上去
  *   - onPause           离开前台：框架只通知，别在这里碰 UI
@@ -16,7 +16,7 @@
  * 见 app/clock/clock_app.h 与 docs/concepts/messages-and-background.md。
  *
  * 界面文字用 ASCII：LVGL 内置字体只含 ASCII，中文要自己生成字体子集
- * （tools/font/gen_font.mjs，见 docs/guides/scaffold-and-tools.md）。
+ * （tools/font/gen_font.mjs，见 docs/guides/tools.md）。
  */
 #ifndef EMBARK_EXAMPLE_MINIMAL_APP_H
 #define EMBARK_EXAMPLE_MINIMAL_APP_H

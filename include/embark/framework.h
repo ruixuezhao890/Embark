@@ -18,7 +18,7 @@
  *                1 UI tick → 2 输入抽干 → 3 （循环边界上的）切换生效 →
  *                4 界面工作（lv_timer_handler → 前台 App 的 LVGL 回调）
  *                → 4b 前台节拍（onForegroundTick，issue 19 / ADR 0008：当前台
- *                App 每帧一次，EEZ App 用它驱动 eez_flow_tick）
+ *                App 每帧一次，给需要按帧驱动界面层的 App 用）
  *                → 5 后台节拍（tick 策略） → 6 消息派发
  *                （own task 收件箱抽干 → 总线广播） → 7 own task 回收
  *                （issue 15：入口已返回的任务由持有者归还槽位） → ++frames。
@@ -27,7 +27,7 @@
  *                onEnter（第一次）/ onResume（再次）→ 第一次进前台时武装它的
  *                后台策略（见「后台武装时机」）。切换决策与时机归框架，
  *                App 永远无权直接改前台。
- *   - request_home()  回主屏（= 注册表第 0 个 App；App 或 EEZ 屏需要时显式调用）。
+ *   - request_home()  回主屏（= 注册表第 0 个 App；App 或屏上事件需要时显式调用）。
  *   - publish/post  消息投递（spec §7）：publish 是总线广播，只能在框架线程
  *                （UI 任务 / 后台 tick / App 生命周期钩子）调用；own task 里
  *                发消息必须走 post()（信封入收件箱，step 的派发段再广播，
@@ -111,7 +111,7 @@ class Framework {
 
   /// 回主屏：注册表首位即主屏（ADR 0006），语义上就是
   /// request_switch(注册表第 0 个)。导航壳的返回键曾用它（导航壳 2026-10-06 退役），
-  /// 现在由 App 显式调用，或由 EEZ 屏观察者转成 request_switch。
+  /// 现在由 App 显式调用，或由屏上事件观察者转成 request_switch。
   [[nodiscard]] Error request_home() noexcept;
 
   /// 退出路径（见文件头）。幂等；之后不要再 step。

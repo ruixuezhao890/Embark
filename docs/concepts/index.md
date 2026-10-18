@@ -18,11 +18,11 @@
 ```mermaid
 flowchart TD
     HW["硬件<br/>屏幕 / 触摸 / 传感器 / RTC / Flash"] --> HAL["HAL 后端<br/>platform/host · platform/esp32 · tests/fakes"]
-    HAL --> CTX["hal::Context<br/>七个能力接口的引用聚合"]
+    HAL --> CTX["hal::Context<br/>能力 + 服务的引用聚合<br/>（服务槽今天可空）"]
     CTX --> CORE["内核<br/>Framework · Bus · AppRegistry · 任务池"]
     CORE --> APP["App 层<br/>launcher · clock · settings · 你的 App"]
-    APP --> BRIDGE["EEZ 薄桥<br/>app/common/eez_ui_bridge"]
-    BRIDGE --> GEN["EEZ 生成代码<br/>app/eez_ui/src/ui"]
+    APP --> BRIDGE["界面薄桥<br/>app/common/ui_backend · aidogui_ui_bridge"]
+    BRIDGE --> GEN["AiDoGUI 生成代码<br/>app/aidogui_ui/export"]
     GEN --> LVGL["LVGL"]
     LVGL --> PORT["LVGL 端口<br/>platform/common/lvgl_port"]
     PORT --> HAL
@@ -36,7 +36,7 @@ flowchart TD
 | --- | --- | --- |
 | **App ↛ platform** | `app/` 下**不 include 任何 `platform/` 头**（spec §14.5 的验收项） | 换后端不动 App 代码，靠链接期选择后端实现 |
 | **内核 ↛ LVGL** | `embark::core` 不依赖 LVGL；界面通过 `IUiPort` 端口注入 | 无屏平台与单元测试都能跑内核（`ui` 可为 `nullptr`） |
-| **App ↛ 生成代码** | App 只调薄桥，不 include `ui.h`/`eez-flow.h` | 重新导出 UI 不该改 C++ 业务代码 |
+| **App ↛ 生成代码** | App 只调薄桥，不 include 设计器导出的任何头 | 重新导出 UI 不该改 C++ 业务代码 |
 
 ---
 
@@ -52,25 +52,25 @@ flowchart TD
     D --> E["1-2 段：LVGL tick + 输入抽干"]
     E --> F["3 段：apply_pending_switch<br/>旧 onPause → 新 onEnter/onResume"]
     F --> G["4 段：lv_timer_handler<br/>控件事件 → App 的 LVGL 回调"]
-    G --> H["4b 段：onForegroundTick<br/>App 推数据：set_var_*"]
-    H --> I["EEZ Flow 的 watchList<br/>值变了才 propagate"]
-    I --> J["SET_PROPERTY<br/>lv_label_set_text / lv_img_set_src / hidden"]
-    J --> K["LVGL 标脏区 → flush → 屏幕"]
+    G --> H["4b 段：onForegroundTick<br/>App 按控件名拿 lv_obj_t* 后直接写"]
+    H --> J["lv_label_set_text / lv_img_set_src / hidden<br/>（控件表 = 数据接口）"]
+    J --> K["LVGL 标脏区 → 下一帧重绘 → flush → 屏幕"]
 ```
 
 **三条要记住的性质**：
 
-1. **只有变化会传播**。Flow 的 watch 只在 `value != execState->value` 时往下走，
+1. **只有变化会传播**。`lv_label_set_text` 内部先比字符串，值没变就返回、不标脏；
    所以"每帧无条件写一遍同一个值"是零成本的，不用自己判重。
-2. **写进去的值下一帧才上屏**。`set_var_*` 只改全局变量，`visitWatchList` 在
-   `eez_flow_tick()` 里跑——而它就在本帧的 4b 段。所以 App 的正确写法是
-   **先 `set_var_*`，再 `eez_ui_bridge_tick()`**（顺序反了要等下一帧）。
+2. **写进去的值下一帧才上屏**。4b 段写的是控件的**属性**，LVGL 只标脏区；真正的重绘在
+   下一个 `lv_timer_handler`（下一帧第 4 段）。所以同帧内"写完立刻截图"看不到新值，
+   验收脚本要给它一帧。
 3. **刷新是按需的**。LVGL 只重画脏区，HAL 的 `flush` 契约是"返回时缓冲区可复用"，
    中间没有双缓冲也没有格式转换。
 
-> 硬件数据（传感器、RTC）进 UI 的完整写法：App 通过 `fw.hal().bus` 拿总线 →
-> 自己写驱动 → 存进 App 成员 → 在 `onForegroundTick` 里 `set_var_*`。
-> **HAL 只到"收发字节"，不做设备驱动**——这是 [ADR 0002](../adr/0002-hal-capability-granularity.md) 的有意取舍。
+> 硬件数据（传感器、RTC）进 UI 的完整写法：App 读**服务层**接口（`fw.hal().imu->read()` 这类，
+> 见 [ADR 0019](../adr/0019-service-layer-and-public-hardware.md)）→ 存进 App 成员 →
+> 在 `onForegroundTick` 里按控件名写进控件。**HAL 只到"收发字节"，不做设备驱动**；
+> 驱动在 HAL 之上的服务层写一遍，不让每个 App 各自写。
 
 ---
 

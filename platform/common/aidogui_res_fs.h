@@ -1,6 +1,6 @@
 /**
  * AiDoGUI 资源盘（'S'）：把生成代码里写死的 "S:/fonts/<name>.bin" / "S:/images/<name>.bin"
- * 映射到一个真实目录（ADR 0011，替代 EEZ 迁移的落地零件之一）。
+ * 映射到一个真实目录（ADR 0011 起，界面资源的落地零件之一）。
  *
  * 为什么自己注册一个盘，而不是打开 LVGL 的 LV_USE_FS_POSIX/LV_USE_FS_STDIO：
  *   1) LVGL 的 POSIX/STDIO 驱动把根目录写进 lv_conf.h 的编译期宏（LV_FS_POSIX_PATH），

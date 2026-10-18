@@ -31,7 +31,9 @@ struct FakeHal {
 
   [[nodiscard]] hal::Context context() noexcept {
     // filesystem = nullptr：内核用例不需要盘；要盘的用例用宿主后端（tests/host/）。
-    return hal::Context{time, storage, log, system, bus, &display, &input, nullptr};
+    // 三个服务槽同理恒为 nullptr：服务实现还没落地（ADR 0019 / issues 08-10）。
+    return hal::Context{time,   storage, log,     system,  bus,    &display,
+                        &input, nullptr, nullptr, nullptr, nullptr};
   }
 
   /// 把需要显式打开的后端都开一遍（时间与总线没有 init）。

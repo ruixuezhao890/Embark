@@ -13,7 +13,7 @@
 
 #include "aidogui_ui_bridge.h"
 #include "aidogui_ui_hooks.h"  // 设计器「调用函数」事件的 C 入口声明（X 宏表）
-#include "eez_ui_screen_names.h"  // 屏名→App 名的纯解析（约定与 EEZ 相同，第二步改名）
+#include "ui_screen_names.h"   // 屏名→App 名的纯解析
 
 namespace embark::demo {
 namespace {
@@ -28,7 +28,7 @@ const char* g_last_screen = nullptr;  // 观测：最近一次屏名（指向屏
 constexpr int kMaxClickBindings = 8;
 
 struct ClickBinding {
-  const char* screen;  // AiDoGUI 屏名（== App 名，约定同 EEZ）
+  const char* screen;  // AiDoGUI 屏名（== App 名）
   const char*
       widget;  // 控件名（设计器里的 name，如 Btn_Back / Card_Clock；主屏磁贴是运行时建的，不走这张表）
   const char* app;  // 目标 App 名（导航绑定）；逻辑绑定为 nullptr
@@ -109,8 +109,8 @@ void on_aidogui_screen_changed(const char* screen_name, void* user) {
   bind_clicks_for(screen_name);  // 控件刚建好：把点击绑定挂回去
   repaint_for(screen_name);      // 控件刚建好、值还是设计稿的：让 App 重推一遍
 
-  char app_name[eez_app_name_max];
-  const char* app = eez_ui_app_name_for_screen(screen_name, app_name, sizeof(app_name));
+  char app_name[app_name_max];
+  const char* app = app_name_for_screen(screen_name, app_name, sizeof(app_name));
   if (app == nullptr) {
     return;  // 屏名异常（空串/过长）：当作不认识
   }
@@ -158,7 +158,7 @@ bool aidogui_ui_nav_request_app(const char* app_name) {
   }
   const AppId target = g_framework->apps().find(app_name);
   if (!g_framework->apps().valid(target)) {
-    // 屏名/App 名约定（screen == App 名）在 aidogui_ui_screen_names.h；这里只认 App 名。
+    // 屏名/App 名约定（screen == App 名）在 app/common/ui_screen_names.h；这里只认 App 名。
     ELOG_ERROR("AiDoGUI 导航：没有 App {}（设计器里的函数名写错了？）", app_name);
     return false;
   }

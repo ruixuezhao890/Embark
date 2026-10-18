@@ -28,6 +28,10 @@ inline constexpr std::size_t message_queue_depth = 16;
 // 单条值上限故意给得小 —— 持久化只放"小对象"（校准值、上次页面、开关），大块数据不属于它。
 inline constexpr std::size_t persistence_max_key_bytes = 16;
 inline constexpr std::size_t persistence_max_value_bytes = 64;
+// 64 字节这个数是**定长槽布局的一部分**（宿主文件后端 / fake 内存后端共用
+// detail/kv_slot.h 的编解码），抬高它会让已存的键值全部失效 —— 所以别为了放
+// WiFi 口令（最长 63 字符）动它：凭据走两个槽（SSID 一槽、口令一槽，见
+// include/embark/hal/network.h 的语义说明）。
 inline constexpr std::size_t persistence_max_slots = 32;
 
 // --- 显示（issues/04、05）----------------------------------------------------
@@ -96,8 +100,8 @@ inline constexpr std::size_t filesystem_path_bytes = 128;
 
 // 运行时字库那三个常量（font_budget_bytes / font_max_loaded / font_path_bytes）随 issue 04
 // 删除：字体改走 ADR 0017 的 TTF 运行期栅格化，容量两处 —— 常驻的整份 TTF 算在
-// font_psram_bytes（platform/esp32/src/esp32_board.h），每字号字形缓存配额算在
-// app/common/aidogui_ui_bridge.cpp 的 kCacheQuotaDefaults。
+// font_psram_bytes（platform/esp32/src/esp32_board.h），每字号字形缓存配额由公式给出
+// （app/common/font_quota.h 的 max(4 KB, 8 × px²)），不在这里列常数。
 
 // --- 测试替身的容量（tests/fakes/）-------------------------------------------
 // 只是替身的缓冲上限，真机后端不读它；集中放这里是为了"容量都查得到"这条规矩不破例。

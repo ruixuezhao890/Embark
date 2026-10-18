@@ -59,7 +59,7 @@ inline constexpr std::uint16_t radius = 8U;
 /// 启动器磁贴圆角（px）：磁贴比面板小，圆角相对更大一点才不显方。
 inline constexpr std::uint16_t tile_radius = 10U;
 
-/// 旧导航壳状态行高（px；导航壳已退役，令牌保留以防 EEZ 屏需要）。
+/// 旧导航壳状态行高（px；导航壳已退役，令牌保留以防屏上需要）。
 inline constexpr std::uint16_t status_h = 28U;
 
 }  // namespace embark::design_tokens

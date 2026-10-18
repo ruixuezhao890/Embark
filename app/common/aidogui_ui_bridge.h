@@ -1,20 +1,19 @@
 /**
  * AiDoGUI UI 薄桥（ADR 0011）：把 AiDoGUI 生成代码接到 Embark App 契约。
- * 这是 `app/common/eez_ui_bridge.h` 的继任者（EEZ 版在迁移第二步退役）。
  *
  * 生成代码（app/aidogui_ui/export/，AiDoGUI 自己的导出布局）是 C，不直接认识 Embark；
  * 这一层是唯一适配点。
  *
- * 一、与 EEZ 生成代码的三个关键差别（决定了本桥的形状）
+ * 一、本桥的三个关键取舍（决定了它的形状）
  *   1) **不调用生成的 aidogui_init()**：它一次性建全部屏、从不回收，且字体加载失败
  *      就直接 return（连屏都不建）。本框架的纪律是「切走即释放」（屏生命周期由
  *      App 的 onEnter/onLeave 决定），所以本桥自己承担 aidogui_init 里的三件事：
  *      注册 LV_EVENT_GET_COMP_CHILD、加载字体、按需调用
  *      ui_<屏id>_screen_init() / ui_<屏id>_screen_destroy()。
- *   2) **没有 tick**：EEZ 每帧刷变量到控件（ui_tick）；AiDoGUI 生成代码没有变量层，
- *      控件值由 App 直接写（aidogui_ui_bridge_widget 拿到 lv_obj_t* 后用 LVGL API）。
+ *   2) **没有 tick**：生成代码没有变量层，控件值由 App 直接写
+ *      （aidogui_ui_bridge_widget 拿到 lv_obj_t* 后用 LVGL API）。
  *      aidogui_ui_bridge_tick() 保留成 no-op 只是为了 App 契约形状不变。
- *   3) **字体是 SD 卡上的整份 TTF**（ADR 0017）：生成代码里 7 个字号的全局槽
+ *   3) **字体是 SD 卡上的整份 TTF**（ADR 0017）：生成代码里每个字号的全局槽
  *      （ui_font_ui_heiti_<字号>，屏内共 75 处引用）照旧由设计器导出，但本桥不再
  *      lv_font_load 它们 —— 它把卡上的 ui_heiti.ttf 一次读进 PSRAM，用 lv_tiny_ttf 为每个
  *      字号建一个运行期栅格化字体，塞进同一个槽：生成代码与屏内引用一行不改。
@@ -33,7 +32,7 @@
  *     所以桥保证「显示器上永远有一张有效当前屏」——就是那张空屏，destroy 也不删）；
  *   - aidogui_ui_bridge_current_screen()：当前装载的屏名（未装载返回 nullptr）。
  *
- * 三、控件表（App 读写界面数据的接口，替代 EEZ 的 Flow 全局变量）
+ * 三、控件表（App 读写界面数据的接口）
  *   构建期由 cmake/embark_aidogui_tables.cmake 在配置期解析 app/aidogui_ui/export 得到
  *   （构建目录 include/embark_aidogui_ui_tables.h，不手改、不入库）：
  *   - aidogui_ui_bridge_widget_count(screen) / _widget_name(screen, i)：遍历控件表；
@@ -63,7 +62,7 @@ namespace embark::demo {
 
 /// 字体加载报告（验收探针：期望 total == loaded == 工程里用到的字体数）。
 struct AidoguiFontReport {
-  int total;   // 生成代码里的字号槽个数（7）
+  int total;   // 生成代码里的字号槽个数（今天是 7，随设计器里用了几个字号变）
   int loaded;  // 真正建出来的 tiny_ttf 字体个数
 };
 
@@ -106,7 +105,8 @@ AidoguiFontReport aidogui_ui_bridge_font_report();
 lv_font_t* aidogui_ui_bridge_font(int size);
 
 /// 槽表的只读遍历（探针与诊断用）：工程里一共几个字号槽、第 index 个是多少 px。
-/// 字号的唯一事实来源因此仍是生成代码，调用方不必自己抄一份 7 档清单。
+/// 字号的唯一事实来源因此仍是生成代码，调用方不必自己抄一份清单。配额按字号算（font_quota.h），
+/// 也没有"哪几档"这回事。
 int aidogui_ui_bridge_font_size_count();
 int aidogui_ui_bridge_font_size(int index);
 

@@ -16,7 +16,7 @@ HAL 是"芯片能力"的抽象（spec §8）：七个纯虚接口 + 一个引用
 | `system.h` | 系统控制（重启、fatal） | `platform/host/host_system.{h,cpp}` | `platform/esp32/src/esp32_system.{h,cpp}`（`heap_caps` / WDT / `abort`） | `tests/fakes/fake_system.h`（fatal 桩在 fakes.cpp） |
 | `bus.h` | 系统总线（外设/模块间，与消息总线不同） | `platform/host/host_bus.{h,cpp}` | `platform/esp32/src/esp32_bus.{h,cpp}`（`i2c_master`；`spi_transfer` 仍 `unsupported`） | `tests/fakes/fake_bus.h` |
 | `types.h` | 共享类型（坐标、尺寸、颜色等） | — | — | — |
-| `context.h` | `hal::Context` 引用聚合体 | `platform/host/host_context.{h,cpp}` | `platform/esp32/src/esp32_hal.{h,cpp}`（七个成员 + 装配） | 测试自搭 |
+| `context.h` | `hal::Context` 引用聚合体（能力 + 可空服务槽） | `platform/host/host_context.{h,cpp}` | `platform/esp32/src/esp32_hal.{h,cpp}`（11 个成员 + 装配） | `tests/fakes/fakes.h`（服务槽全 nullptr；要测服务契约用 `tests/fakes/fake_imu.h`） |
 
 > 注：测试的假后端都是独立文件（fake_*.h，fatal/assert 桩在 fakes.cpp）；
 > 最完整的"一个类一个文件"对照看 `tests/fakes/fake_display.h` 与
@@ -35,8 +35,15 @@ HAL 是"芯片能力"的抽象（spec §8）：七个纯虚接口 + 一个引用
      不要在构造函数里静默吞掉；
    - 日志一律走框架日志门面 `ELOG_*`，不要 printf（宿主端口做了行级串行化）。
 3. **装配**：`host_context.{h,cpp}` 聚合出 `embark::hal::Context` 实例
-   （`Context{display, input, time, persistence, log_sink, system, bus}` 引用聚合，
-   见 `include/embark/hal/context.h`），入口 `main.cpp` 持有它并传给 Framework。
+   （`Context{time, storage, log, system, bus, display*, input*, filesystem*, imu*, audio*, network*}`
+   引用聚合：前五个是必有的能力引用，后六个是可空指针），
+   见 `include/embark/hal/context.h`，入口 `main.cpp` 持有它并传给 Framework。
+   三个服务槽都已接上：`imu`（issue 08，宿主 `HostImu` / 真机 `Esp32Imu`）、`audio`
+   （issue 09，宿主 `HostAudio` / 真机 `Esp32Audio`）、`network`（issue 10，宿主
+   `HostNetwork` / 真机 `Esp32Network`）。语义与 display/input 一致：没有这块硬件才留
+   nullptr，App 一律先判空。
+   **加成员不会让编译器报错**（C++17 聚合初始化允许项数少于成员数）—— 装配点要手工补齐，
+   三处清单见 `.scratch/app-platform/issues/07-service-layer.md`。
 
 宿主与真机共用的层（`platform/common/`，issue 11 从 `platform/host/` 提上来的）：
 

@@ -9,9 +9,9 @@
 #   ctest --test-dir build --output-on-failure
 cmake_minimum_required(VERSION 3.24)
 
-# LANGUAGES 里显式带 C：LVGL 与 eez-framework 的 project() 会在 third_party/ 子作用域
-# 隐式启用 C，app/eez_ui/ 的生成代码也是 C 源——不在顶层声明的话，C 工具链变量
-# （CMAKE_C_COMPILE_OBJECT 等）只存在于 third_party/ 作用域，app/ 下的 C 目标在
+# LANGUAGES 里显式带 C：LVGL 的 project() 会在 third_party/ 子作用域隐式启用 C，
+# 而 app/ 下的 C 目标（AiDoGUI 生成的界面源）在顶层作用域——不在顶层声明的话，
+# C 工具链变量（CMAKE_C_COMPILE_OBJECT 等）只存在于 third_party/ 作用域，
 # Generate step 报 "Missing variable is: CMAKE_C_COMPILE_OBJECT"（issue 19 实测）。
 project(embark
         VERSION 0.1.0
@@ -101,7 +101,7 @@ if(EMBARK_BUILD_ESP32)
   add_subdirectory(platform/esp32)   # ESP-IDF 工程（platform/esp32/README.md），issues/11
 endif()
 add_subdirectory(app)
-add_subdirectory(examples)   # 自包含示例（不依赖 demo App / EEZ Studio）
+add_subdirectory(examples)   # 自包含示例（不依赖 demo App / AiDoGUI Designer）
 
 if(EMBARK_BUILD_TESTS)
   enable_testing()

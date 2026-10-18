@@ -6,7 +6,7 @@
  * CMakeLists.txt 与 platform/esp32/project/CMakeLists.txt 的 option）。默认关闭 ⇒
  * esp32_font_probe.cpp 整个翻译单元是空的，main.cpp 里那句调用也不存在。
  *
- * 量的就是产品路径（桥建出来的那 7 个字号的实例），不另建实验字体，也不需要额外内存；
+ * 量的就是产品路径（桥按字号建出来的那些实例），不另建实验字体，也不需要额外内存；
  * 它剩下的用途是「换字体 / 换字号 / 换缓存配额之后，真机上还是一样快吗」。
  */
 #pragma once

@@ -83,12 +83,27 @@ _Avoid_: 生命周期回调、状态机
 _Avoid_: 渲染循环、驱动包装
 
 **HAL（芯片能力抽象层）**：
-向 App 暴露芯片能力（显示、输入、时间、持久化、日志后端、系统控制）；不承担逐外设驱动。
+向 App 暴露芯片能力（显示、输入、时间、持久化、日志后端、系统控制），并且是**服务层的唯一注入面**。
+**2026-10-18 起 HAL 不是最上层**：它之上还有一层 Service layer（设备服务 + 公共资源），
+见 [ADR 0019](docs/adr/0019-service-layer-and-public-hardware.md)。
+它**不承担业务语义**（播放列表、天气数据这类归 App），但「逐设备驱动」这件事现在有地方写了 —— 写在服务层，一遍，不让每个 App 各写一份。
 _Avoid_: 驱动层、BSP、外设库
 
 **Chip capability（芯片能力）**：
 HAL 暴露的最小能力单元，例如"能显示""能取时间"；与具体芯片的寄存器、引脚无关。
 _Avoid_: 设备、传感器、外设
+
+**Service layer（服务层）**：
+HAL 与 App 之间的一层，装**设备服务 + 公共资源**：`IImu` / `IAudio` / `INetwork` / `IGpio` 这类"每台设备都有的硬件"写成接口 + 平台实现，只写一遍，不让每个 App 各自写驱动（ADR 0019）。判据是**接口形状稳定**：「换一颗同类芯片，这个接口要改吗？」不需要才进服务层。
+**硬规则：服务接口头里不许出现芯片型号名** —— `IImu` 可以、`IQmi8658` 不行（型号名只许出现在实现文件、`platform/esp32/src/esp32_board.h`、注释与文档里）。这条禁令没有编译器约束，靠 review 与 `AGENTS.md` 兜住。
+**业务服务不进这一层**（`IWeather` / `IMusic` 出局）：业务是用户自己写的那一半，塞进基建等于把 token 成本又还给他。
+服务接口头也放在 `include/embark/hal/`（`context.h` 是唯一注入点；另开 `embark::services::` 就要开第二个注入面，每个 App 得拿两份引用）—— 层名叫「服务层」，命名空间仍是 `embark::hal`。
+_Avoid_: 中间件、适配层、驱动层、业务服务层
+
+**ImuSample（姿态采样）**：
+`IImu::read()` 交出来的一份读数，单位是**物理量**：加速度 g（1.0 = 一个重力）、角速度 dps（度/秒）、温度 °C。**不是原始 LSB** —— LSB 是量程的函数（同一颗芯片 ±2 g 与 ±16 g 差 8 倍），给 LSB 就等于把某颗芯片的细节写进接口（ADR 0002 的原始判据），换算落在实现里。
+坐标系由实现定义（接口只承诺右手系 + 静止时合矢量模长 ≈ 1 g）：宿主是 +X 右 / +Y 上 / +Z 朝用户（屏幕朝上平放 az = -1.0），真机按芯片贴合方向换算，符号可能相反 —— 所以验收只要求 `az ≈ ±1.0`。
+_Avoid_: 原始值、raw、六轴数据、传感器读数
 
 **Host backend / Target backend（宿主后端 / 目标后端）**：
 同一套 HAL 接口的两类实现：前者跑在 PC 上，用于仿真、调试与自动化测试；后者跑在真机上。
@@ -99,7 +114,10 @@ _Avoid_: 模拟器、假实现、stub
 _Avoid_: 模拟器、mock、stub、宿主后端
 
 **HAL Context（HAL 聚合体）**：
-把七个能力接口装配成一个引用聚合体交给上层；每个平台一份实例（宿主一份、测试自搭一份），内核不持全局单例。
+把本平台提供的能力与服务装配成一个引用聚合体交给上层；每个平台一份实例（宿主一份、真机一份、测试自搭一份），内核不持全局单例。
+两段组成：前半是**能力接口的引用**（time / storage / log / system / bus，必有），后半是**可空指针**（display / input / filesystem，以及服务层的 imu / audio / network —— 没有这块硬件就是 nullptr，用到的模块自己判空）。
+三个服务槽都已接上：`imu`（issue 08，宿主 `HostImu` / 真机 `Esp32Imu`）、`audio`（issue 09，宿主 `HostAudio` / 真机 `Esp32Audio`）、`network`（issue 10，宿主 `HostNetwork` / 真机 `Esp32Network`）。语义与 display/input 一致：没有这块硬件才留 nullptr，App 一律先判空。
+**加成员编译器不会报错**（C++17 聚合初始化允许初始化项少于成员数，缺的按值初始化成 nullptr），所以装配点靠清单 + grep 保证，不靠编译器（见 `.scratch/app-platform/issues/07-service-layer.md`）。
 _Avoid_: 服务定位器、全局单例、容器
 
 **KV slot（键值槽）**：
@@ -159,11 +177,11 @@ _Avoid_: 返回键、导航栈后退
 _Avoid_: 返回首页、退出到桌面
 
 **Unified back navigation（框架统一返回）**：
-（已退役，2026-10-06）非主屏 App 在前台时，框架曾在导航壳里渲染返回键，点击等效 `request_home()`。现在回主屏的返回由 EEZ 屏内按钮承担（Flow SetPage 回 launcher 屏 → 屏观察者 `request_switch`）；App 不自己画返回按钮。
+（已退役，2026-10-06）非主屏 App 在前台时，框架曾在导航壳里渲染返回键，点击等效 `request_home()`。现在回主屏的返回由界面屏内的返回按钮承担（AiDoGUI 里给控件挂「调用函数」事件 → `embark_ui_open_launcher` → `request_switch`）；App 不自己画返回按钮。
 _Avoid_: 各 App 自绘返回、导航堆栈
 
 **Nav chrome（导航壳）**：
-（已退役，2026-10-06）框架级叠加层（`lv_layer_top`）：曾承载状态行与统一返回键，跨 `lv_scr_load` 持久存在。职责已移交 EEZ 屏（屏内按钮 SetPage 回程、屏上状态控件）；本条目为历史术语保留。
+（已退役，2026-10-06）框架级叠加层（`lv_layer_top`）：曾承载状态行与统一返回键，跨 `lv_scr_load` 持久存在。职责已移交界面屏（屏内返回按钮、屏上状态控件）；本条目为历史术语保留。
 _Avoid_: 页面框架、装饰层
 
 **Status bar（状态行）**：
@@ -180,7 +198,7 @@ _Avoid_: 魔法颜色、主题对象
 
 **AiDoGUI App（AiDoGUI 应用）**：
 页面由 AiDoGUI Designer 工程 `app/aidogui_ui/screen.aid` 导出（生成代码入库，见 ADR 0011）、业务逻辑由 C++ 实现的 App；它是薄壳——onCreate/onEnter 调 `aidogui_ui_bridge_load_screen_for_app(name())` 挂自己的屏，界面数据靠 `aidogui_ui_bridge_widget(屏, 控件名)` 拿到 `lv_obj_t*` 后直接写，不手写任何 LVGL 布局、也不 include 生成代码头。跨 App 切换在**设计器里给控件挂「调用函数」动作**声明（函数名约定 `embark_ui_open_<App 名>`，生成代码的裸调用落到 `app/common/aidogui_ui_hooks.h` 的 C 入口 → `aidogui_ui_nav_request_app()`）；**不要**用 CHANGE_SCREEN 动作（`_ui_screen_change()` 会绕过桥的按需 init/destroy）。备用路径 `aidogui_ui_nav_bind_click(屏名, 控件名, App 名)` 仍在：App 里声明一次，控件随屏销毁消失、由桥在每次装载后重挂回调；**控件值**同理，由 `ui_backend_bind_repaint(屏名, fn)` 在每次装载后重推（**Value repaint**，ADR 0015）。制作界面的唯一方式（手绘已退役）。
-_Avoid_: Studio 页面、生成式 App、Flow 应用（EEZ 时代的叫法是「EEZ App」，随 ADR 0008 归档）
+_Avoid_: 生成式 App、页面工程、设计器应用
 
 **Screen name convention（屏名约定）**：
 AiDoGUI 里 screen 名 == 同名 App 的名字（子页 `<app名>_<编号>_sub`）；桥据此把 AiDoGUI 的切屏翻成框架的 `request_switch`，也据此为 App 找同名屏。屏表由 `cmake/embark_aidogui_tables.cmake` 在 CMake 配置期从 `app/aidogui_ui/export/` 解析、写到构建目录的 `include/embark_aidogui_ui_tables.h`，加屏不用改 C++（重建屏要按目标 id 建：改名必须同步改所有子控件的 `parentId`，漏改的控件会被静默丢弃）。
@@ -226,12 +244,12 @@ _Avoid_: 字体内存钩子、PSRAM 分配器
 _Avoid_: TTF 字库、动态字体
 
 **Font slot（字号槽）**：
-AiDoGUI 生成代码里的 7 个全局 `lv_font_t*`（`ui_font_ui_heiti_{11,12,14,22,28,48,56}`），`app/aidogui_ui/export/screens/*.c` 有 75 处直接把它们塞进控件。**槽是间接层**：换字体实现（BIN → TTF）只换槽里塞的指针，7 张屏零改动。`export/ui.c` 是设计器生成物（`tools/aidogui/export.ps1:62` 会清空 `export/` 重生），所以加载逻辑要落在桥或后处理里，手改会被覆盖。
+AiDoGUI 生成代码里的全局 `lv_font_t*`，**每个不同的 `textFontSize` 一个**（今天是 `ui_font_ui_heiti_{11,12,14,22,28,48,56}` 共 7 个，加字号 = 设计器里改一下重导出，cmake 零改动），`app/aidogui_ui/export/screens/*.c` 有 75 处直接把它们塞进控件。**槽是间接层**：换字体实现（BIN → TTF）只换槽里塞的指针，7 张屏零改动。`export/ui.c` 是设计器生成物（`tools/aidogui/export.ps1:62` 会清空 `export/` 重生），所以加载逻辑要落在桥或后处理里，手改会被覆盖。
 _Avoid_: 字体句柄表、ui_font 全局变量
 
 **Glyph cache budget（字形缓存预算）**：
 每个字号实例的 LRU 字节上限（传进 `lv_tiny_ttf` 的 `cache_size`，`third_party/lvgl/src/extra/libs/tiny_ttf/lv_tiny_ttf.c:214` 收字节，`third_party/lvgl/src/misc/lv_lru.c:85-86` 记账）。8 bpp ⇒ 单字形 ≈ w×h 字节，所以预算是「该字号一屏最大并发字形数 × w×h」，不是「字体文件多大」。**预算必须严格小于可用池**，否则每帧都在重新栅格化（ADR 0016 那次 64 KB > 59 KB 可用池，首帧 716 ms）。
-已定稿（`app/common/aidogui_ui_bridge.cpp` 的 `kCacheQuotaDefaults`，ADR 0017 第 6 条）：11/12/14/22/28/48/56 px = 6/12/32/16/16/16/20 KB，合计 **118 KB**。三档数字的来源与三条规矩：实测一屏并发字形数只有 9/32/32/5/5/5/5（临时插桩统计，已删），表按 2~6 倍给；配额总和只按字库区容量的 **3/4** 收（字形在池里实占「16 字节对齐位图 + 48 字节块头」≈ 记账值 1.3 倍，再加每字号一个 `lv_lru` 哈希桶）；超了由 `fit_cache_quotas()` 按固定顺序 **56 → 48 → 28 → 22 → 14 → 12 → 11** 逐个砍半、下限 4 KB，砍到底仍装不下只 `ELOG_ERROR` 报三个数字，**不 assert 不复位**（ADR 0016 的复位教训）。init 会打两行账：配额合计、以及「已用 / 字库区」；命中率不作数（`lv_lru_t` 藏在私有 `ttf_font_desc_t` 里，为读它复制私有布局或改 third_party 都不值）。
+已定稿（`app/common/font_quota.h`，ADR 0017 第 6 条）：**`quota(px) = max(4 KB, 8 × px²)`**，不是一张手写的字号表 —— 字号是设计器决定的（每个不同 `textFontSize` 一个槽），表只能覆盖"今天这几个"，一旦出现表外字号就会漏算。现有 7 档（11/12/14/22/28/48/56 px）算下来是 4/4/4/4 KB 与 6,272/18,432/25,088 B，合计 **66,176 B ≈ 64.6 KB**（旧实测表是 118 KB，随 issue 03 删除）。两条硬约束：配额 ≤ px² 是 `lv_lru` 取模**除零 panic**（`lv_lru.c:83` 桶数 = `cache_size/px²`、`:301` 取 `h % 桶数`），所以 `8×` 保底 `≥ 2×px²`；4 KB 下限同时兜住"单字形位图装不下 ⇒ 整字不画"。配额总和只按字库区容量的 **3/4** 收（字形在池里实占「16 字节对齐位图 + 48 字节块头」≈ 记账值 1.3 倍，再加每字号一个 `lv_lru` 哈希桶）；超了由 `font_quota::fit()` 按**字号从大到小**砍半、下限 4 KB，砍到底仍装不下只 `ELOG_ERROR` 报三个数字，**不 assert 不复位**（ADR 0016 的复位教训）。算法是纯整数算术（不 include LVGL），单测 `tests/kernel/test_font_quota.cpp` 钉住四条：≥ 4 KB、> px²、单调不减、大字号装得下 8 个字形。init 会打两行账：配额合计、以及「已用 / 字库区」；命中率不作数（`lv_lru_t` 藏在私有 `ttf_font_desc_t` 里，为读它复制私有布局或改 third_party 都不值）。
 _Avoid_: 字体缓存、cache 大小
 
 **Boot self-check screen（启动自检屏）**：
@@ -276,7 +294,7 @@ _Avoid_: 天气组件、天气页
 _Avoid_: 天气控件、天气小组件
 
 **Weather stub（天气数据桩）**：
-`app/weather/weather_data.h` 里的编译期常量表（4 城 × 5 天：日期标签 / 天气字 / 一句话 / 温度区间），零堆零 IO。框架当前没有任何网络能力，所以天气是桩不是真数据 —— 决策与将来怎么换成真数据见 docs/adr/0012-weather-data-source.md。
+`app/weather/weather_data.h` 里的编译期常量表（4 城 × 5 天：日期标签 / 天气字 / 一句话 / 温度区间），零堆零 IO。立项时框架没有任何网络能力，所以天气是桩不是真数据 —— 决策见 docs/adr/0012-weather-data-source.md；`INetwork` 已在 [ADR 0019](docs/adr/0019-service-layer-and-public-hardware.md) 立项，换真数据排在 issue 10。
 _Avoid_: mock 数据、假数据源
 
 **City table（城市表）**：

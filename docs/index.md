@@ -51,17 +51,16 @@ ctest --test-dir build --output-on-failure
 | [guides/state-machine-and-messages.md](guides/state-machine-and-messages.md) | 状态机与消息：`etl::fsm` 怎么接进 App 契约（收消息即切状态、事件从 `onBackgroundTick` 喂、运行语义与坑） |
 | [../app/aidogui_ui/README.md](../app/aidogui_ui/README.md) | **界面怎么改（当前）**：AiDoGUI 设计工程 → 一条命令重生成 → 编译；目录、字体与真机资源约定 |
 | [adr/0011-aidogui-ui-source.md](adr/0011-aidogui-ui-source.md) | **界面来源决策（当前）**：BIN 资源走 S 盘、薄桥按需建屏、空屏不变量、三步迁移 |
-| [adr/0012-weather-data-source.md](adr/0012-weather-data-source.md) | **天气数据来源（当前）**：框架无网络 ⇒ 编译期桩；一处数据两处画；将来怎么换成真数据 |
+| [adr/0012-weather-data-source.md](adr/0012-weather-data-source.md) | **天气数据来源（当前）**：立项时框架无网络 ⇒ 编译期桩；一处数据两处画；换成真数据的前瞻见 [0019](adr/0019-service-layer-and-public-hardware.md) |
 | [adr/0013-launcher-paged-tiles.md](adr/0013-launcher-paged-tiles.md) | **主屏磁贴分页（当前）**：磁贴按注册表运行时生成（加 App 自动多一个）、吸附式横向翻页；`max_apps` 8 → 12。**非主屏上滑返回已被 [0014](adr/0014-in-screen-back.md) 撤回**，其余决策仍有效 |
 | [adr/0014-in-screen-back.md](adr/0014-in-screen-back.md) | **屏内返回按钮（当前）**：撤回上滑返回，回程 = 每个 App 屏里的「返回」按钮；新增 `aidogui_ui_nav_bind_action`（控件 → 逻辑动作）与第 6 张屏 `settings`（**该屏形态已被 [0018](adr/0018-settings-truth-and-growth.md) 取代**，返回按钮与 `bind_action` 机制仍有效） |
 | [adr/0016-runtime-font-rasterization.md](adr/0016-runtime-font-rasterization.md) | **运行期栅格化（历史→当前）**：TTF 走 stb 栅格化 + 每字号字形缓存，替掉 BIN 子集（第 2、5 条已被 [0017](adr/0017-font-ttf-from-sd.md) 取代） |
-| [adr/0017-font-ttf-from-sd.md](adr/0017-font-ttf-from-sd.md) | **字体来源（当前）**：SD 卡上的整份 TTF、单 face、7 个字号槽、按字号配额 |
+| [adr/0017-font-ttf-from-sd.md](adr/0017-font-ttf-from-sd.md) | **字体来源（当前）**：SD 卡上的整份 TTF、单 face、每字号一个槽、配额按公式 `max(4 KB, 8 × px²)` 算 |
 | [adr/0018-settings-truth-and-growth.md](adr/0018-settings-truth-and-growth.md) | **设置中心（当前）**：亮度真值在 HAL、设置真值在 KV（`ui.` 前缀）、屏内交互归 App（滚动容器必须既 SCROLLABLE 又 CLICKABLE）；「关于」App 并入设置屏后退役 |
+| [adr/0019-service-layer-and-public-hardware.md](adr/0019-service-layer-and-public-hardware.md) | **服务层（当前，取代 [0002](adr/0002-hal-capability-granularity.md)）**：HAL 之上加设备服务 + 公共资源（`IImu` / `IAudio` / `INetwork` / `IGpio`），业务服务不进基建；硬规则 **HAL 里不许出现芯片型号名** |
 | [adr/0015-app-retention-and-refresh.md](adr/0015-app-retention-and-refresh.md) | **留存与刷新（当前）**：三条正交轴（留存申请 / 视图留存 / 数据新鲜度）+ 五类 App；后台变成显式申请的例外（今天全仓无人声明）、clock 与 launcher 退役 `tick` 走前台节拍、控件值由 `ui_backend_bind_repaint` 在屏装载后重推 |
-| [guides/eez-ui-manual.md](guides/eez-ui-manual.md) | **历史（EEZ 时代）**：EEZ UI 用户手册 —— 迁移第二步随 `app/eez_ui/` 一起归档 |
-| [guides/eez-studio-guide.md](guides/eez-studio-guide.md) | **历史（EEZ 时代）**：EEZ Studio 一条龙（装 Studio、导出代码入库） |
 | [guides/hal-backend-guide.md](guides/hal-backend-guide.md) | 怎么写一个 HAL 后端：宿主骨架（照 `platform/host/`）、共享层（`platform/common/`）与真机实现（`platform/esp32/`，含 IDF 坑清单） |
-| [guides/scaffold-and-tools.md](guides/scaffold-and-tools.md) | 脚本与工具：**验收开关与退出码、字体子集生成仍然有效**；`tools/scaffold_app.py` 的 EEZ 变量骨架部分已过期（AiDoGUI 世界没有变量层，加 App 照 `app/music/` 抄） |
+| [guides/tools.md](guides/tools.md) | 脚本与工具：验收开关与退出码、界面无头重导出、字体缺字审计、给仓库加新脚本的规矩 |
 
 ### reference —— 查表
 

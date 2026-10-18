@@ -27,7 +27,7 @@ flowchart TD
     S1 --> S2["2 输入抽干<br/>HAL 队列 → LVGL 事件"]
     S2 --> S3["3 前台切换生效<br/>旧 onPause → 新 onEnter/onResume"]
     S3 --> S4["4 界面工作<br/>lv_timer_handler → 前台 App 的 LVGL 回调"]
-    S4 --> S4b["4b 前台节拍<br/>onForegroundTick 每帧一次<br/>EEZ App → eez_flow_tick()"]
+    S4 --> S4b["4b 前台节拍<br/>onForegroundTick 每帧一次<br/>App 把数据写进控件"]
     S4b --> S5["5 后台节拍<br/>只有声明了后台体的 App 才有（今天全仓没有）"]
     S5 --> S6["6 消息派发<br/>own task 收件箱抽干 → 总线广播"]
     S6 --> S7["7 own task 回收<br/>已返回任务的槽位归还"]
@@ -40,7 +40,7 @@ flowchart TD
 | 2 | 输入事件处理（抽干 HAL 输入队列） | — |
 | 3 | 边界切换 `apply_pending_switch` | 旧前台 `onPause`，新前台 `onEnter`/首个 `onResume` |
 | 4 | 界面工作（`lv_timer_handler`） | 前台 App 的 LVGL 回调（事件） |
-| 4b | 前台节拍 | 前台 App `onForegroundTick`（EEZ 用它驱动 `eez_flow_tick`） |
+| 4b | 前台节拍 | 前台 App `onForegroundTick`（用它把数据写进控件） |
 | 5 | 后台节拍 | 声明了 `tick` 的 App 的 `onBackgroundTick`（按各自周期）——**今天全仓没有这样的 App，这一段空转**（§4.3 / [ADR 0015](../adr/0015-app-retention-and-refresh.md)） |
 | 6 | 消息派发 | 每个 App 的 `onMessage`（收件箱信封 + 同帧 publish 的消息） |
 | 7 | own task 回收 | 入口已返回的任务 → 槽位归还（`reap_finished_own_tasks`） |
@@ -89,7 +89,7 @@ sequenceDiagram
     autonumber
     participant UI as UI 任务<br/>(framework.step)
     participant LAU as launcher<br/>(当前台)
-    participant BR as 观察者<br/>(eez_ui_nav / EEZ 屏按钮)
+    participant BR as 观察者<br/>(aidogui_ui_nav / 屏内按钮)
     participant CLK as clock<br/>(后台 tick)
 
     BR->>UI: request_switch("clock")

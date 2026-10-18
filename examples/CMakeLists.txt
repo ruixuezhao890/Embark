@@ -1,4 +1,4 @@
-# examples/ —— 自包含示例（不依赖 app/ 里的 demo App，也不依赖 EEZ Studio）
+# examples/ —— 自包含示例（不依赖 app/ 里的 demo App，也不依赖 AiDoGUI Designer）
 #
 # 每个子目录一个独立可执行文件。共同前提是宿主 UI 那条线已经建起来
 # （SDL2 + LVGL + platform/common 的端口）；没有 SDL2 就整体跳过，与

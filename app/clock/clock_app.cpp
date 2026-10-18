@@ -34,11 +34,8 @@
 #include "clock_app.h"
 #include "local_clock.h"
 
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
 #include "ui_backend.h"
-#endif
-#if defined(EMBARK_EEZ_UI_BRIDGE)
-#include "eez_ui_bridge.h"  // 迁移期旧链路：clock 的数据入口是 EEZ Flow 变量
 #endif
 #if defined(EMBARK_AIDOGUI_UI)
 #include "aidogui_ui_bridge.h"  // 控件表：clock 的数据入口是 AiDoGUI 屏 clock 的控件
@@ -62,7 +59,7 @@ constexpr const char* kColBlue = "6ea0ff";  // 强调蓝（时间的冒号）
 // --- 数据出口：数据名 → AiDoGUI 屏 clock 里的控件名（ADR 0011 决策⑥）-------------
 // App 只按名字写控件（aidogui_ui_bridge_widget），**不引**生成代码里的 ui_<id> 全局 —— 那是
 // 绑定到具体控件的符号，设计器里改个名就静默断链。这张表是唯一的映射点：控件改名只改这里。
-// var_name 沿用 EEZ 时代的 Flow 变量名（<app名>_<字段>），只当本文件内部的「哪个数据」键。
+// var_name 是 <app名>_<字段> 形状的数据名，只当本文件内部的「哪个数据」键。
 struct VarWidget {
   const char* var_name;
   const char* widget;  // AiDoGUI 里的控件名（设计器里的 name）
@@ -173,7 +170,7 @@ void ClockApp::onEnter() {
   ++enters_;
   ELOG_INFO("App {} 进入前台（enter {}, resume {}, 累计 {} 次）", name(), enters_, resumes_,
             enters_ + resumes_);
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
   // 装载自己的屏；屏装好后桥回调 repaint_screen()：清缓存（保留视图月）、重算、重挂翻月按钮。
   ui_backend_load_for_app(name());
 #endif
@@ -188,7 +185,7 @@ void ClockApp::onPause() {
 void ClockApp::onResume() {
   ++resumes_;
   ELOG_INFO("App {} 回到前台（enter {}, resume {}）", name(), enters_, resumes_);
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
   ui_backend_load_for_app(name());  // 同 onEnter：屏装载后由桥回调 repaint_screen()
 #endif
 }
@@ -230,10 +227,9 @@ void ClockApp::onForegroundTick(std::uint32_t now_ms) {
   // 前台逐帧刷新：时间与日历只有人在看时才需要推进（ADR 0015）。refresh_display 自己按秒
   // 短路，所以每帧成本 = 一次整数比较；真变了才写控件。
   refresh_display(now_ms);
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
-  // 泵一帧。EEZ 后端 = ui_tick()（lv_timer_handler + tick_screen(当前屏)：绑了 Flow
-  // 全局变量的控件在那里读到最新值）；AiDoGUI 后端 = 空实现（生成代码没有变量层，
-  // 控件值由 App 通过 aidogui_ui_bridge_widget() 直接写）。见 app/common/ui_backend.h。
+#if defined(EMBARK_AIDOGUI_UI)
+  // 泵一帧（AiDoGUI 后端是空实现：生成代码没有变量层，控件值由 App 通过
+  // aidogui_ui_bridge_widget() 直接写）。见 app/common/ui_backend.h。
   ui_backend_tick();
 #endif
 }
@@ -265,8 +261,6 @@ void ClockApp::push(const char* var_name, const char* value, char* cache, std::s
   }
   // 屏没装载（还没进前台 / 已切走）时控件是 nullptr：静默跳过，值留在 cache 里；屏下次
   // 装载时 repaint_screen() 会清缓存重算，所以不会丢（也不会读到旧屏的对象）。
-#elif defined(EMBARK_EEZ_UI_BRIDGE)
-  eez_ui_bridge_set_var_string(var_name, cache);
 #else
   (void)var_name;  // 真机还没接界面时桥是 no-op（屏也不存在），计算照跑
 #endif
@@ -280,8 +274,6 @@ void ClockApp::push_int(const char* var_name, std::int32_t value, std::int32_t& 
   if (lv_obj_t* widget = clock_widget_for(var_name); widget != nullptr) {
     lv_bar_set_value(widget, value, LV_ANIM_OFF);  // Bar_Prog：第 N 天进度条
   }
-#elif defined(EMBARK_EEZ_UI_BRIDGE)
-  eez_ui_bridge_set_var_int(var_name, value);
 #else
   (void)var_name;
 #endif

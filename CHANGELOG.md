@@ -8,7 +8,7 @@
 
 ---
 
-## [未发布] v0.1.0 —— 内核成形 + 双后端 + EEZ 适配
+## [未发布] v0.1.0 —— 内核成形 + 双后端 + 图形化界面
 
 第一版可用的形态：**同一份源码**构建宿主（PC 仿真）与 ESP32-S3 两个目标。
 尚未打 tag —— 真机界面观感确认与 RTC/SD 卡还没完成，见根 [README](README.md) 的「状态」。
@@ -37,21 +37,23 @@
 - **CI**（issue 10）：宿主构建测试 / ESP32 固件构建 / clang-format 检查三个 job。
 - **系统用例**（issue 14）：`embark_host_tour` 按 ①→⑨ 走完进程入口到关窗，17 项自检清单；
   另有不依赖窗口的 doctest 版本（`tests/kernel/test_system_tour.cpp`）。
-- **EEZ Studio 适配**（issue 19）：界面全部交给 Studio 导出的屏，App 只调薄桥
-  （`ensure_init` / `enter_app_screen` / `tick` / `set_var_*`）；
-  屏名 == App 名、子页 `<app名>_<编号>_sub` 的约定；切屏事件翻成 `request_switch`。
-- **屏生命周期**（issue 19 后续）：离开即回收、回来即重建（EEZ 的 Screens lifetime support），
+- **界面来源：AiDoGUI Designer**（[ADR 0011](docs/adr/0011-aidogui-ui-source.md)）：界面全部交给设计器导出的屏，
+  App 只调薄桥（`app/common/ui_backend.h` 六个函数）；屏名 == App 名、子页 `<app名>_<编号>_sub` 的约定；
+  屏内事件翻成 `request_switch`。
+- **屏生命周期**：离开即回收、回来即重建（设计器的屏 lifetime 支持），
   实测稳态仅 launcher ≈ 6.9 KB、+clock ≈ 8.0 KB（LVGL 预算 262144 B）。
-- **脚手架**（`tools/scaffold_app.py`）：交互向导一键生成 App 薄壳 + `eez_vars.txt` 粘贴清单，
-  支持增量加变量与 `--vars-check` 核对构建期变量表；默认 dry-run、可重复跑、锚点找不到就报错退出。
-- **示例**：`examples/minimal/` —— 不依赖 EEZ、不依赖 demo App 的最小可运行 App（纯 LVGL 手写界面）。
+- **示例**：`examples/minimal/` —— 不依赖 demo App、不依赖设计器的最小可运行 App（纯 LVGL 手写界面）。
 
 ### 变更（含破坏性）
 
 - **每个 App 独立目录**（`app/<名字>/`）：原来的 `app/demo_apps/` 平铺结构取消，
   薄桥与消息类型归 `app/common/`。
-- **导航壳退役**：框架不再持"状态行 + 统一返回键"的导航壳，回主屏由 EEZ 屏内按钮
-  （SetPage → 屏观察者 → `request_switch`）承担。**迁移**：删掉 `fw.request_home()` 的调用点即可，
+- **界面生成链路换代**（[ADR 0011](docs/adr/0011-aidogui-ui-source.md)）：旧的图形化界面工具链已整体删除——
+  生成代码目录、薄桥、专属验收开关与脚手架脚本一并退役。**迁移**：界面代码改由设计器导出
+  （[docs/guides/tools.md](docs/guides/tools.md)），App 侧只保留 `app/common/ui_backend.h` 六个函数；
+  当年那套方案为何引入、又为何退役，见 ADR 0008（决策史）。
+- **导航壳退役**：框架不再持"状态行 + 统一返回键"的导航壳，回主屏由界面屏内按钮
+  （设计器事件 → `embark_ui_open_launcher` → `request_switch`）承担。**迁移**：删掉 `fw.request_home()` 的调用点即可，
   接口本身还在（给显式返回用）。
 - **`AppId` 从 1 字节加宽到 `std::uint16_t`**（issue 13 副作用）：
   上游 efmt 把 1 字节整型当字符打印，`0` 会写出 NUL 截断整行。框架里会进日志的字段一律 2 字节起。
@@ -77,7 +79,7 @@
   [docs/reference/limits.md](docs/reference/limits.md)（全部容量常量）、
   [docs/concepts/index.md](docs/concepts/index.md)（分层总图 + 一帧数据流）、
   [docs/concepts/hal-and-portability.md](docs/concepts/hal-and-portability.md)、
-  [docs/guides/scaffold-and-tools.md](docs/guides/scaffold-and-tools.md)。
+  [docs/guides/tools.md](docs/guides/tools.md)。
 - 新增 [CONTRIBUTING.md](CONTRIBUTING.md)；根 README 重写为面向新访客的开源首页。
 
 ---
@@ -97,7 +99,7 @@
 | 2026-10-04 | 13 / 14 | 整对象日志；系统用例（窗口版 + 无窗口版） |
 | 2026-10-04 | 15 | 运行期任务生命周期（入口返回 = 结束，持有者回收槽位） |
 | 2026-10-05 | 16 / 17 | 启动器扇形半环 + App 元数据；字体服务与缺字审计 |
-| 2026-10-05 | 18 / 19 | EEZ Flow 技术验证；EEZ Studio 适配（转正为唯一的界面方案） |
+| 2026-10-05 | 18 / 19 | 界面生成方案技术验证；图形化界面适配（转正为唯一的界面方案，2026-10-18 由 AiDoGUI 取代） |
 | 2026-10-05 | 20 / 21 / 22 | 真机三个缺陷：IDF 组件源清单、任务栈单位、own_task 日志栈溢出 |
 | 2026-10-06 | 23 / 24 | 后台武装时机：默认第一次进前台；新增 `ArmPolicy::at_boot` |
 | 2026-10-06 | — | 导航壳退役；每个 App 独立目录；屏生命周期（离开即回收）；脚手架交互向导 |

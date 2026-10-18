@@ -19,8 +19,10 @@ add_library(embark_platform_host STATIC
         host_bus.cpp
         host_context.cpp
         host_filesystem.cpp
+        host_imu.cpp
         host_log_sink.cpp
         host_lvgl_mem.cpp
+        host_network.cpp
         host_persistence.cpp
         host_system.cpp
         host_time.cpp
@@ -33,6 +35,12 @@ add_library(embark::platform_host ALIAS embark_platform_host)
 # 记账槽位，头文件里的调用点落在消费者（ui_demo / ui_tour）的 TU 上，所以符号要从这里透传。
 # 真机侧不需要这条：platform/esp32 的组件源列表里已经有 platform/common/static_pool.cpp。
 target_link_libraries(embark_platform_host PUBLIC embark::core embark_freertos embark::static_pool)
+
+# 网络服务（issue 10）在 Windows 上走 WinSock：静态库里的 socket 符号要在**消费者**那一层
+# 才解析得到，所以这条必须是 PUBLIC（PRIVATE 会让 embark_host_ui 链接失败）。
+if(WIN32)
+  target_link_libraries(embark_platform_host PUBLIC ws2_32)
+endif()
 
 add_executable(embark_host main.cpp)
 
@@ -47,6 +55,7 @@ embark_find_sdl2(EMBARK_HOST_SDL2_FOUND)
 
 if(EMBARK_HOST_SDL2_FOUND)
   add_library(embark_platform_host_ui STATIC
+          host_audio.cpp
           host_display.cpp
           host_input.cpp)
 
@@ -58,20 +67,23 @@ if(EMBARK_HOST_SDL2_FOUND)
 
   # LVGL 端口与 UI 端口在 platform/common（宿主与真机共用，issues/11），
   # 这里只提供 SDL 的显示/输入后端。
+  # embark::audio：WAV 解析 + 播放状态机（platform/common，issue 09）。本目标只多
+  # 「用 SDL 设备消费它」这一层，状态机本身与真机共用同一个 TU。
   target_link_libraries(embark_platform_host_ui
           PUBLIC embark::core
                  embark::platform_host
                  embark::common_ui
+                 embark::audio
                  SDL2::SDL2)
 
   # 演示程序：唯一 UI 任务的完整例子 + 无人值守验收开关
-  # （--frames / --click / --drag / --launch / --eez / --screenshot / --shot-frame /
-  #   --scale / --delay / --quit-at，全集见 ui_demo.cpp 的 print_usage()）。
+  # （--frames / --click / --drag / --launch / --ui / --ui-nav / --ui-weather /
+  #   --screenshot / --shot-frame / --scale / --delay / --quit-at，
+  #   全集见 ui_demo.cpp 的 print_usage()）。
   # demo App 本体在 app/（embark::demo_apps），issues/08 起宿主侧不再自带。
   #
-  # 两个验收程序额外链 embark::eez_ui 并拿到生成代码的 include 根：合成点击必须落在
-  # **真实控件几何**上（屏幕会随 EEZ 工程重画而移动，硬编码坐标每改一次屏就失效一次；
-  # 2026-10-12 的 clock 屏落地就踩过这个坑）。它们只读 objects 表 + 调
+  # 合成点击必须落在**真实控件几何**上（屏幕会随设计稿重画而移动，硬编码坐标每改一次屏
+  # 就失效一次；2026-10-12 的 clock 屏落地就踩过这个坑）。它们只按名查控件 + 调
   # lv_obj_get_coords / lv_obj_scroll_to_view，不建控件、不改样式。
   add_executable(embark_host_ui ui_demo.cpp)
 
@@ -79,12 +91,11 @@ if(EMBARK_HOST_SDL2_FOUND)
   # 头文件不在 App 层的编译面里，所以这里显式带上目标与宏（宏 = 「App 层界面走 AiDoGUI」，
   # 与 app/CMakeLists.txt 给 embark_demo_apps 的定义是同一个开关）。
   target_link_libraries(embark_host_ui PRIVATE embark::platform_host_ui embark::demo_apps
-          embark::eez_ui embark::aidogui_res)
+          embark::aidogui_res)
 
   target_compile_definitions(embark_host_ui PRIVATE EMBARK_AIDOGUI_UI=1)
 
   target_include_directories(embark_host_ui SYSTEM PRIVATE
-          "${PROJECT_SOURCE_DIR}/app/eez_ui/src/ui"
           "${PROJECT_SOURCE_DIR}/third_party")
 
   embark_copy_sdl2_runtime(embark_host_ui)
@@ -95,10 +106,12 @@ if(EMBARK_HOST_SDL2_FOUND)
   # 它不是单元测试（不进 ctest），而是给人从启动看到任务切换的可运行说明。
   add_executable(embark_host_tour ui_tour.cpp)
 
-  target_link_libraries(embark_host_tour PRIVATE embark::platform_host_ui embark::demo_apps embark::eez_ui)
+  target_link_libraries(embark_host_tour PRIVATE embark::platform_host_ui embark::demo_apps)
+
+  # 与 embark_host_ui 同一个开关：用例按控件名读真几何（aidogui_ui_bridge_widget）。
+  target_compile_definitions(embark_host_tour PRIVATE EMBARK_AIDOGUI_UI=1)
 
   target_include_directories(embark_host_tour SYSTEM PRIVATE
-          "${PROJECT_SOURCE_DIR}/app/eez_ui/src/ui"
           "${PROJECT_SOURCE_DIR}/third_party")
 
   embark_copy_sdl2_runtime(embark_host_tour)

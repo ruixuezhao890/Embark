@@ -28,7 +28,7 @@
 #
 # 加文件 / 加 App 的流程：改本文件的清单 → 跑一次 cmake 配置（漏了就配不过）。
 # 归口目录之外的东西各自由自己的 CMakeLists.txt 管，不在这里：platform/host/、
-# platform/esp32/project/（入口与组件）、tests/、app/eez_ui/、app/aidogui_ui/（生成代码）。
+# platform/esp32/project/（入口与组件）、tests/、app/aidogui_ui/（生成代码）。
 
 if(DEFINED EMBARK_SOURCES_CMAKE_INCLUDED)
   return()
@@ -64,11 +64,9 @@ set(EMBARK_APP_SOURCES
         "${EMBARK_ROOT}/app/weather/weather_app.cpp"
         "${EMBARK_ROOT}/app/music/music_app.cpp"
         "${EMBARK_ROOT}/app/album/album_app.cpp"
-        "${EMBARK_ROOT}/app/common/eez_ui_bridge.cpp"
-        "${EMBARK_ROOT}/app/common/eez_ui_nav.cpp"
         "${EMBARK_ROOT}/app/common/aidogui_ui_bridge.cpp"
         "${EMBARK_ROOT}/app/common/aidogui_ui_nav.cpp"
-        # 新 App 登记锚点（tools/scaffold_app.py 在这一行之前插一行；手工加 App 也加在这里）
+        # 新 App 登记锚点（加在这里）
         )
 
 # --- 真机 App 子集（必须 ⊆ 上面那份） -----------------------------------------
@@ -105,6 +103,11 @@ set(EMBARK_COMMON_UI_SOURCES
 # 被减数：归口目录里任何**没写在这里、也不在上面两份**的文件都会让下面的审计报错。
 # 现在是空的（issue 04 之后 platform/common 下已没有宿主专属的 UI 胶水）。
 set(EMBARK_COMMON_UI_HOST_ONLY_SOURCES)
+# 音频（issue 09）：WAV 头解析 + 播放状态机，宿主与真机共用同一份。
+# 只用 stdio、不认平台，于是单元测试可以脱离声卡直接链它（见 tests/hal/test_audio.cpp）。
+set(EMBARK_COMMON_AUDIO_SOURCES
+        "${EMBARK_ROOT}/platform/common/wav_player.cpp")
+
 set(EMBARK_COMMON_AIDOGUI_RES_SOURCES
         # AiDoGUI 资源盘（'S' 盘，ADR 0011）：宿主根 = 仓库里的导出目录（EMBARK_AIDOGUI_RES_ROOT
         # 在宿主 platform/common/CMakeLists.txt 定义）；真机根 = SD 卡挂载点 /sdcard
@@ -116,6 +119,7 @@ set(EMBARK_COMMON_AIDOGUI_RES_SOURCES
 set(EMBARK_COMMON_SOURCES_DEVICE
         ${EMBARK_COMMON_STATIC_POOL_SOURCES}
         ${EMBARK_COMMON_UI_SOURCES}
+        ${EMBARK_COMMON_AUDIO_SOURCES}
         ${EMBARK_COMMON_AIDOGUI_RES_SOURCES})
 
 # --- 中文字库（lv_font_conv 生成物；两侧同一个文件，各成一个独立目标） --------
@@ -135,6 +139,10 @@ set(EMBARK_ESP32_SOURCES
         "${EMBARK_ROOT}/platform/esp32/src/esp32_bus.cpp"
         # 板载 RTC PCF85063（2026-10-17 接上）：走上面那条 I2C_NUM_1，给 Esp32Time::epoch_ms()
         # 提供开机锚点。芯片不在 / 没电池时只让 epoch_ms() 报 unsupported，不影响启动。
+        "${EMBARK_ROOT}/platform/esp32/src/esp32_imu.cpp"
+        "${EMBARK_ROOT}/platform/esp32/src/esp32_audio.cpp"
+        # WiFi STA + esp_http_client + SNTP（issue 10）：协议栈起不来只记日志，不挡启动。
+        "${EMBARK_ROOT}/platform/esp32/src/esp32_network.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_rtc.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_display.cpp"
         "${EMBARK_ROOT}/platform/esp32/src/esp32_input.cpp"
@@ -188,6 +196,7 @@ if(NOT _embark_manifest_audited)
           EMBARK_COMMON_STATIC_POOL_SOURCES
           EMBARK_COMMON_UI_SOURCES
           EMBARK_COMMON_UI_HOST_ONLY_SOURCES
+          EMBARK_COMMON_AUDIO_SOURCES
           EMBARK_COMMON_AIDOGUI_RES_SOURCES
           EMBARK_FONT_SOURCES
           EMBARK_ESP32_SOURCES)

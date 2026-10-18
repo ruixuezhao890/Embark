@@ -13,6 +13,18 @@ add_library(embark_static_pool STATIC ${EMBARK_COMMON_STATIC_POOL_SOURCES})
 
 add_library(embark::static_pool ALIAS embark_static_pool)
 
+# 音频（issue 09）：宿主与真机共用的一份 WAV 解析 + 播放状态机。
+# 不认平台、不链 SDL/IDF —— 于是三边（宿主后端 / 真机后端 / 单元测试）编的是同一个 TU，
+# 状态机只有一条能单测的路径，音量公式也只有一份。
+add_library(embark_audio STATIC ${EMBARK_COMMON_AUDIO_SOURCES})
+
+add_library(embark::audio ALIAS embark_audio)
+
+# 使用者按 "wav_player.h" 引用（真机 esp32_audio.cpp 与宿主的 host_audio.cpp 都是）。
+target_include_directories(embark_audio PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+
+target_link_libraries(embark_audio PUBLIC embark::core embark_build_options)
+
 # 使用者按 "static_pool.h" 引用（真机 esp32_lvgl_mem.cpp 与单元测试都是）。
 target_include_directories(embark_static_pool PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 

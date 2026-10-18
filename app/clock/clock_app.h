@@ -37,9 +37,9 @@
        事件 embark_ui_open_launcher 承担（导航壳 2026-10-06 退役）；
  *   - App 之间只走消息（SettingsApp publish → 本 App onMessage）。
  *
- * 编译开关 EMBARK_AIDOGUI_UI（新）/ EMBARK_EEZ_UI_BRIDGE（迁移期旧链路）：宿主构建
- * （app/CMakeLists.txt 定义）接界面生成代码；未定义的目标（esp32 真机）把桥调用编译成
- * no-op —— App 逻辑（节拍/日历/消息）照常可跑，真机接入界面后打开开关即可。
+ * 编译开关 EMBARK_AIDOGUI_UI：宿主与真机构建都定义它（app/CMakeLists.txt 与
+ * platform/esp32/project/components/embark），接界面生成代码；未定义的目标把桥调用编译成
+ * no-op —— App 逻辑（节拍/日历/消息）照常可跑。
  *
  * 换后端不动本目录：这里只依赖 embark 公开头、LVGL（头符号 + lv_calendar）与界面薄桥，
  * 没有任何 platform/ 后端头（spec §14.5 验收项）。

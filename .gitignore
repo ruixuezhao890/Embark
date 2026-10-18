@@ -37,9 +37,6 @@ platform/esp32/project/autodebug_reports/
 # build/tests/embark_host_tests.exe 时会在仓库根留下这一坨。
 /embark_host_fs_test/
 
-# EEZ Studio：打开工程时生成的瞬时 UI 状态文件（每次打开都会重建，不必提交）
-*.eez-project-ui-state
-
 # 注意：.scratch/ 是 issue 追踪所在地，必须随仓库提交，不要忽略它。
 # 例外：下面这些是本机临时产物（抓帧用的 Chrome user-data-dir 有几百 MB、
 # 演示用的自包含 HTML 与 GIF），只当本地草稿留着，不进仓库。
@@ -59,15 +56,13 @@ lvgl_screen_by_ai/
 # AiDoGUI 打开工程时生成的桥会话目录（含本机端口与 token，绝不入库）
 app/aidogui_ui/.ai-workspace/
 
-# --- .scratch 本机探查噪声（抓帧/试构建/EEZ 备份/临时脚本与日志）---
+# --- .scratch 本机探查噪声（抓帧/试构建/临时脚本与日志）---
 # .scratch/ 仍是 issue 追踪所在地，需要入库的只有 <feature>/{spec,acceptance,issues}/ 下的 md 与 evidence/
 .scratch/lvfc/
 .scratch/game_ui_build/
 .scratch/clock-screen/
 .scratch/_chrome_probe/
 .scratch/buildtest_orig/
-.scratch/eez_ui_backup*/
-.scratch/eez_app_asar.bin
 .scratch/*.log
 .scratch/*.png
 .scratch/*.bmp

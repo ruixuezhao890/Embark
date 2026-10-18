@@ -34,12 +34,15 @@ idf_component_register(
         # fatfs / sdmmc / esp_driver_sdspi|sdmmc|spi：SD 卡（issue 25）用 SPI 模式挂 FAT，
         # 走 esp_vfs_fat_sdspi_mount（driver/sdspi_host.h、driver/sdmmc_host.h、
         # driver/spi_master.h）。板级引脚默认没填，但驱动代码照样编译（见 esp32_sd.cpp）。
+        # esp_driver_i2s：板载音频（issue 09）走 I2S std 模式（driver/i2s_std.h）。
+        # esp_wifi / esp_netif / esp_event / esp_http_client：网络服务（issue 10）
+        # 走 esp_wifi STA + esp_netif（含 esp_netif_sntp）+ esp_http_client。
         # 注意 REQUIRES 写成**一行**：IDF 会把它们抄进 build_properties.temp.cmake，
         # 跨行/夹注释会让那份生成文件报 "Argument not separated from preceding token"。
         # embark_aidogui：AiDoGUI 导出代码（生成代码 + 配置期写出的 aidogui 表头）。
         # 它只会在启用真机 UI 后端时被用到，但组件注册是静态的 —— 一直是依赖，走 GLOB，
         # export/ 被重导出时自动重配。
-        REQUIRES lvgl embark_aidogui embark_font nvs_flash esp_timer esp_lcd driver fatfs sdmmc esp_driver_sdspi esp_driver_sdmmc esp_driver_spi spi_flash)
+        REQUIRES lvgl embark_aidogui embark_font nvs_flash esp_timer esp_lcd driver fatfs sdmmc esp_driver_sdspi esp_driver_sdmmc esp_driver_spi spi_flash esp_driver_i2s esp_wifi esp_netif esp_event esp_http_client)
 
 # 内核与 App 的编译口径（与宿主 embark_kernel_flags 对齐：C++17、无异常、无 RTTI）。
 set_property(TARGET ${COMPONENT_LIB} PROPERTY CXX_STANDARD 17)

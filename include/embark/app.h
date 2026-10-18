@@ -11,8 +11,8 @@
  *   - onEnter 只在"第一次成为前台"时触发，之后再次回到前台走 onResume；
  *   - v1 常驻：没有任何退役/销毁 App 的路径，onExit 只在关机路径触发。
  *
- * 钩子集合 = spec §5 + 前台节拍 onForegroundTick（issue 19 / ADR 0008，为 EEZ
- * Studio 适配引入）。除此之外不再增加。
+ * 钩子集合 = spec §5 + 前台节拍 onForegroundTick（issue 19 / ADR 0008，为界面
+ * 生成代码适配引入）。除此之外不再增加。
  *
  * 打印（issue 13）：BackgroundPolicy 与 AppSettings 用 efmt 的派生宏声明，框架在装配
  * 期会把每个 App 的后台配置整条打进日志（src/embark/framework.cpp 的 boot）：
@@ -107,8 +107,8 @@ class App {
   /// 它在唯一 UI 任务的循环里执行（spec §6），阻塞/长耗时工作必须走 own_task。
   virtual void onBackgroundTick(std::uint32_t now_ms) { (void)now_ms; }
 
-  /// 前台节拍（issue 19 / ADR 0008，EEZ Studio 适配引入）：当前台 App 每帧一次，
-  /// 在 step 第 4 段 lv_timer_handler 之后调用，专供 EEZ App 驱动 eez_flow_tick()。
+  /// 前台节拍（issue 19 / ADR 0008，界面生成代码适配引入）：当前台 App 每帧一次，
+  /// 在 step 第 4 段 lv_timer_handler 之后调用，给需要按帧驱动界面层的 App 用。
   /// 默认空实现——手写 App 不需要覆写；前台专属，离开前台即停。
   virtual void onForegroundTick(std::uint32_t now_ms) { (void)now_ms; }
 

@@ -20,11 +20,14 @@
 #include <embark/hal/context.h>
 #include <embark/log.h>
 
+#include "esp32_audio.h"
 #include "esp32_bus.h"
 #include "esp32_display.h"
 #include "esp32_filesystem.h"
+#include "esp32_imu.h"
 #include "esp32_input.h"
 #include "esp32_log_sink.h"
+#include "esp32_network.h"
 #include "esp32_persistence.h"
 #include "esp32_sd.h"
 #include "esp32_system.h"
@@ -58,13 +61,19 @@ class Esp32Hal {
   /// SD 卡（issue 25）：没插卡时 mounted() == false，其余接口照样能问。
   [[nodiscard]] SdCard& sd() noexcept { return sd_; }
   [[nodiscard]] Esp32FileSystem& filesystem() noexcept { return filesystem_; }
+  /// 姿态服务（issue 08）：没有这颗芯片时 present() == false，read() 返回 not_ready。
+  [[nodiscard]] Esp32Imu& imu() noexcept { return imu_; }
+  /// 音频服务（issue 09）：I2S 通道没建起来时 channel_ready() == false。
+  [[nodiscard]] Esp32Audio& audio() noexcept { return audio_; }
+  /// 网络服务（issue 10）：协议栈没起来时 ready() == false，所有操作返回 not_ready。
+  [[nodiscard]] Esp32Network& network() noexcept { return network_; }
 
  private:
   Esp32Hal() noexcept
       // filesystem 先留 nullptr：它指的是 SD 挂载点上的一块盘（issue 25），只有 init() 里
       // 挂载成功才接上 —— 没卡的机器这格永远是空，运行时字库服务据此返回 not_ready。
-      : binder_(log_),
-        context_{time_, storage_, log_, system_, bus_, &display_, &input_, nullptr} {}
+      : binder_(log_), context_{time_,   storage_, log_,  system_, bus_,   &display_,
+                                &input_, nullptr,  &imu_, &audio_, &network_} {}
 
   Esp32Time time_;
   Esp32Persistence storage_;
@@ -75,7 +84,10 @@ class Esp32Hal {
   Esp32Input input_;
   SdCard sd_;  // SD 卡（issue 25）：没插卡也活着，只是 mounted() == false
   Esp32FileSystem filesystem_;  // 根 = SD 挂载点；只在挂载成功后才被 Context 指到
-  LogSinkBinder binder_;        // 必须活在 logger 之后：elog 里存的是它的指针
+  Esp32Imu imu_;  // 板载六轴（issue 08）：没焊/没应答时 present() == false
+  Esp32Audio audio_;  // 板载 I2S 音频（issue 09）：通道建不起来时 channel_ready() == false
+  Esp32Network network_;  // WiFi STA + HTTP + SNTP（issue 10）：协议栈起不来时 ready() == false
+  LogSinkBinder binder_;  // 必须活在 logger 之后：elog 里存的是它的指针
   hal::Context context_;
 
   bool log_installed_ = false;

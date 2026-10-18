@@ -3,7 +3,7 @@
  *
  * 见 launcher_app.h 头注释。本文件与 clock_app.cpp / album_app.cpp 同形：不手写任何
  * 界面调用，只把界面生成代码里同名屏（"launcher"）挂上显示器，并把界面工具的切屏事件
- * 反向接到框架的 App 切换上（屏名约定 == App 名，解析在 eez_ui_screen_names.h）。
+ * 反向接到框架的 App 切换上（屏名约定 == App 名，解析在 app/common/ui_screen_names.h）。
  *
  * 唯一的例外是主屏磁贴：它画不进设计稿（画进去就等于把 App 数写死），改为屏每次装载后
  * 按 App 注册表运行时生成 —— 见 rebuild_tiles() 与 app/launcher/launcher_tiles.cpp。
@@ -14,10 +14,8 @@
  * label 已被打回设计稿初值，必须重推一遍；这也是"回主屏时间停在设计稿 11:31"那个 bug
  * 的根治办法 —— 以前靠每个 App 自己记得清缓存（ADR 0015）。
  *
- * 桥调用的开关在 app/common/ui_backend.h：宿主构建定义 EMBARK_AIDOGUI_UI（优先）与
- * EMBARK_EEZ_UI_BRIDGE（EEZ 老链路，迁移期并存），三句桥调用生效；两个宏都没定义的目标
- * （esp32 真机，尚未接界面文件系统）把桥调用编译成 no-op —— 本 App 照常可跑，真机接入
- * 后打开开关即可（esp32 的 EMBARK_APP_TABLE 已含 LauncherApp）。
+ * 桥调用的开关在 app/common/ui_backend.h：定义 EMBARK_AIDOGUI_UI 时桥调用生效（宿主与
+ * esp32 真机构建都定义）；没定义的目标把桥调用编译成 no-op —— 本 App 照常可跑。
  */
 #include <cstdint>
 #include <cstdio>
@@ -31,7 +29,7 @@
 #include "local_clock.h"
 #include "weather/weather_data.h"  // 天气卡与天气屏同源（ADR 0012）
 
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
 #include "ui_backend.h"
 #endif
 #if defined(EMBARK_AIDOGUI_UI)
@@ -46,7 +44,7 @@ LauncherApp* LauncherApp::g_for_ui = nullptr;
 void LauncherApp::onCreate(Framework& fw) {
   ELOG_INFO("App {} onCreate", name());
   fw_ = &fw;  // 刷新时间要 hal().time.epoch_ms()（host_time.cpp = PC 墙上时间）
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
   // 谁当 UI 的宿主谁接线：确保后端已就位（幂等）+ 装上屏切换观察者，于是界面工具里
   // 切到某屏 = 框架切到那个屏对应的 App（屏名约定 == App 名，见 ui_backend.h）。
   ui_backend_attach_nav(fw);
@@ -73,7 +71,7 @@ void LauncherApp::onCreate(Framework& fw) {
 void LauncherApp::onEnter() {
   ++enters_;
   ELOG_INFO("App {} 进入前台（enter {}, resume {}）", name(), enters_, resumes_);
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
   // 装载自己的屏；桥装载完新屏会回调 repaint_screen()（磁贴/时间/天气卡/页号）。
   ui_backend_load_for_app(name());
 #endif
@@ -87,7 +85,7 @@ void LauncherApp::onPause() {
   // 视图留存：离开时屏还在，记下磁贴带停在第几页，回来时 repaint_screen() 跳回去。
   // 磁贴带是 AiDoGUI 屏上的控件：没有 UI 后端的构建（esp32 真机当前状态）里
   // launcher_tiles.cpp 根本不参与编译，读页号无从谈起，保持上次记住的页号。
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
   page_ = launcher_tiles_current_page();
 #endif
   ELOG_INFO("App {} 退到后台（enter {}, resume {}, 磁贴停在第 {} 页）", name(), enters_, resumes_,
@@ -97,7 +95,7 @@ void LauncherApp::onPause() {
 void LauncherApp::onResume() {
   ++resumes_;
   ELOG_INFO("App {} 回到前台（enter {}, resume {}）", name(), enters_, resumes_);
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
   ui_backend_load_for_app(name());  // 同 onEnter：屏装载后由桥回调 repaint_screen()
 #endif
   refresh_clock();  // 兜底（同上）：屏没被重载时也能把时间推到最新
@@ -107,7 +105,7 @@ void LauncherApp::onResume() {
 void LauncherApp::onForegroundTick(std::uint32_t now_ms) {
   (void)now_ms;
   ++foreground_ticks_;
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
   ui_backend_tick();
 #endif
 }

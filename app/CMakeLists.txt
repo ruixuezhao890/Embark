@@ -13,10 +13,10 @@
 #      两边共用同一份清单，不再手抄）。
 #
 #      目录布局（2026-10-06 目录化）：app/<app名>/ 放各 App 的 {h,cpp}；
-#      app/common/ 放跨 App 共用代码：EEZ 薄桥（eez_ui_bridge / eez_ui_nav /
-#      eez_ui_screen_names）与共享消息 app_messages.h。每个 App 独立成目录，
-#      新 App 用 tools/scaffold_app.py 一键生成（自动登记到 cmake/embark_sources.cmake
-#      的 EMBARK_APP_SOURCES 与 EMBARK_APP_TABLE，见 docs/guides/quickstart.md）。
+#      app/common/ 放跨 App 共用代码：界面薄桥（aidogui_ui_bridge / aidogui_ui_nav /
+#      ui_screen_names）与共享消息 app_messages.h。每个 App 独立成目录，
+#      新 App 照 app/music/ 抄一份薄壳，再登记到 cmake/embark_sources.cmake 的
+#      EMBARK_APP_SOURCES 与 EMBARK_APP_TABLE（见 docs/guides/new-app-guide.md）。
 #
 # App 之间只通过框架消息通信，禁止互相 include（spec §4 / §7）。
 add_library(embark_apps INTERFACE)
@@ -27,17 +27,12 @@ target_link_libraries(embark_apps INTERFACE
         embark_kernel_flags)
 target_include_directories(embark_apps INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/common")
 
-# EEZ Studio 生成代码（issue 19 / ADR 0008）：app/eez_ui/，编译口径见该目录 CMakeLists.txt。
-add_subdirectory(eez_ui)
-
-# AiDoGUI Designer 生成代码（ADR 0011，接替 EEZ）：app/aidogui_ui/，编译口径见该目录
-# CMakeLists.txt。迁移期两个生成代码目录并存，第二步（三屏画完）EEZ 整套退役，
-# 那时把上面那行 add_subdirectory(eez_ui) 与本分支一起删）。
+# AiDoGUI Designer 生成代码（ADR 0011）：app/aidogui_ui/，编译口径见该目录 CMakeLists.txt。
 add_subdirectory(aidogui_ui)
 
 # 源清单来自 cmake/embark_sources.cmake（宿主与真机共用，issue 20）：这里以前是手写的一份，
-# 真机组件另有一份，两边漂移的代价全落在真机链接期。加/删 App 改那份清单
-# （tools/scaffold_app.py 也会往那里追加），漏了会被它的配置期审计拦住。
+# 真机组件另有一份，两边漂移的代价全落在真机链接期。加/删 App 改那份清单，
+# 漏了会被它的配置期审计拦住。
 
 embark_find_sdl2(EMBARK_APP_SDL2_FOUND)
 
@@ -49,27 +44,14 @@ if(EMBARK_APP_SDL2_FOUND)
   # 内核与 LVGL 的 include 根（spec §11）。
   target_link_libraries(embark_demo_apps PUBLIC embark_apps embark::core embark_lvgl)
 
-  # EEZ 生成代码与薄桥（issue 19）：PRIVATE —— 静态库依赖以 LINK_ONLY 透传给
-  # 宿主可执行文件，但 eez 的 include 根不进消费者的编译面。
-  # 只链 embark_eez_ui：生成 eez-flow.cpp 是自含混编（commit 10f714f），不再链
-  # third_party 的 eez_framework（另一个 pin，同链必重复符号，见 eez_ui/CMakeLists.txt）。
-  target_link_libraries(embark_demo_apps PRIVATE embark::eez_ui)
-
-  # AiDoGUI 生成代码 + 资源盘（ADR 0011）：同样 PRIVATE —— include 根不进消费者编译面
-  # （两个生成代码目录都有一份 ui.h，绝不能让它们同时出现在 include 路径上）。
+  # AiDoGUI 生成代码 + 资源盘（ADR 0011）：PRIVATE —— include 根不进消费者编译面
+  # （生成代码头写死 <lvgl/lvgl.h>，与 App 自己的 include 面混在一起容易撞名）。
   target_link_libraries(embark_demo_apps PRIVATE embark::aidogui_ui embark::aidogui_res)
   # 生成代码头写死 <lvgl/lvgl.h>：需要 third_party/ 作为 include 根（spike 18 同款）。
   target_include_directories(embark_demo_apps SYSTEM PRIVATE "${PROJECT_SOURCE_DIR}/third_party")
 
-  # 薄壳开关（issue 19）：宿主构建接 EEZ 生成代码 —— App 层的 eez_ui_bridge_*
-  # 桥调用生效；esp32 真机组件清单没编 eez_ui_*/生成代码，不定义此宏 = 桥调用
-  # 编译成 no-op（见 launcher_app.cpp / clock_app.cpp / settings_app.cpp 的
-  # #if defined(EMBARK_EEZ_UI_BRIDGE)）。
-  target_compile_definitions(embark_demo_apps PRIVATE EMBARK_EEZ_UI_BRIDGE=1)
-
-  # AiDoGUI 后端开关（ADR 0011）：两个宏同时定义时 App 层优先走 AiDoGUI（选后端的地方
-  # 只有 app/common/ui_backend.h 一处）；EEZ 宏留着只是让 --eez 老验收与 EEZ 桥继续编过，
-  # 第二步 EEZ 退役时与上面那行一起删。
+  # 界面后端开关（ADR 0011）：定义后 App 层的 ui_backend_* 桥调用生效（选后端的地方
+  # 只有 app/common/ui_backend.h 一处）。esp32 真机在 components/embark 上定义同一个宏。
   target_compile_definitions(embark_demo_apps PRIVATE EMBARK_AIDOGUI_UI=1)
 else()
   message(STATUS "  示例 App 库（embark_demo_apps）已跳过：没有 SDL2，LVGL 不可用。")

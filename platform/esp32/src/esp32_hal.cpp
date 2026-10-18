@@ -41,6 +41,29 @@ Error Esp32Hal::init() noexcept {
   if (time_error != Error::none) {
     return time_error;
   }
+  // 姿态服务（issue 08）：与 SD 卡同款语义 —— 可选硬件。芯片没焊、地址不对、上拉缺失都只
+  // 记日志（驱动自己会打「0x6A/0x6B 都没应答」那条），不挡启动；App 拿到的 read() 返回
+  // not_ready，而不是一个假的 (0,0,0)。
+  imu_.attach_bus(&bus_);
+  const Error imu_error = imu_.init();
+  if (imu_error != Error::none) {
+    ELOG_WARN("板载 IMU：初始化失败（错误码 {}），姿态服务不可用", static_cast<int>(imu_error));
+  }
+
+  // 音频服务（issue 09）：与 IMU 同款语义 —— 可选硬件。I2S 通道建不起来（引脚没填、控制器
+  // 被占、任务起不来）只记日志，App 拿到的 play() 返回 not_ready，而启动照常往下走。
+  const Error audio_error = audio_.init();
+  if (audio_error != Error::none) {
+    ELOG_WARN("板载音频：初始化失败（错误码 {}），音频服务不可用", static_cast<int>(audio_error));
+  }
+
+  // 网络服务（issue 10）：与 IMU / 音频同款语义 —— 起不来只记日志，App 拿到的
+  // connect()/http_get() 返回 not_ready，启动照常往下走（无网也能用本地功能）。
+  const Error network_error = network_.init();
+  if (network_error != Error::none) {
+    ELOG_WARN("网络：初始化失败（错误码 {}），网络服务不可用", static_cast<int>(network_error));
+  }
+
   const Error system_error = system_.init();
   if (system_error != Error::none) {
     return system_error;

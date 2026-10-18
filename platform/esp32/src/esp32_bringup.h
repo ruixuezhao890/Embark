@@ -11,7 +11,7 @@
  *   - 中央实时坐标 + 按下沿串口日志：触摸 swap/mirror 直接读数判定，不靠猜。
  *
  * 由 platform/esp32/src/esp32_board.h 的 bringup_self_test 开关控制（main.cpp 里两处
- * `if constexpr`）。真机接上 aidogui/EEZ UI 后端后把那个开关置 false，本对文件可整个删。
+ * `if constexpr`）。真机接上 aidogui UI 后端后把那个开关置 false，本对文件可整个删。
  *
  * 这里的 check_sd_font()（SD 卡 + 运行时字库自检，issue 25）已在 issue 04 退役：字体改由
  * AiDoGUI 桥读卡上的 ui_heiti.ttf 建字号（ADR 0017），判据搬到了 main.cpp 直接看桥的字体

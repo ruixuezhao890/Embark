@@ -153,7 +153,7 @@ void ui_main(void*) noexcept {
   }
 
   // 字库自检（验收令牌 SD_FONT_OK，原 issue 25）：ADR 0017 之后字体只有一条路 —— AiDoGUI 桥
-  // 在 framework.boot() 里读卡上的 ui_heiti.ttf、整份常驻 PSRAM，再给 7 个字号各建一份运行期
+  // 在 framework.boot() 里读卡上的 ui_heiti.ttf、整份常驻 PSRAM，再给每个字号各建一份运行期
   // 栅格字体。所以"卡上有字体吗、栅格得出来吗"的唯一真相就是桥的报告，不必再自己读一遍那个
   // 3.85 MB（桥已经占着它，再读一份会让 8 MB PSRAM 见底）。
   const embark::demo::AidoguiFontReport font_report = embark::demo::aidogui_ui_bridge_font_report();
@@ -172,7 +172,7 @@ void ui_main(void*) noexcept {
     // 常开会让缺卡/缺文件的设备进 panic 重启循环（原因看不见，界面也进不去）。
     embark::fatal("字库自检未通过：卡上的 ui_heiti.ttf 没建出全部字号（ADR 0017）");
   } else {
-    // 默认策略：报错但**继续启动**。7 个字号槽会退回内置 14 px（桥自己打 WARN），设备能用、
+    // 默认策略：报错但**继续启动**。字号槽会退回内置 14 px（桥自己打 WARN），设备能用、
     // 串口能看到原因；宿主工具那边因为没收到通过令牌，最终判 TIMEOUT（退出码 4）而不是
     // PANIC_DETECTED。
     ELOG_ERROR(

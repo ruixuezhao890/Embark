@@ -132,8 +132,11 @@ cmake -S . -B build -DEMBARK_BUILD_ESP32=ON   # 出现 embark_esp32_hint / embar
 5. **背光**：`backlight_pwm_hz = 5000` / `backlight_pwm_bits = 13` / `backlight_default_percent = 70`。
 6. **FreeRTOS 计时**：`CONFIG_FREERTOS_HZ=1000` 是硬要求（默认 100 Hz 下 `pdMS_TO_TICKS(5) == 0`，
    UI 循环会忙等）。改过 `sdkconfig.defaults` 之后要 `idf.py fullclean` 再构建。
-7. **v1 有意不做**（将来要就得先加 HAL 面）：RTC **写时间**（没有可信时间源，也别让固件瞎改芯片）、
-   RTC 秒中断、温度补偿校准、音频、WiFi/BLE、`spi_transfer()`、低功耗与深睡。
+7. **v1 有意不做**（将来要就得先加能力面）：RTC **写时间**（没有可信时间源，也别让固件瞎改芯片）、
+   RTC 秒中断、温度补偿校准、BLE、`spi_transfer()`、低功耗与深睡。
+   音频与 WiFi 已从这条清单里移出：[ADR 0019](../../docs/adr/0019-service-layer-and-public-hardware.md)
+   把它们立项成服务层能力（`IAudio` / `INetwork`）—— 两个都已落地：音频见下面第 12 条（issue 09），
+   网络见第 13 条（issue 10）。
 8. **SD 卡（issue 25）**：**已开**（`src/esp32_board.h` 的 `EMBARK_SD_ENABLED 1`），信号脚已填：
    CS = IO21 / MOSI = IO17 / MISO = IO16 / CLK = IO14（卡检测脚留 -1）。挂载点 `/sdcard`（SPI2，10 MHz）。
    历史上这里是"默认关、四个信号脚是 -1"——那块板的手册不给卡座接线，得照 2D/3D 图纸或万用表量；
@@ -146,15 +149,15 @@ cmake -S . -B build -DEMBARK_BUILD_ESP32=ON   # 出现 embark_esp32_hint / embar
    ```
    I (1624) embark: SD：已挂载 /sdcard（SD32G 30436 MB，31914983424 字节）
    I (1700) embark: AiDoGUI 字体源：/sdcard/fonts/ui_heiti.ttf（3854132 字节，常驻 PSRAM）
-   I (1706) embark: AiDoGUI 字体 14 px 就绪（字形缓存 32768 字节，行高 16，基线 3）
+   I (1706) embark: AiDoGUI 字体 14 px 就绪（字形缓存 4096 字节，行高 16，基线 3）
    I (1712) embark: AiDoGUI 字体 7/7 已加载（TTF 运行期栅格化；根 /sdcard）
-   I (1712) embark: 字体缓存：已用 41224 字节 / 字库区 196608 字节（配额合计 120832 字节）
+   I (1712) embark: 字体缓存：已用 41224 字节 / 字库区 196608 字节（配额合计 66176 字节）
    I (1713) embark: [AUTODEBUG_PASS] SD_FONT_OK
    ```
 
    判读：只有 `SD：本板未配置卡座引脚…跳过挂载` 一行 → 开关或接线；`AiDoGUI 字体源 … 读不全` 的 WARN
-   → 卡上路径不对（桥会把三个候选试完，最后 7 个槽全指内置 14 px）；`AiDoGUI 字体 N px 建不出来` →
-   该字号的字形缓存拿不到内存；最后一行没有 `SD_FONT_OK` → 字号数不是 7/7。同一个心跳行里的
+   → 卡上路径不对（桥会把三个候选试完，最后全部槽指向内置 14 px）；`AiDoGUI 字体 N px 建不出来` →
+   该字号的字形缓存拿不到内存；最后一行没有 `SD_FONT_OK` → 有的字号没建出来（loaded != total）。同一个心跳行里的
    **LVGL 池未回收/峰值看不出变化**是对的 —— 字体占的是 `font_psram_bytes` 那块 PSRAM 池。
 
    **自检没过时会怎样**：默认只打错误、**继续启动**（`src/esp32_board.h` 的 `sd_font_check_fatal = false`）——
@@ -212,6 +215,98 @@ cmake -S . -B build -DEMBARK_BUILD_ESP32=ON   # 出现 embark_esp32_hint / embar
     播种被关掉或失败时 `epoch_ms()` 返回 `unsupported`，时钟屏显示「等待对时 / ----年--月--日」占位符
     （不是驱动坏了 —— 芯片**真的不知道自己几点**）。心跳行末尾的"墙钟 …"就是当前状态。
 
+11. **板载 IMU QMI8658（2026-10-18，issue 08）**：同样挂板载 I²C（`I2C_NUM_1`，SDA=IO11 / SCL=IO10），
+    驱动在 `src/esp32_imu.{h,cpp}`，实现 `hal::IImu`（单位 g / dps，见 `include/embark/hal/imu.h`）。
+    三条要知道的事：
+
+    - **7 位地址是探出来的**：SA0 脚决定 `0x6A` 还是 `0x6B`，仓库里没有这块板的确切接法，
+      所以 `init()` 依次探两个地址、用 `WHO_AM_I`（`0x00`，期望 `0x05`）判据。
+      探到哪个会打进日志；确认接法后把 `kAddressCandidates` 收成一项即可。
+    - **量程与数据率**：`CTRL2=0x15`（±4 g / 250 Hz）、`CTRL3=0x55`（±512 dps / 250 Hz）、
+      `CTRL1=0x40`（读自动递增，**不加这一位 14 字节连读会一直读到同一个寄存器**）、
+      `CTRL7=0x03`（开两轴）。换算：`8192 LSB/g`、`64 LSB/dps`、温度 `raw/256`。
+      数据从 `0x33` 起 14 字节一次连读，全部小端。改量程必须同步改这两个系数。
+    - **`CTRL5`（低通）故意不配**：两组公开驱动的位图互相矛盾（一说是高半字节陀螺、低半字节加速度，
+      一说是 `bit6:5` 加一个使能位），而手上没有硬件可验。低通默认关闭只让读数更噪、不会错；
+      猜一个位图反而可能把量程/数据率写坏。要加按数据手册 Rev D 的 `CTRL5` 章补。
+    - 初始化失败**不是致命错误**（与 SD 卡同款语义）：芯片没焊、地址不对、上拉缺失都只记日志，
+      `Context::imu` 照旧指向驱动实例，`read()` 返回 `not_ready` —— App 判空、判错、降级即可。
+
+    启动日志两种结局：
+
+    ```
+    I (…) embark: 板载 IMU：0x6A 在线，WHO_AM_I = 0x05
+    I (…) embark: 板载 IMU：已就绪（±4 g / ±512 dps / 250 Hz，地址 0x6A）
+    W (…) embark: 板载 IMU：0x6A/0x6B 都没应答 —— 芯片没焊 / SA0 接法不同 / SDA IO11 SCL IO10 上拉缺失
+    W (…) embark: 板载 IMU：初始化失败（错误码 …），姿态服务不可用
+    ```
+
+    验「读数对不对」不用烧固件：宿主那份是同一套接口的合成实现 ——
+    `embark_host_ui --ui --delay 40 --imu-log` 每 500 ms 打一行，静止时 `az = -1.00`；
+    加 `--imu-shake` 换成周期 2 s / 幅度 0.5 g 的正弦。真机上对应的是把板子平放
+    （某一轴 `≈ ±1.0`）再绕轴转 90°（那一轴读数换到重力轴上）。
+
+12. **板载音频 PCM5101（2026-10-18，issue 09）**：I²S 走 `I2S_NUM_0`，STD / Philips / 48 kHz /
+    16 bit 立体声；引脚在 `src/esp32_board.h` 的「板载音频」段（`audio_pin_bclk = 48`、
+    `audio_pin_lrck = 38`、`audio_pin_dout = 47`，任一项填 -1 就是关音频）。驱动在
+    `src/esp32_audio.{h,cpp}`，实现 `hal::IAudio`。四条要知道的事：
+
+    - **没有 MCLK**：板子只接了 BCK/LRCK/DIN 三根线，`I2S_STD_CLK_DEFAULT_CONFIG` 的
+      `mclk = I2S_GPIO_UNUSED` 是对的，别去凑 256 fs（没那根线）。
+    - **音量是软件衰减，不是硬件音量**：PCM5101 的控制接口是 HW，没有 I2C/SPI 寄存器；
+      板上那个旋钮接的是功放级的模拟增益，**MCU 看不到它**。所以 `set_volume()` 只能在采样上
+      乘系数 —— 每 6 dB 掉 1 bit 有效精度，`0` 只是采样全零、底噪还在。
+    - **只认 PCM WAV**：读头 → 直接把采样喂 I²S，零解码器。MP3/AAC 要引解码器（约 0.5 MB
+      代码体积），是一次独立的依赖决策，`play()` 对它们返回 `unsupported`。
+    - **喂数据在后台任务里**：512 帧一块（约 10.7 ms），`xTaskCreatePinnedToCore` 落**核 0**
+      （UI 落核 1，两边不抢）；保护播放器状态用的是 FreeRTOS 互斥量 —— 真机上
+      `std::atomic_flag` 会因为 xtensa 默认库缺 `__atomic_test_and_set` 而链接失败。
+
+    初始化失败**不是致命错误**（与 SD 卡 / IMU 同款语义）：`Context::audio` 照旧指向驱动实例，
+    `play()` 返回 `not_ready`。启动日志两种结局：
+
+    ```
+    I (…) embark: 音频：I2S 就绪（48000 Hz / 16 bit / 立体声，BCK=48 WS=38 DOUT=47）
+    W (…) embark: 音频：i2s_new_channel 失败 —— 音频输出关闭
+    W (…) embark: 板载音频：初始化失败（错误码 …），音频服务不可用
+    ```
+
+    验「出声与状态机对不对」不用烧固件：`embark_host_ui --ui --delay 40 --audio-test`
+    会走一遍 播 → 暂停 → 继续 → 跳转 → 停止 → 音量边界，逐项打 `✔ / ✘`。
+
+13. **板载 WiFi + HTTP（2026-10-18，issue 10）**：`src/esp32_network.{h,cpp}` 实现 `hal::INetwork`，
+    底层是 IDF 的 esp_wifi（STA）+ esp_http_client + SNTP。五条要知道的事：
+
+    - **只做明文 HTTP**：`http_get()` 只认 `http://`，其它 scheme（`https://` / `ws://`）返回
+      `unsupported`。上 HTTPS 要引 TLS（代码体积与证书校验都是独立决定），另开一票。
+      对时走 `sntp_sync()`（pool.ntp.org），它自己用 UDP，不受这条限制。
+    - **凭据只存内存，不落 NVS**：`esp_wifi_set_storage(WIFI_STORAGE_RAM)`。要"记住 WiFi"由 App
+      自己经 `IPersistence` 存两个槽（SSID 一槽、口令一槽；单条上限 64 字节，见
+      `config/embark_limits.h`），服务层不替 App 决定要不要记住。
+    - **`connect()` 阻塞到出结果**（拿到 IP / 失败 / 15 s 超时）：成功进 `connected`、失败进
+      `failed`。拨号前先 `esp_wifi_disconnect()` 再置状态是必须的 —— 否则自己触发的 DISCONNECTED
+      事件会抢先把它翻成 `failed`。
+    - **`http_get()` 是阻塞的**：按 256 字节块 `read()` 到 EOF 或缓冲写满；写满返回 `no_space`
+      且 `body_len = 0`。HTTP 4xx/5xx **不是** `Error`（返回 `none`，状态码由
+      `last_http_status()` 如实报），只有连不上 / 超时 / 协议错才算错误。别在 UI 任务里调它。
+    - **初始化失败不是致命错误**（与 SD 卡 / IMU / 音频同款语义）：`Context::network` 照旧指向驱动
+      实例，`connect()` 返回 `not_ready`。App 判空、判错、降级即可。
+
+    启动日志两种结局：
+
+    ```
+    I (…) embark: 网络：WiFi 就绪（STA 模式；凭据只存内存，不落 NVS）
+    I (…) embark: 网络：已连接 MyAP（IP 192.168.1.42）
+    W (…) embark: 网络：esp_wifi_init 失败（…）
+    W (…) embark: 网络：初始化失败（错误码 …），网络服务不可用
+    W (…) embark: 网络：拨号 MyAP 失败或超时（密码错 / AP 不在 / 信号差）
+    ```
+
+    验「通不通」不用烧固件：`embark_host_ui --net-test` 会 GET `http://example.com/` 并逐项打
+    `✔ / ✘`（状态机、body 缓冲 `no_space`、断连后 `not_ready`）。宿主后端是直通 socket、
+    `connect()` 恒成功，所以它验的是**接口契约**，不是真无线；真机要联网得由 App 调
+    `connect(ssid, password)`。
+
 ## 6. 两条构建纪律
 
 1. **`sdkconfig.defaults` 与 `partitions.csv` 必须保持纯 ASCII**：IDF 的 `kconfgen` / `gen_esp32part`
@@ -237,12 +332,14 @@ I (418) embark: CST328 就绪：地址 0x1A，自报分辨率 X=240 / Y=320（�
 I (512) embark: ST7789 就绪：240×320 竖屏，SPI 80 MHz，BGR=1，像素小端=1，反色=1
 I (640) embark: 框架就绪：3 个 App，默认前台 launcher；LVGL 8.3.11，绘制缓冲 40 行，LVGL 静态池 49152 字节
 I (648) embark: BRINGUP 自检屏就绪：四角 TL/TR/BL/BR，四条色带 R/G/B/W；点四角核对坐标（左上应 ≈0,0，右下应 ≈239, 319）
+I (660) embark: 板载 IMU：0x6A 在线，WHO_AM_I = 0x05
+I (668) embark: 板载 IMU：已就绪（±4 g / ±512 dps / 250 Hz，地址 0x6A）
 I (1620) embark: BRINGUP 触摸按下：12, 9
 I (1624) embark: SD：已挂载 /sdcard（SD32G 30436 MB，31914983424 字节）
 I (1700) embark: AiDoGUI 字体源：/sdcard/fonts/ui_heiti.ttf（3854132 字节，常驻 PSRAM）
-I (1706) embark: AiDoGUI 字体 14 px 就绪（字形缓存 32768 字节，行高 16，基线 3）
+I (1706) embark: AiDoGUI 字体 14 px 就绪（字形缓存 4096 字节，行高 16，基线 3）
 I (1712) embark: AiDoGUI 字体 7/7 已加载（TTF 运行期栅格化；根 /sdcard）
-I (1712) embark: 字体缓存：已用 41224 字节 / 字库区 196608 字节（配额合计 120832 字节）
+I (1712) embark: 字体缓存：已用 41224 字节 / 字库区 196608 字节（配额合计 66176 字节）
 I (1713) embark: [AUTODEBUG_PASS] SD_FONT_OK
 I (10420) embark: 心跳：2000 帧；堆空余 268435456 字节，UI 栈余 6824 字节；LVGL 池未回收 9978 / 峰值 12480 字节；刷新 214 次，触摸按下 3 次
 ```

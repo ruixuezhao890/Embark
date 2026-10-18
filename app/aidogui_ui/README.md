@@ -1,8 +1,7 @@
 # app/aidogui_ui —— AiDoGUI 设计工程与生成代码
 
-这个目录里是**界面代码的唯一来源**（ADR 0011）。EEZ Studio 时代是 `app/eez_ui/`，
-现在换成 AiDoGUI Designer，生成物形状相同（LVGL C 代码），所以 App 侧只换接缝
-（`app/common/ui_backend.h`），三条铁律不变：
+这个目录里是**界面代码的唯一来源**（ADR 0011）。界面由 AiDoGUI Designer 画，
+生成物是 LVGL C 代码，App 侧只认接缝 `app/common/ui_backend.h`。三条铁律：
 
 1. **屏名 == App 名**（子页 `<app名>_<编号>_sub`）——App 通过屏名找到自己的屏；
 2. 生成代码**不要手改**（`export/` 全是导出产物，下一次导出会覆盖）；
@@ -153,8 +152,8 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 ## 字体
 
 字体只有一条路（ADR 0017）：桥（`app/common/aidogui_ui_bridge.cpp`）在 `framework.boot()` 里把
-卡上的 `ui_heiti.ttf` 整份读进 PSRAM，用 `lv_tiny_ttf` 给设计器里用到的 7 个字号
-（11/12/14/22/28/48/56 px）各建一份实例，再填进生成代码里那 7 个全局 `lv_font_t*` 槽
+卡上的 `ui_heiti.ttf` 整份读进 PSRAM，用 `lv_tiny_ttf` 给设计器里用到的每个字号
+（今天是 11/12/14/22/28/48/56 px 共 7 个）各建一份实例，再填进生成代码里对应的全局 `lv_font_t*` 槽
 （`ui_font_ui_heiti_<字号>`）。**屏代码一个字都不用改**：`export/screens/*.c` 里那 75 处
 `lv_obj_set_style_text_font(..., ui_font_ui_heiti_14, ...)` 照旧，只是槽里换成 TTF 实例。
 
@@ -167,9 +166,10 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 - **换字体** = 换 `assets/font/ui_heiti.ttf`（卡上 `fonts/` 那份同步换）+ 重跑导出。
   只有**字号**会进生成代码（槽名里带 px），所以改字号才需要重导出。
 - **中文 label 仍要显式指定 `textFont`**：不指定走的是内置 `embark_zh_14`（184 字形），汉字会成方框。
-- **字形缓存按字号分**：`app/common/aidogui_ui_bridge.cpp` 的 `kCacheQuotaDefaults` 给
-  11/12/14/22/28/48/56 px 各 6/12/32/16/16/16/20 KB（合计 118 KB），只占字库区（192 KB）的 3/4 以内；
-  装不下时 `fit_cache_quotas()` 按 56→48→28→22→14→12→11 砍半、下限 4 KB，砍到底只打 ERROR 不崩。
+- **字形缓存按字号分，配额是算出来的**：`quota(px) = max(4 KB, 8 × px²)`（`app/common/font_quota.h`，
+  纯整数算术、有单测）。今天 7 档合计 66,176 B ≈ 64.6 KB，只占字库区（192 KB）的 3/4 以内；装不下时
+  `fit_cache_quotas()` 按**字号从大到小**砍半、下限 4 KB，砍到底只打 ERROR 不崩。加字号不用改这里，
+  额度自动跟着字号变。
 
 当前用的 `ui_heiti.ttf` 是「时尚中黑简体」(TRENDS)，**商业授权待确认**；
 若要用在正式产品里，换成 OFL 授权的 Noto Sans SC 更稳（换完记得重跑字形审计）。
@@ -182,5 +182,5 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 - `images/*.bin`：图片（`export/image/` 原样拷到 `/sdcard/images/`）；
 - `fonts/ui_heiti.ttf`：字体（桥按 `fonts/` → `font/` → `../assets/font/` 的顺序找）。
 
-没插卡 ⇒ 桥一个字也建不出来，7 个字号槽全指内置 14 px：界面不空但字号不对，串口有一行 WARN。
+没插卡 ⇒ 桥一个字也建不出来，所有字号槽全指内置 14 px：界面不空但字号不对，串口有一行 WARN。
 宿主的 'S' 盘指向本目录的 `export/`，所以宿主跑验收不需要插卡。

@@ -29,7 +29,7 @@
  *   想"永不退出"（真机 v1 的样子）就把 LvglUiPort 的退出查询传 nullptr，
  *   见 ui_main 里的注释。--frames N 只是给脚本/CI 用的收尾便利，不是常态。
  *
- * 验收开关（--click / --launch / --eez …）都在 ui_demo.cpp（embark_host_ui），
+ * 验收开关（--click / --launch / --ui …）都在 ui_demo.cpp（embark_host_ui），
  * 那是"demo + 自动验收"二合一；本文件是干干净净的"用户程序"。
  */
 #include <cstdio>
@@ -129,7 +129,7 @@ void ui_main(void* argument) noexcept {
   embark::platform::LvglUiPort ui_port(hal.context(), &host_exit_query, &input);
   static hp::HostTaskSpawner spawner;  // 静态存储：own_task 后台任务的槽位池
   // Framework 是 App 壳：boot() 会遍历 EMBARK_APP_TABLE 注册的 App、
-  // 依次 onCreate()，再把默认前台（第一位）拉上前台（onEnter → 加载它的 EEZ 屏）。
+  // 依次 onCreate()，再把默认前台（第一位）拉上前台（onEnter → 挂它的屏）。
   Framework framework(hal.context(), hp::embark_apps(), &ui_port, &spawner);
   if (const Error boot_error = framework.boot(); boot_error != Error::none) {
     char text[32];

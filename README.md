@@ -105,7 +105,7 @@ ctest --test-dir build --output-on-failure
 | `examples/minimal/` | 不依赖界面生成器的最小可运行 App —— **从这读起** |
 | `tests/` | doctest 用例：`hal/` 按能力分、`kernel/` 是内核契约、`fakes/` 是 HAL 假后端 |
 | `config/` | 编译期宏、`lv_conf.h` 与**全部容量上限**（单一事实来源） |
-| `tools/` | 脚手架（`scaffold_app.py`）、字库生成、真机尺寸检查 |
+| `tools/` | 界面无头重导出、字库生成、缺字审计 |
 | `docs/` | 文档三层：[docs/index.md](docs/index.md)（concepts / guides / reference）+ ADR |
 | `.scratch/` | 规格书与 issue 追踪（随仓库提交，是设计决策的一手记录） |
 
@@ -133,7 +133,7 @@ ctest --test-dir build --output-on-failure
 | 目标 | 用途 |
 | --- | --- |
 | `embark_host` | 无窗口，走一遍 HAL 自检（时间 / 持久化 / 总线 / 系统） |
-| `embark_host_ui` | **演示 + 自动验收**二合一：`--click` / `--launch` / `--drag` / `--ui`（AiDoGUI 界面冒烟验收）/ `--eez`（历史，迁移中）各是一段脚本化故事 |
+| `embark_host_ui` | **演示 + 自动验收**二合一：`--click` / `--launch` / `--drag` / `--ui`（AiDoGUI 界面冒烟验收）各是一段脚本化故事 |
 | `embark_host_tour` | 一条用例看完整系统：按 ①→⑨ 走完进程入口到关窗，17 项自检清单全过退出码 0 |
 | `embark_host_user` | **你自己的程序**：干净入口 [platform/host/user_main.cpp](platform/host/user_main.cpp)，改 `EMBARK_APP_TABLE` 即得 |
 
@@ -163,7 +163,7 @@ idf.py -C platform/esp32/project -B build-esp32 -p COM5 flash monitor
 **v0.1.0，可以用了，但还不是 1.0。** 诚实的边界：
 
 - ✅ 内核（App 契约、编译期注册表、唯一 UI 任务、前后台切换）、消息总线、三种后台策略、own task 运行期生命周期
-- ✅ 宿主与 ESP32-S3 两个后端、LVGL 8.3.11、AiDoGUI Designer 适配（含屏生命周期回收；EEZ 适配在迁移第二步退役）
+- ✅ 宿主与 ESP32-S3 两个后端、LVGL 8.3.11、AiDoGUI Designer 适配（含屏生命周期回收）
 - ✅ 零堆审计、CI 三个 job（宿主构建测试 / 真机构建 / clang-format）
 - ⚠️ **真机上的界面观感还没确认**（屏幕方向/颜色、触摸方向）—— 需要板子到手
 - ⚠️ RTC 对时（`epoch_ms` 目前返回 `unsupported`）与 SD 卡总线还没做

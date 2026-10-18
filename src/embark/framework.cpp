@@ -143,7 +143,7 @@ void Framework::step() noexcept {
   }
 
   // 4b. 前台节拍（issue 19 / ADR 0008）：当前台 App 每帧一次，紧跟 lv_timer_handler
-  //     之后——EEZ App 在这里调 eez_flow_tick()（Flow 引擎与 LVGL 同帧推进）。
+  //     之后——需要按帧驱动界面层的 App 在这里做（与 LVGL 同帧推进）。
   if (apps_.valid(foreground_)) {
     apps_.at(foreground_)->onForegroundTick(hal_.time.now_ms());
   }

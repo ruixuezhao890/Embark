@@ -106,7 +106,7 @@ void pump_touch() {
 }
 
 // 运行时字库自检（check_sd_font，issue 25）已在 issue 04 退役：字体改由 AiDoGUI 桥在
-// framework.boot() 里读卡上的 ui_heiti.ttf 建 7 档字号（ADR 0017），判据搬到了 main.cpp
+// framework.boot() 里读卡上的 ui_heiti.ttf 按字号建字体（ADR 0017），判据搬到了 main.cpp
 // 直接看桥的字体报告 —— 在这里再读一份 3.85 MB 会顶爆 PSRAM。
 
 }  // namespace embark::platform::esp32::bringup

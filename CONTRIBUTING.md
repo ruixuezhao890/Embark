@@ -41,7 +41,7 @@ ctest --test-dir build --output-on-failure
 | **零堆分配** | 内核与 App 不用 `new` / `malloc`，容器只用 ETL 定容版 | 宿主 FreeRTOS 干脆不编译 `heap_4.c`，`pvPortMalloc` 在符号层面不存在；「内存够不够」是链接期问题 |
 | **无异常、无 RTTI** | 内核目标带 `-fno-exceptions -fno-rtti` | 嵌入式工具链常关掉它们；错误用 `Error` 枚举 + `etl::expected` 表达 |
 | **App 不碰平台头** | `app/` 与 `examples/` 下**不 include 任何 `platform/` 头** | 换后端不动 App 代码（spec §14.5 的验收项） |
-| **App 不碰生成代码** | App 只调薄桥（`app/common/eez_ui_bridge.h`），不 include `ui.h` / `eez-flow.h` | 重新导出 UI 不该改业务代码 |
+| **App 不碰生成代码** | App 只调薄桥（`app/common/ui_backend.h`），不 include 设计器导出的任何头 | 重新导出 UI 不该改业务代码 |
 
 配套的还有两条操作层面的：
 
@@ -63,7 +63,7 @@ ctest --test-dir build --output-on-failure
   ```
 
   不参与格式检查的文件：`third_party/**`、`.scratch/embark-v1/spikes/**`、
-  `config/lv_conf.h`、`platform/host/freertos/FreeRTOSConfig.h`、`app/aidogui_ui/**`（AiDoGUI 生成，重导出即覆盖；EEZ 时代的 `app/eez_ui/**` 在迁移中）。
+  `config/lv_conf.h`、`platform/host/freertos/FreeRTOSConfig.h`、`app/aidogui_ui/**`（AiDoGUI 生成，重导出即覆盖）。
 
 - 命名：类型 `UpperCamelCase`、函数与变量 `snake_case`、成员变量带尾部下划线（`foreground_`）。
 - 注释写**为什么**，不写**是什么** —— 代码已经说了是什么。复杂取舍在注释里带 issue/ADR 编号
@@ -97,8 +97,8 @@ ctest --test-dir build --output-on-failure
 
 | 你想要 | 怎么做 |
 | --- | --- |
-| 一个**不依赖 EEZ** 的最小 App（纯 LVGL 手写界面） | 照 [examples/minimal/](examples/minimal/) 抄 —— 一个 `*_app.h/cpp` + 一个 `main.cpp`，约 250 行含注释 |
-| 一个**带 EEZ 界面**的 App（推荐路径） | 跑 `python tools/scaffold_app.py`，然后照 [docs/guides/new-app-guide.md](docs/guides/new-app-guide.md) 在 Studio 里画同名屏 |
+| 一个**最小 App**（纯 LVGL 手写界面，不接界面工程） | 照 [examples/minimal/](examples/minimal/) 抄 —— 一个 `*_app.h/cpp` + 一个 `main.cpp`，约 250 行含注释 |
+| 一个**带设计器界面**的 App（推荐路径） | 照 [app/music/](app/music/) 抄薄壳，再照 [docs/guides/new-app-guide.md](docs/guides/new-app-guide.md) 在 AiDoGUI Designer 里画同名屏 |
 
 加完 App 要动的地方、屏名/变量名约定、八个钩子各写什么，都在
 [docs/guides/new-app-guide.md](docs/guides/new-app-guide.md) 与

@@ -1,9 +1,10 @@
 /**
  * Embark · 天气数据桩（编译期常量，零堆零 IO）
  *
- * 框架当前**没有任何网络能力**（HAL 只有 time/persistence/log/system/bus/display/input；
- * WiFi 在 ADR 0004/0005 里还只是 own_task 策略的"将来用例"），所以最近 5 天的天气是
- * **编译期写死的桩**，不是真数据。这条决策记在 docs/adr/0012-weather-data-source.md。
+ * 框架**今天还没有可用的网络能力**（HAL 只有 time/persistence/log/system/bus/display/input；
+ * `INetwork` 已在 ADR 0019 立项、排在姿态与音频之后，尚未落地），所以最近 5 天的天气是
+ * **编译期写死的桩**，不是真数据。这条决策记在 docs/adr/0012-weather-data-source.md，
+ * 换真数据的时机见 .scratch/app-platform/issues/10-network.md。
  *
  * 谁在用：WeatherApp（天气屏）与 LauncherApp（主屏上的天气卡）读同一张表 —— 天气卡不是
  * 第二份数据，只是同一份数据的另一种画法（ADR 0011 的"数据接口走控件表按名查找"）。

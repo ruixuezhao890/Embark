@@ -4,13 +4,13 @@
 # tools/aidogui/export.ps1 都往这里写）
 #   * export/screens/ui_<屏id>.h：该屏的控件符号 extern lv_obj_t * ui_<屏id>[_<控件名>];
 #     与 ui_<屏id>_screen_init / ui_<屏id>_screen_destroy 两个函数；
-#   * export/ui.c：7 个字号槽的定义（lv_font_t * ui_font_ui_heiti_<字号> = NULL;）。ADR 0017
+#   * export/ui.c：每个字号的槽定义（lv_font_t * ui_font_ui_heiti_<字号> = NULL;）。ADR 0017
 #     之后字体由桥注入（卡上的 TTF 运行期栅格化），这里只抓**槽名里的字号**，不碰文件路径；
 #   * export/components/ui_comp.h：自定义事件号（LV_EVENT_GET_COMP_CHILD 等）。
 #
-# 纪律（照抄 cmake/embark_eez_screens.cmake）：解析不到就写空表 + WARNING，绝不 FATAL_ERROR。
-# 生成的表头是自含的：自己 extern 用到的符号，不 include 生成代码的 ui.h —— EEZ 老目标也有一份
-# ui.h，两个 include 根同名会打架（谁在前面谁赢，非常隐蔽）。
+# 纪律：解析不到就写空表 + WARNING，绝不 FATAL_ERROR。
+# 生成的表头是自含的：自己 extern 用到的符号，不 include 生成代码的 ui.h（那份头是给屏内 C
+# 代码互相包含用的；两个 include 根同名会打架，谁在前面谁赢，非常隐蔽）。
 #
 # 产物（OUT_H，落在构建目录 include/ 下，不手改、不入库）：
 #   typedef struct { const char* name; lv_obj_t** slot; } aidogui_widget_entry_t;

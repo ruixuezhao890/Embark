@@ -1,16 +1,16 @@
 /**
  * Embark · 最小示例 App 实现（examples/minimal）
  *
- * 全部界面调用都是普通 LVGL，没有 EEZ 生成代码参与 —— 这样"框架怎么跑"和
- * "EEZ 怎么用"就是两件可以分开看的事。想用 EEZ Studio 画界面，见
- * docs/guides/eez-ui-manual.md 与 app/launcher/launcher_app.cpp（薄壳写法）。
+ * 全部界面调用都是普通 LVGL，没有生成代码参与 —— 这样"框架怎么跑"和
+ * "界面怎么用"就是两件可以分开看的事。想用 AiDoGUI Designer 画界面，见
+ * app/aidogui_ui/README.md 与 app/launcher/launcher_app.cpp（薄壳写法）。
  *
  * 三条纪律（都在 docs/concepts/app-lifecycle.md 有出处）：
  *   1. 只有 UI 任务能碰 LVGL —— App 的钩子都在 UI 任务里跑，所以这里随便用 LVGL；
  *      own_task 的后台钩子【不】在 UI 任务里，那里绝不能碰 LVGL。
  *   2. 界面对象归 App 自己所有：框架只发 onPause/onResume，不会替你隐藏/销毁。
- *   3. 屏切换只发请求：App 不能自己调 request_switch 的等价物，EEZ 那边也是
- *      屏观察者把 SetPage 转成框架请求（见 app/common/eez_ui_nav.cpp）。
+ *   3. 屏切换只发请求：App 不能自己调 request_switch 的等价物，界面那边也是
+ *      屏上事件转成框架请求（见 app/common/aidogui_ui_nav.cpp）。
  */
 #include <embark/log.h>
 

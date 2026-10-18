@@ -18,8 +18,11 @@ add_executable(embark_tests
         detail/test_allocation_counter.cpp
         detail/zero_alloc_hooks.cpp
         fakes/fakes.cpp
+        hal/test_audio.cpp
         hal/test_bus.cpp
+        hal/test_context.cpp
         hal/test_display.cpp
+        hal/test_imu.cpp
         hal/test_input.cpp
         hal/test_log_sink.cpp
         hal/test_persistence.cpp
@@ -28,7 +31,8 @@ add_executable(embark_tests
         kernel/test_app_registry.cpp
         kernel/test_launcher_pages.cpp
         kernel/test_framework.cpp
-        kernel/test_eez_screen_names.cpp
+        kernel/test_ui_screen_names.cpp
+        kernel/test_font_quota.cpp
         kernel/test_framework_messaging.cpp
         kernel/test_system_tour.cpp
         kernel/test_bus.cpp
@@ -40,16 +44,19 @@ add_executable(embark_tests
         kernel/test_zero_alloc.cpp)
 
 # 测试内部用 "fakes/fakes.h" 这种从 tests/ 起算的相对包含。
-# app/ 与 app/common/ 也在搜索路径上：屏名解析（app/common/eez_ui_screen_names.h，
-# 2026-10-06 目录化后薄桥归 common）是纯函数，脱离 LVGL 单测。
+# app/ 与 app/common/ 也在搜索路径上：屏名解析（app/common/ui_screen_names.h）与字形配额
+# 公式（app/common/font_quota.h）都是纯函数，脱离 LVGL 单测。
 target_include_directories(embark_tests PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}"
         "${PROJECT_SOURCE_DIR}/app"
         "${PROJECT_SOURCE_DIR}/app/common")
 
+ # 音频（issue 09）：被测的是 platform/common/wav_player.cpp（宿主与真机共用那一份），
+# 它只碰 stdio —— 于是状态机能在 CI 里单测，不需要声卡。
 target_link_libraries(embark_tests PRIVATE
         embark::core
         embark::static_pool
+        embark::audio
         embark_freertos
         doctest::doctest)
 
@@ -60,6 +67,7 @@ add_test(NAME embark_tests COMMAND embark_tests)
 # 单独一个可执行文件不会撞符号。
 add_executable(embark_host_tests
         host/test_host_filesystem.cpp
+        host/test_network.cpp
         host/test_text_wrap.cpp
         host/test_ttf_font.cpp)
 

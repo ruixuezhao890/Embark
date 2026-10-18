@@ -183,7 +183,7 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
   `clock_app.h: No such file or directory`。清单自带**配置期审计**（每次 cmake 配置跑一次）：
   登记的路径不存在、归口目录里有 `.cpp` 没登记、真机 App 子集不在全量里、真机 main.cpp
   的裸头名找不到 include 目录 —— 四条都在配置期 `FATAL_ERROR`，不再拖到真机链接期。
-  新加 `.cpp` 必须登记（`tools/scaffold_app.py` 会自动登记新 App）。
+  新加 `.cpp` 必须手工登记到 `cmake/embark_sources.cmake` 的 `EMBARK_APP_SOURCES`。
 - **组件的 `PUBLIC` 编译选项会漏到 IDF 生成的纯 C 文件上**：`PUBLIC` 选项会跟着
   组件传播给最终链接目标 `embark_esp32.elf`，而那个目标要编一个自动生成的
   `project_elf_src_esp32s3.c`（**纯 C**）。于是 `-include config/embark_config.h`
@@ -230,22 +230,7 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
 **新增界面文案后跑 `node tools/font/audit_glyphs.mjs`**（CI 也跑）：它对照 TTF 的 cmap，缺字会
 exit 1 并给出行号。缺字的出路是换字体 / 改文案 / 给该 label 显式指定含这个字的字体 —— **不是**
 再补一份子集清单（BIN 那条链已经删了）。框架与日志的中文不受影响（那是宿主侧输出）。
-## EEZ Studio 生成代码（issue 19）
 
-- 生成代码的 UI 文本进 `app/eez_ui/screens.c`（`lv_label_set_text` 调用），不叫
-  "页面资源"；尺寸写死在生成代码里（样例 800×480，本仓库 240×320 已改写），
-  换屏分辨率要同步改。
-- Flow 的 **User Action / 变量** 由 `actions.cpp` / `vars.cpp` 落地（C++），是
-  应用与生成代码之间唯一的桥；`vars.cpp` 的变量是全局 `int32_t`（非 extern "C"），
-  读值从 `app/eez_ui_bridge.cpp` 走，别从生成代码头文件绕。
-- 生成代码 6 个 .c 源以 `-w` 编译（上游无害警告不归零）；C++ 侧也**必须** `-w`
-  （actions.cpp 的 unused parameter 等），否则违反宿主零警告门禁。
-- 生成代码以 `EEZ_FOR_LVGL` 分支编译；CMake 给 eez_ui 补 `SYSTEM` include：
-  third_party 根（生成代码写死 `<lvgl/lvgl.h>`）与 eez-framework 的
-  src/libs/agg/platform/simulator。
-- 需要 C 语言的注意：顶层 `project()` 已显式 `LANGUAGES C CXX`（见
-  common-pitfalls 的 CMake 小节），子目录再 `project()` 隐式启用 C 的工具链
-  规则变量不外泄。
 ## ESP-IDF 组件 CMakeLists 会被执行两遍（issue 25 踩到）
 
 `platform/esp32/project/components/*/CMakeLists.txt` 里的 `include(...)` **会在两种模式下各跑一遍**，
@@ -260,3 +245,16 @@ REQUIRES 时用它跑一遍各组件 CMakeLists）：
 - `idf_component_register(... REQUIRES ...)` 的参数**写一行**：跨行或夹注释会被抄进生成的
   `build_properties.temp.cmake`，报
   `Syntax Warning … Argument not separated from preceding token by whitespace`，并被 IDF 当致命错误打出来。
+
+## 音频 / I²S（issue 09 踩到）
+
+- **xtensa 上 `std::atomic_flag` 链接失败**：报 `undefined reference to '__atomic_test_and_set'`，
+  因为 xtensa 的默认库里没有那个 libatomic 符号（宿主的 MinGW 有，所以只在真机构建暴露）。
+  真机侧改用 FreeRTOS 互斥量（`xSemaphoreCreateMutex` / `xSemaphoreTake(lock, portMAX_DELAY)`），
+  不要把宿主的 `atomic_flag` 写法直接搬过去。
+- **别拿固定 `sleep` 当音频同步点**：宿主 SDL 的音频回调很稀疏（实测 300 ms 里只来 1 次 21 ms），
+  首版验收写「sleep 300 ms 后断言位置前进」直接失败了 —— 那是在测机器心情，不是在测状态机；
+  真机 I²S 更没这个保证。改成轮询 `wait_until_advanced()`（deadline 3 s、步长 10 ms）。
+- **`sizeof` 带命名空间的类型名要当心**：`sizeof std::int16_t` 在 GCC 15（MinGW）报
+  `error: expected primary-expression before ',' token`（被当成表达式解析）。写 `sizeof(buf[0])`
+  或 `sizeof(std::int16_t)` 加括号。

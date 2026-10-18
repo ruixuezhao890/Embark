@@ -3,7 +3,7 @@
  *
  * 表头是构建期生成的：cmake/embark_aidogui_tables.cmake 在配置期解析 app/aidogui_ui/export，
  * 写出构建目录 include/embark_aidogui_ui_tables.h，由 embark::aidogui_ui 的 PUBLIC include 根
- * 带进来。它是自含的：自己 extern 用到的控件/字体符号，不 include 生成代码的 ui.h —— EEZ 老
+ * 带进来。它是自含的：自己 extern 用到的控件/字体符号，不 include 生成代码的 ui.h —— 两个
  * 目标也有一份 ui.h，两边同名必然打架（谁在 include 路径前面谁赢，非常隐蔽）。
  */
 #include "aidogui_ui_bridge.h"
@@ -21,6 +21,7 @@
 #include "aidogui_res_fs.h"
 #include "embark_aidogui_ui_tables.h"
 #include "font_alloc_scope.h"
+#include "font_quota.h"
 
 // 字体方案 = TTF 运行期栅格化（ADR 0017）：没有 LVGL 的 tiny_ttf 就编不出这条路径。
 #if !defined(LV_USE_TINY_TTF) || !LV_USE_TINY_TTF
@@ -139,94 +140,64 @@ bool load_entry(const aidogui_screen_entry_t* entry, bool notify) {
 
 // --- 字体：一份 TTF × 每个字号一个 tiny_ttf 实例（ADR 0017）---------------------
 //
-// 生成代码里 7 个 lv_font_t* 槽（ui_font_ui_heiti_<字号>）照旧填，只是不再 lv_font_load
-// 一个 BIN，而是拿同一份 TTF 为每个字号建一个字体 —— 75 处屏内引用因此零改动。
-// 拿不到 TTF（卡里没放 / 读不进来）时退回老路（BIN），覆盖"先通后删"这段过渡期。
+// 生成代码里每个不同 textFontSize 一个 lv_font_t* 槽（ui_font_ui_heiti_<字号>），由 cmake 在
+// 配置期扫成 kAidoguiFonts[]；桥拿同一份 TTF 为每个字号建一个字体 —— 屏内引用因此零改动。
+// 拿不到 TTF（卡里没放 / 读不进来）时全部槽退回 flash 里的静态子集 embark_zh_14。
 
 /// 字源文件名。真机：SD 卡的 fonts/ 下（'S' 盘根 = /sdcard）；宿主：导出目录旁边的
 /// app/aidogui_ui/assets/font/（相对导出目录就是 ../assets/font/）。
 constexpr const char* kTtfFileName = "ui_heiti.ttf";
 
-/// 每个字号的字形缓存预算（ADR 0017 的表）。数字来自实测（2026-10-17，五条验收故事里
-/// 「一屏同时要画的不同码点数」的最大值）：11 px 9 个、12 px 32、14 px 32、22 px 5、
-/// 28 px 5、48 px 5、56 px 5；单个汉字位图 ≈ 字号² 字节（14 px ≈ 196 B，56 px ≈ 3.1 KB）。
-/// 表按实测的 2~6 倍给：48/56 px 原来各 8 KB 只装得下 3 个字形，而一屏要 5 个 —— 每帧重
-/// 栅格化 5 次（真机 405 µs/字 ≈ 2 ms/帧），所以抬到 16/20 KB。合计 118 KB。
-struct FontCacheQuota {
-  int px;
-  std::size_t bytes;
-};
-constexpr FontCacheQuota kCacheQuotaDefaults[] = {
-    {11, 6U * 1024U},  {12, 12U * 1024U}, {14, 32U * 1024U}, {22, 16U * 1024U},
-    {28, 16U * 1024U}, {48, 16U * 1024U}, {56, 20U * 1024U},
-};
-constexpr int kCacheQuotaCount =
-    static_cast<int>(sizeof(kCacheQuotaDefaults) / sizeof(kCacheQuotaDefaults[0]));
-/// 表里没有的字号（将来新加档位）：够放一屏，也不至于挤掉别人。
-constexpr std::size_t kDefaultCacheBytes = 16U * 1024U;
-/// 预算不足时的让位顺序：大字号先让 —— 一屏并发字形最少（实测 5 个），砍掉代价最低；
-/// 11/12 px 是列表正文，最后才动。
-constexpr int kCacheCutOrder[] = {56, 48, 28, 22, 14, 12, 11};
-/// 再降也不低于这个数（连一屏 14 px 都放不下时，宁可慢也别返回 0 —— LRU 容量 0 等于每帧全量重栅格化）。
-constexpr std::size_t kCacheQuotaFloorBytes = 4U * 1024U;
+/// 每个字号的配额由公式算（app/common/font_quota.h）：quota(px) = max(4 KB, 8 × px²)。
+/// 表里只存"收敛后的结果"，不再有手写的 7 档实测值 —— 字号是设计器决定的（每个不同
+/// textFontSize 一个槽），不是 cmake 决定的，所以配额也只能是算出来的。
+///
+/// 硬下限为什么不能省：lv_lru_create 拿 cache_size/(px*px) 当哈希桶数（lv_lru.c:83），
+/// lv_lru_hash 取 h % 桶数（:301）⇒ 配额 ≤ px² 是除零 panic，不是变慢。公式的 8× 恒 ≥ 2×px²。
+constexpr std::size_t kCacheQuotaCount = AIDOGUI_FONT_COUNT > 0
+                                             ? static_cast<std::size_t>(AIDOGUI_FONT_COUNT)
+                                             : 1U;
 /// 字库区的利用上限：字形在池里实占「16 字节对齐的位图 + 48 字节块头」≈ 记账值的 1.3 倍，
 /// 再加每个字号一个 lv_lru 的哈希桶 —— 所以配额总和只按池容量的 3/4 收。
 constexpr std::size_t kCachePoolNumerator = 3U;
 constexpr std::size_t kCachePoolDenominator = 4U;
 
-/// 运行期配额表：init 时按字库区实际容量收一次（默认值 → 降级）。
-FontCacheQuota g_cache_quotas[kCacheQuotaCount] = {};
-
-FontCacheQuota* quota_slot(int px) {
-  for (int i = 0; i < kCacheQuotaCount; ++i) {
-    if (g_cache_quotas[i].px == px) {
-      return &g_cache_quotas[i];
-    }
-  }
-  return nullptr;
-}
+/// 运行期配额表：init 时按生成代码里实际出现的字号 + 字库区容量算一次。
+font_quota::QuotaEntry g_cache_quotas[kCacheQuotaCount] = {};
+std::size_t g_cache_quota_count = 0U;
 
 std::size_t cache_quota_total_bytes() {
-  std::size_t total = 0U;
-  for (const FontCacheQuota& quota : g_cache_quotas) {
-    total += quota.bytes;
-  }
-  return total;
+  return font_quota::total_bytes(g_cache_quotas, g_cache_quota_count);
 }
 
-/// 按字库区容量收配额：available_bytes == 0 表示没有独立字库区（宿主，有真实堆），照默认表给。
-/// 收的顺序是 kCacheCutOrder（56 → 48 → 28 → …），每轮砍半、不低于 kCacheQuotaFloorBytes，
-/// 保证「配额总和 ≤ 可用池」这条永不破 —— 破了就会在缓冲字形时反复淘汰 + 重栅格化。
+/// 按字库区容量收敛配额。available_bytes == 0 表示没有独立字库区（宿主：有真实堆），
+/// 照公式给、不收 —— 宿主与真机走的是同一个 font_quota::fit()，算法不会分叉。
 void fit_cache_quotas(std::size_t available_bytes) {
-  for (int i = 0; i < kCacheQuotaCount; ++i) {
-    g_cache_quotas[i] = kCacheQuotaDefaults[i];
+  g_cache_quota_count = 0U;
+  for (int i = 0; i < AIDOGUI_FONT_COUNT; ++i) {
+    g_cache_quotas[g_cache_quota_count].px = kAidoguiFonts[i].size;
+    g_cache_quotas[g_cache_quota_count].bytes = 0U;
+    ++g_cache_quota_count;
   }
-  if (available_bytes == 0U) {
-    return;
+  font_quota::fit(g_cache_quotas, g_cache_quota_count, available_bytes);
+  const std::size_t total = cache_quota_total_bytes();
+  if (available_bytes != 0U && total > available_bytes) {
+    // 砍到下限仍然超 = 字号太多或池太小，是配置问题：只报错不 abort（界面照旧能跑）。
+    ELOG_ERROR("字体缓存配额已全部压到 {} 字节下限，合计 {} 字节仍超过字库区可用 {} 字节",
+               static_cast<unsigned>(font_quota::floor_bytes), static_cast<unsigned>(total),
+               static_cast<unsigned>(available_bytes));
   }
-  std::size_t total = cache_quota_total_bytes();
-  for (const int px : kCacheCutOrder) {
-    FontCacheQuota* quota = quota_slot(px);
-    if (quota == nullptr) {
-      continue;
-    }
-    while (total > available_bytes && quota->bytes > kCacheQuotaFloorBytes) {
-      const std::size_t halved = quota->bytes / 2U;
-      quota->bytes = halved > kCacheQuotaFloorBytes ? halved : kCacheQuotaFloorBytes;
-      total = cache_quota_total_bytes();
-    }
-    if (total <= available_bytes) {
-      return;
-    }
-  }
-  ELOG_ERROR("字体缓存配额已全部压到 {} 字节下限，合计 {} 字节仍超过字库区可用 {} 字节",
-             static_cast<unsigned>(kCacheQuotaFloorBytes), static_cast<unsigned>(total),
-             static_cast<unsigned>(available_bytes));
 }
 
+/// 某个字号实际用的配额。表里查不到（不该发生）就按公式给 —— 绝不静默返回一个魔数，
+/// 那正是旧表"表外字号按 16 KB 给、却不计入合计"的毛病来源。
 std::size_t cache_quota_bytes(int px) {
-  const FontCacheQuota* quota = quota_slot(px);
-  return quota != nullptr ? quota->bytes : kDefaultCacheBytes;
+  for (std::size_t i = 0; i < g_cache_quota_count; ++i) {
+    if (g_cache_quotas[i].px == px) {
+      return g_cache_quotas[i].bytes;
+    }
+  }
+  return font_quota::quota_bytes(px);
 }
 
 /// 字形缓存在**绘制期**才分配（lv_tiny_ttf.c:158 的 lv_mem_alloc），那时加载作用域早退出了 ——
@@ -682,16 +653,16 @@ bool aidogui_ui_bridge_init() {
             static_cast<unsigned>(cache_quota_total_bytes()), static_cast<unsigned>(pool_budget),
             static_cast<unsigned>(cache_available));
 
-  // 字体：SD 卡上的整份 TTF（ADR 0017：任意字符、7 个字号都能栅格化）。BIN 那条路已经删了
-  // （issue 03）。拿不到 TTF（未插卡 / 文件不在 / 一个字号也建不出来）时 7 个槽留空，界面
-  // 退回 LVGL 默认字体 —— 也就是 flash 里的静态子集 embark_zh_14（无卡兜底，ADR 0017 第 9 条）。
+  // 字体：SD 卡上的整份 TTF（ADR 0017：任意字符、任意字号都能栅格化）。BIN 那条路已经删了
+  // （issue 03）。拿不到 TTF（未插卡 / 文件不在 / 一个字号也建不出来）时槽位退回 LVGL 默认
+  // 字体 —— 也就是 flash 里的静态子集 embark_zh_14（无卡兜底，ADR 0017 第 9 条）。
   const char* res_root = embark::platform::aidogui_res_fs_root();
   splash_begin();
   const std::chrono::steady_clock::time_point font_begin = std::chrono::steady_clock::now();
   int loaded = 0;
   const bool read_ok = read_ttf(res_root);
   if (read_ok) {
-    splash_fonts_building();  // 读完了：接下来建 7 个字体实例（真机约 150 ms）
+    splash_fonts_building();  // 读完了：接下来按字号建字体实例（真机约 150 ms）
     loaded = load_ttf_fonts();
     if (loaded == 0) {
       embark::platform::font_buffer_free(g_ttf_data);
@@ -707,7 +678,7 @@ bool aidogui_ui_bridge_init() {
       *kAidoguiFonts[i].slot = const_cast<lv_font_t*>(LV_FONT_DEFAULT);  // 内置字体是 const 的
     }
     splash_fonts_failed(read_ok);
-    ELOG_WARN("AiDoGUI 字体：一个字号也没建出来（源 {}），7 个槽全指向内置字体", kTtfFileName);
+    ELOG_WARN("AiDoGUI 字体：一个字号也没建出来（源 {}），全部槽指向内置字体", kTtfFileName);
   } else {
     splash_fonts_ready(loaded, AIDOGUI_FONT_COUNT);
   }
@@ -888,7 +859,7 @@ void aidogui_ui_bridge_set_screen_observer(AidoguiScreenObserver observer, void*
 }
 
 void aidogui_ui_bridge_tick() {
-  // AiDoGUI 生成代码没有「每帧把变量刷进控件」的层（EEZ 的 ui_tick 没有对应物）：
+  // AiDoGUI 生成代码没有「每帧把变量刷进控件」的层：
   // 控件值由 App 通过 aidogui_ui_bridge_widget() 直接写。
 }
 

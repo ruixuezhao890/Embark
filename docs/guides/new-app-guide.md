@@ -9,8 +9,6 @@
 > 只想先看现成样板：`app/music/` 与 `app/album/` 是两个最小的完整 App（薄壳 + 同名占位屏 + 字符表 + 验收），
 > 本指南的每个数字都来自它们。
 >
-> **EEZ 时代的旧指南**（[eez-ui-manual.md](eez-ui-manual.md)、[eez-studio-guide.md](eez-studio-guide.md)）
-> 已加废弃横幅，只作历史阅读。
 
 ## 0. 三个角色，一张分工表
 
@@ -117,13 +115,13 @@ class MyApp final : public embark::App {
 #include <embark/framework.h>
 #include <embark/log.h>
 #include "my_app.h"
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
 #include "ui_backend.h"
 #endif
 
 void MyApp::onCreate(Framework& fw) { fw_ = &fw; }
 void MyApp::onEnter() {
-#if defined(EMBARK_AIDOGUI_UI) || defined(EMBARK_EEZ_UI_BRIDGE)
+#if defined(EMBARK_AIDOGUI_UI)
   ui_backend_load_for_app(name());   // 屏名 == App 名；缺屏只记日志、不黑屏
 #endif
 }
@@ -148,9 +146,9 @@ void MyApp::onForegroundTick(std::uint32_t) { /* 有数据时在这里 ui_backen
 > 现在只有 launcher/clock/settings 三个在里面）；App 的 include 目录由清单从源文件位置
 > 推导，不用手工补。`platform/host/ui_tour.cpp` 与 `user_main.cpp` 是精简系统用例，也不必加。
 
-**一键生成脚本的现状**：`tools/scaffold_app.py` 仍在，但它生成的是 **EEZ 时代的变量骨架**
-（AiDoGUI 没有变量层），生成出来的 App 不会挂屏、不该照抄。**现在照 `app/music/` 抄更快**；
-脚本与其余工具见 [scaffold-and-tools.md](scaffold-and-tools.md)（已标出废弃范围）。
+**没有一键生成脚本，照 `app/music/` 抄**：`app/music/music_app.{h,cpp}` 共 121 行（含注释），
+是完整的最薄样板 —— 复制目录、改类名与 `name()`/`title()`/`icon()`、再改上面两处登记即可。
+模板只有这一份真相：脚本模板会和真 App 走偏，样板本身就是编译通过的那份代码。
 
 **还没画屏时会怎样**：`ui_backend_load_for_app` 找不到同名屏 → 保持当前屏 + 一行 INFO 日志
 （`AiDoGUI 工程里还没有 App my 的屏（约定：screen == App 名）`），**不会黑屏**。
@@ -265,4 +263,4 @@ ctest --test-dir build --output-on-failure              # 内核 + 分页纯函�
 - 本功能的规格与验收剧本：**[.scratch/launcher-pages/spec.md](../../.scratch/launcher-pages/spec.md)**、**[acceptance.md](../../.scratch/launcher-pages/acceptance.md)**
 - 回程改动与两个界面 bug（时钟缓存、天气两字被裁）+ 设置屏：**[.scratch/launcher-fixes/spec.md](../../.scratch/launcher-fixes/spec.md)**
 - 后台策略 / 消息总线 / own_task 生命周期：**[messages-and-background.md](../concepts/messages-and-background.md)**
-- 脚本与工具（验收开关与退出码部分仍然有效）：**[scaffold-and-tools.md](scaffold-and-tools.md)**
+- 脚本与工具（验收开关、重导出、字体审计）：**[tools.md](tools.md)**

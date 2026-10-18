@@ -1,6 +1,6 @@
 /**
- * 宿主 · UI 演示可执行文件（issues/06；issue 16 起点；issue 19 起界面全部由
- * EEZ Studio 生成代码接管 —— 手绘 UI 已退役，App 只剩薄壳逻辑）
+ * 宿主 · UI 演示可执行文件（issues/06；issue 16 起点；ADR 0011 起界面全部由
+ * AiDoGUI Designer 生成代码接管 —— 手绘 UI 已退役，App 只剩薄壳逻辑）
  *
  * 从 issue 06 起，这个程序是"唯一 UI 任务"的第一个真实例子：
  *   进程入口 main 只做两件事 —— 起 UI 任务（FreeRTOS 静态任务）+ 进调度器；
@@ -8,19 +8,18 @@
  *     HAL（SDL 窗口在创建它的线程上泵事件）→ UI 端口（唯一允许调 lv_timer_handler()
 *     的地方）→ Framework（App 注册表 + 前台切换）→ 事件循环。
  *
- * 默认前台是 LauncherApp，它的主屏与 clock 屏一样来自 EEZ Studio 生成代码
- * （app/eez_ui/src/ui/；屏名约定 == App 名，子页 = <app名>_<编号>_sub，见
- * eez_ui_bridge.h / eez_ui_nav.h）：EEZ 屏上控件的 Flow SetPage 被桥翻成"切到
- * 同名 App"，所以点 EEZ 屏上的按钮 = 启动那个 App。手绘的扇形启动器与 demo App
- * 手绘按钮已全部下线（亮度改由设置中心 SettingsApp::bump_brightness() 驱动，0..100 百分比）
+ * 默认前台是 LauncherApp，它的主屏与各 App 屏一样来自 AiDoGUI 设计工程
+ * （app/aidogui_ui/；屏名约定 == App 名，子页 = <app名>_<编号>_sub，见
+ * app/common/ui_screen_names.h）：屏上的「调用函数」事件被桥翻成"切到同名 App"，
+ * 所以点屏上的按钮 = 启动那个 App。手绘的扇形启动器与 demo App 手绘按钮已全部下线
+ * （亮度改由设置中心 SettingsApp::bump_brightness() 驱动，0..100 百分比）
  *
  * 验收开关分五档（全部由合成 SDL 输入 + 帧号驱动，确定性）：
- *   --click [X,Y]   点 EEZ launcher 屏的按钮（Flow SetPage → clock 屏 → 切 ClockApp），
- *                   再在 clock 屏上点 (X,Y)（默认 = clock 屏按钮中心，回启动器），
- *                   验证点击落点随前台切换走。
- *   --drag X1,Y1,X2,Y2  合成一次拖动（默认在空白处 40,60 → 100,140）：EEZ 屏上
- *                   没有可拖动的槽位了，这里只作输入通路冒烟 —— press → 3 个插值
- *                   move → release 全程不误触按钮、不切 App。
+ *   --click [X,Y]   点 launcher 屏的时钟卡（切 ClockApp），再在 clock 屏上点 (X,Y)
+ *                   （默认 = clock 屏返回键中心，回启动器），验证点击落点随前台切换走。
+ *   --drag X1,Y1,X2,Y2  合成一次拖动（默认在空白处 40,60 → 100,140）：这里只作输入
+ *                   通路冒烟 —— press → 每帧一个插值 move → release 全程不误触按钮、
+ *                   不切 App。
  *   --launch        完整故事线（无人值守验收主路径）：程序化 request_switch("clock")
  *                   → 点 clock 屏按钮回启动器 → 点 launcher 屏按钮再进 clock →
 *                   再点 clock 屏按钮回启动器 → settings->bump_brightness(+10)（消息广播）；
@@ -28,35 +27,40 @@
  *   --ui            AiDoGUI 验收（ADR 0011）：字体报告（期望 6/6）+ 屏表/控件表自检
  *                   （launcher 屏 23 个控件、按名取 L_Time 文本为 HH:MM 形状）→ 释放当前屏
  *                   （控件归零）→ 再装载（恢复 23 个控件）；全程同步调用，不需要点击。
- *   --eez           EEZ 验收（issue 19 / ADR 0008；AiDoGUI 接管 App 层后只作老代码回归）：屏表自检
- *                   + 变量表自检（launcher_tap_count 构建期生成）+ 变量读写往返
- *                   → 点 EEZ 屏按钮驱动切 App（Flow SetPage → 屏名 → request_switch）
- *                   → 点 clock 屏按钮回启动器；断言 switches==2、nav_requests==2、last_screen=="launcher"。
+ *   --imu-log       每 500 ms 打一行姿态读数（issue 08）：静止时 az ≈ -1.00
+ *   --imu-shake     姿态后端改出正弦曲线（周期 2 s、幅度 0.5 g）：让"界面跟着姿态动"能验
+ *   --audio-test    音频服务验收（issue 09）：播 assets/audio/chime.wav，打设备/时长/进度/
+ *                   暂停-继续-跳转-停止的状态迁移。本机没有音频输出时打一行"跳过"并退 0
+ *                   （状态机本身的单测在 tests/hal/test_audio.cpp，不需要声卡）
+ *   --net-test      网络服务验收（issue 10）：状态机 → 拨号 → GET example.com → no_space →
+ *                   断开后 not_ready。**会真的发网络请求**，机器没网时退 2（环境问题）
+ *                   （状态机本身的单测在 tests/hal/test_network.cpp，不需要网络）
  *   --screenshot FILE 最后一帧把窗口内容存成 BMP（用 Python/Pillow 转 PNG 便于查看）
  *   --frames N / --scale S / --delay MS / --quit-at N / --help 同旧版。
  *
- * 界面文案：demo App 界面与 EEZ 生成屏都用 LVGL 默认字体（Montserrat）；导航壳
- * 已退役（2026-10-06），不再有框架级叠加层；日志照旧是中文。
- * 日志照旧是中文。
+ * 界面文案：demo App 界面用卡上的 ui_heiti.ttf（ADR 0017 起字号由设计器决定）；
+ * 导航壳已退役（2026-10-06），不再有框架级叠加层；日志照旧是中文。
  *
  * 退出码：0 = 正常；1 = 后端起不来或用法错误；2 = 验收失败（日志写明哪一步）。
  */
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string_view>
+#include <thread>
 
 #include <SDL.h>
 #include <lvgl.h>
 
 #include <embark/error.h>
 #include <embark/framework.h>
+#include <embark/hal/network.h>
 #include <embark/log.h>
 #include <embark_limits.h>
 
 #include "album/album_app.h"
 #include "clock/clock_app.h"
-#include "eez_ui_bridge.h"
-#include "eez_ui_nav.h"
 #include "music/music_app.h"
 #include "settings/settings_app.h"
 #include "settings/settings_prefs.h"
@@ -66,6 +70,7 @@
 #include "aidogui_ui_bridge.h"
 #include "aidogui_ui_nav.h"
 #endif
+#include "host_audio.h"
 #include "host_context.h"
 #include "host_display.h"
 #include "host_input.h"
@@ -76,7 +81,6 @@
 #include "lvgl_port.h"
 #include "lvgl_ui_port.h"
 #include "own_task_spawner.h"
-#include "screens.h"  // EEZ 生成的对象表：合成点击按真实控件几何算（见 widget_center）
 #include "ui_task.h"
 #include "weather/weather_data.h"  // --ui-weather：拿数据桩逐字段比对界面
 
@@ -84,17 +88,13 @@ namespace {
 
 // --- 合成输入的帧号与几何 ----------------------------------------------------
 // 每帧 = HAL 一跳（默认 5 ms）。按下后隔两帧抬起，让 LVGL 分两个读周期处理。
-// 两个目标控件（app/eez_ui/src/ui/screens.c）：
-//   clock 屏「← 返回」按钮 objects.obj0 —— Flow SetPage → launcher 屏；
-//   launcher 屏「闹钟」行 objects.app_row_alarm —— launcher 屏上唯一接了 Flow 的控件
-//     （SetPage → clock 屏）；它在 apps_list 里，视口 195 高而内容 387 高，
-//     初始在屏外 → **必须先滚进视口才点得到**（见 scroll_into_view）。
-// 坐标不硬编码：widget_center() 每帧从生成代码的 objects 表读真实几何
-// （lv_obj_get_coords），改屏后自动跟着走。下面两个常量只是屏还没建好时的兜底。
-constexpr int launcher_button_fallback_x = 163;  // launcher 屏「闹钟」行（app_row_alarm）中心
-constexpr int launcher_button_fallback_y = 215;
-constexpr int clock_button_fallback_x = 188;  // clock 屏「← 返回」按钮中心
-constexpr int clock_button_fallback_y = 295;
+// 坐标不硬编码：aidogui_widget_center() 每帧从控件表按名读真实几何
+// （lv_obj_get_coords），设计器里挪了位置也点得中。下面两个常量只是屏还没建好、
+// 或控件表里查不到名字时的兜底。
+constexpr int launcher_button_fallback_x = 120;  // launcher 屏时钟卡 Card_Clock 中心
+constexpr int launcher_button_fallback_y = 78;
+constexpr int clock_button_fallback_x = 40;  // clock 屏返回键 Btn_Back 中心
+constexpr int clock_button_fallback_y = 18;
 
 // 合成点击：press_frame 按下，隔 click_release_delta 帧抬起（LVGL 分两个读周期）。
 constexpr int press_frame = 20;
@@ -104,12 +104,12 @@ constexpr int click_release_delta = 2;
 //   落在首次切页动画 22–62 之后，避开 LVGL 动画期输入屏蔽）。
 constexpr int click_second_frame = 70;
 constexpr int click_frames = 90;
-// --launch 故事线（程序化启动 + 真点击混合；EEZ 屏按钮引发的切页动画 200ms≈40 帧，
-//   期间 LVGL 屏蔽输入（lv_indev.c prev_scr 非空），后续点击须等动画窗口结束再落帧）：
-//   帧 20 request_switch("clock")（程序化、无动画）；帧 40 点 clock 屏按钮 → 回启动器，
-//   动画 42–82；帧 90 点 launcher 屏按钮 → 再进 clock，动画 92–132；
+// --launch 故事线（程序化启动 + 真点击混合；AiDoGUI 的屏切换是"换根控件"，没有切页
+//   动画的输入屏蔽窗口，帧距只要盖住"按下 2 帧 + 切换在下个 step 边界生效"）：
+//   帧 20 request_switch("clock")（程序化）；帧 40 点 clock 屏返回键 → 回启动器；
+//   帧 90 点 launcher 屏时钟卡 → 再进 clock；
 //   帧 84 settings->bump_brightness(+10)（亮度的逻辑入口，BrightnessMessage 广播到 clock）；
-//   帧 140 再点 clock 屏按钮 → 回启动器（EEZ 屏内按钮承担返回，导航壳已退役）。
+//   帧 140 再点 clock 屏返回键 → 回启动器（回程由屏内按钮承担，导航壳已退役）。
 constexpr int launch_switch_frame = 20;
 constexpr int launch_clock_back_frame = 40;
 constexpr int launch_launcher_btn_frame = 90;
@@ -117,15 +117,6 @@ constexpr int launch_bump_frame = 84;
 constexpr int launch_home_frame = 140;
 constexpr int launch_quit_frame = 190;
 constexpr int launch_frames = 200;
-// --eez 故事线（issue 19 / ADR 0008，2026-10-06 精简为三 App）：点 launcher 屏按钮
-// （帧 20）→ Flow SetPage 到 clock 屏 → 桥的屏观察者 request_switch("clock") →
-// ClockApp 前台；帧 70 点 clock 屏按钮 → Flow SetPage 回 launcher 屏 → 观察者
-// request_switch 回启动器（回程由 EEZ 屏内按钮承担，导航壳已退役）；帧 70 落在
-// 第一次切页动画（22–62）之后，避免 LVGL 动画期屏蔽输入。
-constexpr int eez_switch_frame = press_frame;
-constexpr int eez_home_frame = 70;
-constexpr int eez_quit_frame = 100;
-constexpr int eez_frames = 110;
 // --ui 故事线（ADR 0011）：帧 10 一次性跑完 Aidogui 验收（同步调用，无合成输入），
 //   帧 30 关窗 —— 中间留几帧把重建出来的屏真渲染出去（配 --shot-frame 10 可抓图）。
 constexpr int aidogui_check_frame = 10;
@@ -136,8 +127,8 @@ constexpr int aidogui_frames = 40;
 //   「返回」→ 帧 40 校验回 launcher（clock 屏已释放）→ 帧 50 点时钟卡 Card_Clock（C++
 //   bind_click 备用路径）再进 clock → 帧 62 校验 + 记录月历基准显示月 → 帧 70 点「>」翻下月
 //   → 帧 80 校验显示月 +1 且标题同步 → 帧 88 点「<」翻回 → 帧 96 校验显示月回到基准 →
-//   帧 100 关窗。帧距只要盖住"按 2 帧 + 切换在下个 step 边界生效"；AiDoGUI 屏切换没有
-//   EEZ 那种 40 帧的切页动画输入屏蔽窗口。
+//   帧 100 关窗。帧距只要盖住"按 2 帧 + 切换在下个 step 边界生效"；AiDoGUI 的屏切换是
+//   换根控件，没有切页动画的输入屏蔽窗口。
 constexpr int uinav_tile_frame = 12;
 constexpr int uinav_clock_check_frame = 22;
 constexpr int uinav_back_frame = 30;
@@ -250,14 +241,6 @@ constexpr int ulp_scroll_x = 120;
 constexpr int ulp_scroll_y_from = 250;
 constexpr int ulp_scroll_y_to = 90;
 
-#if defined(EMBARK_AIDOGUI_UI)
-// App 层唯一的界面接缝（app/common/ui_backend.h）在定义本宏时选 AiDoGUI：EEZ 的 nav
-// 不再被 App attach，所以 --eez 的切屏断言在本机构建下必然不成立（EEZ 屏也不再装载）。
-// 它不是回归：EEZ 版界面已由 AiDoGUI 取代（ADR 0011），--eez 只保留做老代码参照。
-constexpr bool kAidoguiOwnsAppLayer = true;
-#else
-constexpr bool kAidoguiOwnsAppLayer = false;
-#endif
 // --drag 冒烟：press 15 → 每帧一个插值 move → release 40。
 // **一帧一个点**是关键：稀疏的几个 move 会被 LVGL 的吸附/回弹吃掉，列表只挪十几
 // 像素就弹回原位；连续 24 个点才滚得动（LVGL 的 scroll_throw 是逐帧低通滤波的）。
@@ -278,28 +261,32 @@ struct Options {
   int click_y = clock_button_fallback_y;
   bool drag = false;
   int drag_x1 = 40;
-  int drag_y1 = 60;  // 默认落在 EEZ 屏的空白处（不碰按钮）
+  int drag_y1 = 60;  // 默认落在屏的空白处（不碰按钮）
   int drag_x2 = 100;
   int drag_y2 = 140;
   bool launch = false;
   int quit_at = 0;
-  bool eez = false;
   bool ui = false;
   bool ui_nav = false;
   bool ui_weather = false;
   bool ui_launcher_pages = false;
+  bool imu_log = false;  // --imu-log：每 500 ms 打一行姿态读数（issue 08）
+  bool imu_shake = false;  // --imu-shake：把合成姿态换成正弦（宿主没有真芯片，见 host_imu.h）
+  bool audio_test = false;  // --audio-test：播一遍 chime.wav 并验状态迁移（issue 09）
+  bool net_test = false;    // --net-test：真拉一个 HTTP 响应并验状态机（issue 10）
 };
 
 void print_usage() {
   std::printf(
       "用法：embark_host_ui [选项]\n"
-      "  --frames N         跑 N 帧后退出（默认按模式：launch 200 / click 90 / drag 80 / eez 110 / "
+      "  --frames N         跑 N 帧后退出（默认按模式：launch 200 / click 90 / drag 80 / "
       "ui 40 / ui-nav 110 / ui-launcher-pages 132 / 否则 0 = 一直跑到关窗）\n"
-      "  --click [X,Y]      点 launcher 屏「闹钟」行切 clock（帧 20，自动滚进视口）→ 帧 70 在 "
-      "clock 屏点 (X,Y)（默认按钮中心 %d,%d = 回启动器）\n"
+      "  --click [X,Y]      点 launcher 屏时钟卡切 clock（帧 20）→ 帧 70 在 clock 屏点 "
+      "(X,Y)（默认返回键中心 %d,%d = 回启动器）\n"
       "  --drag X1,Y1,X2,Y2 合成拖动冒烟（帧 15 按下 → 每帧一个插值点 → 帧 40 抬起；默认 40,60 → "
       "100,140）\n"
-      "  --launch            完整验收故事（request_switch('clock')→点屏按钮往返→bump_brightness 消息）\n"
+      "  --launch            完整验收故事（request_switch('clock')→点屏按钮往返→bump_brightness "
+      "消息）\n"
       "  --ui                AiDoGUI 验收（ADR 0011）：字体 6/6 + 屏表/控件表 + "
       "切走即释放/回来即重建\n"
       "  --ui-nav            双向导航 + 月历翻月验收：点磁贴进 clock → 点返回回 launcher → "
@@ -309,10 +296,12 @@ void print_usage() {
       "  --ui-launcher-pages 主屏分页验收：磁贴/页/页码点按注册表生成 → 横向拖到第 2 页 → "
       "点「相册」磁贴进相册屏 → 点「返回」回主屏 → 点「设置」磁贴进设置屏 → 点「亮度 "
       "+1」校验逻辑绑定 → 点「返回」回主屏\n"
-      "  --eez               EEZ 老代码回归（issue 19）：屏表/变量表自检 + 变量读写往返 + EEZ "
-      "屏点按钮切 App\n"
+      "  --imu-log           每 500 ms 打一行姿态读数 ax/ay/az/gx/gy/gz（issue 08）\n"
+      "  --imu-shake         姿态改出正弦曲线（周期 2 s、幅度 0.5 g，配 --imu-log 看变化）\n"
+      "  --audio-test        音频验收：播 chime.wav，验 播放→暂停→继续→跳转→停止（issue 09）\n"
+      "  --net-test          网络验收：GET example.com，验状态机与 body 缓冲（issue 10，需联网）\n"
       "  --screenshot FILE  最后一帧存 BMP\n"
-      "  --shot-frame N FILE 第 N 帧存 BMP（配 --eez 等故事线抓中途屏）\n"
+      "  --shot-frame N FILE 第 N 帧存 BMP（配各故事线抓中途屏）\n"
       "  --scale S           窗口放大倍数（默认 1 = 240×320 1:1）\n"
       "  --delay MS          每帧间隔（默认 5；选了合成点击/手势的验收模式时自动用 40 ——\n"
       "                      LVGL 约每 30 ms 读一次输入，帧跑得比它快就会把几次按下/抬起\n"
@@ -323,8 +312,8 @@ void print_usage() {
       clock_button_fallback_x, clock_button_fallback_y);
 }
 
-// --- 真实控件几何（从 EEZ 生成代码的 objects 表读）-----------------------------
-// 合成点击必须落在控件真正的中心：屏幕随 EEZ 工程重画而移动，硬编码坐标每改一次屏
+// --- 真实控件几何（从 AiDoGUI 控件表按名读）-----------------------------------
+// 合成点击必须落在控件真正的中心：屏幕随设计稿重画而移动，硬编码坐标每改一次屏
 // 就失效一次。这里只读、不建控件不改样式。
 struct PanelPoint {
   int x;
@@ -340,14 +329,6 @@ PanelPoint widget_center(const lv_obj_t* obj, int fallback_x, int fallback_y) {
   lv_area_t coords{};
   lv_obj_get_coords(obj, &coords);
   return PanelPoint{(coords.x1 + coords.x2) / 2, (coords.y1 + coords.y2) / 2, true};
-}
-
-/// 把滚动容器里的控件滚进视口（launcher 的 apps_list 内容 387 高、视口只有 195，
-/// 「闹钟」行初始在屏外 —— 不先滚进去，合成点击永远打不中）。
-void scroll_into_view(lv_obj_t* obj) {
-  if (obj != nullptr) {
-    lv_obj_scroll_to_view(obj, LV_ANIM_OFF);
-  }
 }
 
 // --- 合成输入（SDL_PushEvent → 真事件队列 → 输入后端）-------------------------
@@ -473,8 +454,6 @@ Options parse_options(int argc, char** argv) {
       }
     } else if (std::strcmp(arg, "--launch") == 0) {
       options.launch = true;
-    } else if (std::strcmp(arg, "--eez") == 0) {
-      options.eez = true;
     } else if (std::strcmp(arg, "--ui") == 0) {
       options.ui = true;
     } else if (std::strcmp(arg, "--ui-nav") == 0) {
@@ -483,6 +462,14 @@ Options parse_options(int argc, char** argv) {
       options.ui_weather = true;
     } else if (std::strcmp(arg, "--ui-launcher-pages") == 0) {
       options.ui_launcher_pages = true;
+    } else if (std::strcmp(arg, "--imu-log") == 0) {
+      options.imu_log = true;
+    } else if (std::strcmp(arg, "--imu-shake") == 0) {
+      options.imu_shake = true;
+    } else if (std::strcmp(arg, "--audio-test") == 0) {
+      options.audio_test = true;
+    } else if (std::strcmp(arg, "--net-test") == 0) {
+      options.net_test = true;
     } else if (std::strcmp(arg, "--help") == 0) {
       print_usage();
       std::exit(0);
@@ -500,9 +487,8 @@ Options parse_options(int argc, char** argv) {
   // 以前这靠人在命令行上记得加 --delay 40，忘了就得到一条假红（比如
   // --ui-launcher-pages 的两条拖动断言 scroll_x=186/40，期望 240/0）。这里替用户补上：
   // 只要有合成输入、又没显式给 --delay，就用 40 ms（要压测照样可以显式给更小的值）。
-  const bool synthetic_input = options.click || options.drag || options.launch || options.eez ||
-                               options.ui || options.ui_nav || options.ui_weather ||
-                               options.ui_launcher_pages;
+  const bool synthetic_input = options.click || options.drag || options.launch || options.ui ||
+                               options.ui_nav || options.ui_weather || options.ui_launcher_pages;
   if (synthetic_input && !options.delay_explicit) {
     options.delay_ms = 40;
     std::printf("[ui_demo] 有合成输入的模式：帧间隔自动设为 40 ms（要覆盖请显式传 --delay MS）\n");
@@ -538,7 +524,7 @@ bool aidogui_acceptance() {
   bool ok = true;
 
   // 1) 字体：ADR 0017 之后只有一条路 —— 桥把卡上的 ui_heiti.ttf 整份读进 PSRAM，为设计器
-  //    用到的 7 个字号各建一份 tiny_ttf 实例。建不出来时 7 个槽全指向内置 14 px（屏不空但
+  //    用到的每个字号各建一份 tiny_ttf 实例。建不出来时槽全指向内置 14 px（屏不空但
   //    字号不对），所以这里必须全绿。
   const embark::demo::AidoguiFontReport fonts = embark::demo::aidogui_ui_bridge_font_report();
   const char* res_root = embark::platform::aidogui_res_fs_root();
@@ -571,7 +557,7 @@ bool aidogui_acceptance() {
     ok = false;
   }
 
-  // 4) 按名取控件：这是 App 读写界面数据的入口（替代 EEZ 的 Flow 全局变量）。
+  // 4) 按名取控件：这是 App 读写界面数据的入口（设计器事件之外的唯一数据通道）。
   //    文本必须是"HH:MM"形状（launcher 的时间由 LauncherApp::onBackgroundTick 按 PC 墙钟刷，
   //    不再固定是设计器初值 "11:31"）—— 形状不对说明刷新链路断了。
   lv_obj_t* time_label = embark::demo::aidogui_ui_bridge_widget("launcher", "L_Time");
@@ -1126,6 +1112,238 @@ bool aidogui_weather_card_ok(std::size_t city) {
   return ok;
 }
 #endif /* EMBARK_AIDOGUI_UI */
+/// 状态名（日志用）。switch 穷举，加一个 AudioState 取值这里会先报「没覆盖」。
+/// 状态机名字（日志与 --net-test 共用）。
+const char* net_state_name(embark::hal::NetState state) noexcept {
+  switch (state) {
+    case embark::hal::NetState::off:
+      return "off";
+    case embark::hal::NetState::connecting:
+      return "connecting";
+    case embark::hal::NetState::connected:
+      return "connected";
+    case embark::hal::NetState::failed:
+      return "failed";
+  }
+  return "?";
+}
+
+const char* audio_state_name(embark::hal::AudioState state) noexcept {
+  switch (state) {
+    case embark::hal::AudioState::idle:
+      return "idle";
+    case embark::hal::AudioState::playing:
+      return "playing";
+    case embark::hal::AudioState::paused:
+      return "paused";
+  }
+  return "?";
+}
+
+/// --audio-test（issue 09）：把音频服务按「播放 → 暂停 → 继续 → 跳转 → 停止」走一遍，
+/// 每一步都读回 state/position 并断言。返回退出码：0 = 通过（或本机没有音频输出，跳过），
+/// 2 = 状态机行为不符。
+///
+/// 为什么这里可以整段 sleep 阻塞：它跑在 UI 任务里但发生在建 LVGL 之前 —— 音频这条链路
+/// 不需要屏幕，也就没必要为了「不阻塞」去写一个一次性状态机（那反而把被测对象挪到了
+/// 测试里）。真正需要并发的那部分（回调与主线程抢 WavPlayer）由后端自己的锁护住。
+int run_audio_test(hp::HostAudio& audio) noexcept {
+  // 候选路径：仓库根相对（本机跑构建产物时的常态）、上一级（从 build/ 里跑）、卡上。
+  constexpr const char* kCandidates[] = {
+      "app/aidogui_ui/assets/audio/chime.wav",
+      "../app/aidogui_ui/assets/audio/chime.wav",
+      "/sdcard/audio/chime.wav",
+      "/sdcard/chime.wav",
+  };
+
+  if (!audio.device_open()) {
+    ELOG_WARN("〔音频验收跳过：本机没有音频输出设备〕状态机本身的单测在 tests/hal/test_audio.cpp");
+    return 0;
+  }
+
+  const char* played = nullptr;
+  embark::Error last_error = embark::Error::none;
+  for (const char* candidate : kCandidates) {
+    last_error = audio.play(candidate);
+    if (last_error == embark::Error::none) {
+      played = candidate;
+      break;
+    }
+  }
+  if (played == nullptr) {
+    ELOG_ERROR("〔音频验收失败〕一个候选 WAV 都没播起来（最后一次错误 {}）", last_error);
+    return 2;
+  }
+
+  const auto wait_ms = [](int ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); };
+  // 等到为止，而不是「睡 300 ms 然后断言位置动了」：宿主这里位置是 SDL 音频线程每
+  // 21 ms 推进一次（1024 帧 / 48 kHz），机器忙的时候第一批数据可能晚到好几百毫秒。
+  // 拿固定 sleep 当同步点是在测机器心情，不是在测状态机。真机上 I2S 更没这个保证。
+  const auto wait_until_advanced = [&](std::uint32_t from) -> std::uint32_t {
+    constexpr int kDeadlineMs = 3000;
+    constexpr int kStepMs = 10;
+    for (int waited = 0; waited < kDeadlineMs; waited += kStepMs) {
+      const std::uint32_t now = audio.position_ms();
+      if (now > from) {
+        return now;
+      }
+      wait_ms(kStepMs);
+    }
+    return audio.position_ms();
+  };
+
+  const std::uint32_t duration = audio.duration_ms();
+  ELOG_INFO("音频：{} 时长 {} ms，音量 {}%（软件衰减，见 IAudio 头注释）", played, duration,
+            static_cast<int>(100));
+
+  bool ok = duration > 0U && audio.state() == embark::hal::AudioState::playing;
+
+  const std::uint32_t after_play = wait_until_advanced(0U);
+  ok = ok && after_play > 0U && after_play < duration;
+  ELOG_INFO("音频：播放推进到 {} ms（state={}）{}", after_play, audio_state_name(audio.state()),
+            ok ? "" : " ✘");
+
+  // 暂停：位置必须停住（这是「暂停」与「静音」的区别，也是后端最容易写错的一处）。
+  const embark::Error pause_error = audio.pause();
+  const std::uint32_t paused_at = audio.position_ms();
+  wait_ms(300);
+  const std::uint32_t paused_after = audio.position_ms();
+  const bool pause_ok = pause_error == embark::Error::none &&
+                        audio.state() == embark::hal::AudioState::paused &&
+                        paused_after == paused_at;
+  ok = ok && pause_ok;
+  ELOG_INFO("音频：暂停 300 ms 后 state={} 位置 {} ms（暂停前 {} ms）{}",
+            audio_state_name(audio.state()), paused_after, paused_at, pause_ok ? "" : " ✘");
+
+  // 继续：位置要往前走。
+  const embark::Error resume_error = audio.resume();
+  const std::uint32_t resumed = wait_until_advanced(paused_after);
+  const bool resume_ok = resume_error == embark::Error::none &&
+                         audio.state() == embark::hal::AudioState::playing &&
+                         resumed > paused_after;
+  ok = ok && resume_ok;
+  ELOG_INFO("音频：继续 200 ms 后 state={} 位置 {} ms{}", audio_state_name(audio.state()), resumed,
+            resume_ok ? "" : " ✘");
+
+  // 跳转：允许 ±30 ms 的取整误差（毫秒 → 帧 → 毫秒）。
+  const std::uint32_t half = duration / 2U;
+  const embark::Error seek_error = audio.seek(half);
+  const std::uint32_t after_seek = audio.position_ms();
+  const std::uint32_t drift = (after_seek > half) ? (after_seek - half) : (half - after_seek);
+  const bool seek_ok = seek_error == embark::Error::none && drift <= 30U;
+  ok = ok && seek_ok;
+  ELOG_INFO("音频：seek({}) → 位置 {} ms（偏差 {} ms）{}", half, after_seek, drift,
+            seek_ok ? "" : " ✘");
+
+  // 停止：回 idle + 位置归零。
+  const embark::Error stop_error = audio.stop();
+  const bool stop_ok = stop_error == embark::Error::none &&
+                       audio.state() == embark::hal::AudioState::idle && audio.position_ms() == 0U;
+  ok = ok && stop_ok;
+  ELOG_INFO("音频：stop 后 state={} 位置 {} ms{}", audio_state_name(audio.state()),
+            audio.position_ms(), stop_ok ? "" : " ✘");
+
+  // 音量：0..100 之外必须被拒（不是静默夹紧 —— 夹紧会让上层的滑条无从知道越界）。
+  const bool volume_ok = audio.set_volume(30) == embark::Error::none &&
+                         audio.set_volume(101) == embark::Error::invalid_argument &&
+                         audio.set_volume(100) == embark::Error::none;
+  ok = ok && volume_ok;
+  ELOG_INFO("音频：音量边界（30 ok / 101 拒 / 100 ok）{}", volume_ok ? "" : " ✘");
+
+  ELOG_INFO("{}", ok ? "〔音频验收通过〕" : "〔音频验收失败〕");
+  return ok ? 0 : 2;
+}
+
+/// --net-test（issue 10）：把网络服务按「状态机 → 拨号 → 拉一份真响应 → 收尾」走一遍。
+///
+/// 宿主这份 connect 恒成功（没有对端可拨），所以真正被验的是 http_get 的整条链路：
+/// DNS 解析 / TCP 连接 / HTTP 响应解析 / body 拷进调用方 span。**这条会真的发网络请求**，
+/// 所以机器没网时会失败（退 2）—— 那是环境问题不是代码问题，日志里写清是哪一步。
+int run_net_test(embark::hal::INetwork& network) noexcept {
+  char text[32];
+  bool ok = true;
+
+  ok = ok && network.state() == embark::hal::NetState::off;
+  ELOG_INFO("网络：初始状态 {} {}", net_state_name(network.state()), ok ? "" : "✘");
+
+  // 空口令的 ssid 必须先被拒：不然 App 传进一个没填的输入框就会去拨一个空 AP。
+  const embark::Error empty_error = network.connect("", "");
+  const bool empty_ok = empty_error == embark::Error::invalid_argument;
+  ok = ok && empty_ok;
+  ELOG_INFO("网络：空 SSID 被拒（{}）{}", embark::error_text(text, empty_error),
+            empty_ok ? "" : " ✘");
+
+  const embark::Error connect_error = network.connect("embark-host", "not-a-real-password");
+  const bool connect_ok = connect_error == embark::Error::none &&
+                          network.state() == embark::hal::NetState::connected;
+  ok = ok && connect_ok;
+  ELOG_INFO("网络：拨号 {} → state={} {}", embark::error_text(text, connect_error),
+            net_state_name(network.state()), connect_ok ? "" : " ✘");
+
+  // 非 http 一律 unsupported：本层不做 TLS（理由见 include/embark/hal/network.h）。
+  char small[8];
+  std::size_t small_len = 0;
+  const embark::Error scheme_error = network.http_get("https://example.com/", {small, 0}, small_len);
+  const bool scheme_ok = scheme_error == embark::Error::unsupported;
+  ok = ok && scheme_ok;
+  ELOG_INFO("网络：https 被拒为 unsupported（{}）{}", embark::error_text(text, scheme_error),
+            scheme_ok ? "" : " ✘");
+
+  // 主菜：拉 example.com。缓冲 4 KB 够装它对 HTTP 的默认响应（约 1.3 KB）。
+  char body[4096];
+  std::size_t body_len = 0;
+  embark::Error get_error = embark::Error::none;
+  const char* used_url = "http://example.com/";
+  const char* const candidate_urls[] = {"http://example.com/", "http://example.org/"};
+  for (const char* url : candidate_urls) {
+    get_error = network.http_get(url, {body, sizeof(body)}, body_len);
+    used_url = url;
+    if (get_error == embark::Error::none) {
+      break;
+    }
+  }
+  const bool status_ok = network.last_http_status() == 200;
+  const std::string_view body_text(body, body_len);
+  const bool body_ok = body_len > 0U && body_text.find("Example Domain") != std::string_view::npos;
+  const bool get_ok = get_error == embark::Error::none && status_ok && body_ok;
+  ok = ok && get_ok;
+  ELOG_INFO("网络：GET {} → {}，状态码 {}，body {} 字节{}", used_url,
+            embark::error_text(text, get_error), network.last_http_status(), body_len,
+            get_ok ? "" : " ✘");
+  if (!get_ok) {
+    ELOG_WARN("网络：本机大概率没有出网能力（DNS / 防火墙 / 对端不在）—— 这是环境问题；"
+              "状态机本身不需要网络，见 tests/hal/test_network.cpp");
+  }
+
+  // 缓冲装不下 → no_space，且**一个字节都不写**（调用方拿到的长度必须是能安全读的）。
+  char tiny[4];
+  std::size_t tiny_len = 99;
+  const embark::Error space_error = network.http_get("http://example.com/", {tiny, sizeof(tiny)}, tiny_len);
+  const bool space_ok = space_error == embark::Error::no_space && tiny_len == 0U;
+  ok = ok && space_ok;
+  ELOG_INFO("网络：4 字节缓冲 → {}，写出 {} 字节（期望 no_space / 0）{}",
+            embark::error_text(text, space_error), tiny_len, space_ok ? "" : " ✘");
+
+  // 走完要能干净地回到 off，且 off 之后 http_get 立刻 not_ready（不会偷偷替你拨号）。
+  static_cast<void>(network.disconnect());
+  const bool off_ok = network.state() == embark::hal::NetState::off;
+  const embark::Error after_off = network.http_get("http://example.com/", {body, sizeof(body)}, body_len);
+  const bool guard_ok = off_ok && after_off == embark::Error::not_ready;
+  ok = ok && guard_ok;
+  ELOG_INFO("网络：断开后 state={}，再 GET → {}（期望 not_ready）{}",
+            net_state_name(network.state()), embark::error_text(text, after_off),
+            guard_ok ? "" : " ✘");
+
+  // 对时：宿主本来就有真实时钟，正确答复是 unsupported（假装成功会让 App 以为时间被校准过）。
+  const embark::Error sntp_error = network.sntp_sync(1000);
+  const bool sntp_ok = sntp_error == embark::Error::unsupported;
+  ok = ok && sntp_ok;
+  ELOG_INFO("网络：sntp_sync → {}（宿主有时钟，期望 unsupported）{}",
+            embark::error_text(text, sntp_error), sntp_ok ? "" : " ✘");
+
+  ELOG_INFO("{}", ok ? "〔网络验收通过〕" : "〔网络验收失败〕");
+  return ok ? 0 : 2;
+}
 }  // namespace
 
 /// 唯一 UI 任务（spec §6：唯一能碰 LVGL 的线程，窗口事件也在它上面泵）。
@@ -1135,13 +1353,33 @@ void ui_main(void* argument) noexcept {
   hp::HostHal& hal = hp::HostHal::instance();
   hp::HostDisplay display(static_cast<std::uint8_t>(options->scale), "Embark 宿主 UI");
   hp::HostInput input(hal.time(), display);
+  hp::HostAudio audio;
   hal.attach_display(display);
   hal.attach_input(input);
+  hal.attach_audio(audio);
+  // 姿态服务的演示开关：必须在 hal.init() 之前设好，init 之后读到的第一帧就该是想要的那份
+  // 曲线（--imu-shake 是宿主模拟的一个模式位，真机没有对应物）。
+  hal.imu().set_shake(options->imu_shake);
 
   if (const Error hal_error = hal.init(); hal_error != Error::none) {
     char text[32];
     std::fprintf(stderr, "HAL 初始化失败：%s\n", embark::error_text(text, hal_error));
     hp::exit_process(1);
+  }
+
+  // --audio-test（issue 09）：音频链路不需要屏幕，所以在建 LVGL 之前就验完退出。
+  if (options->audio_test) {
+    hp::exit_process(run_audio_test(audio));
+  }
+
+  // --net-test（issue 10）：同理，网络也不需要屏。network 槽可能为空（后端 init 失败），
+  // 那种情况按「本机没有网络」报失败，而不是解引用空指针。
+  if (options->net_test) {
+    if (hal.context().network == nullptr) {
+      ELOG_WARN("〔网络验收失败：网络后端没有装配成功〕");
+      hp::exit_process(2);
+    }
+    hp::exit_process(run_net_test(*hal.context().network));
   }
 
   embark::platform::LvglUiPort ui_port(hal.context(), &host_exit_query, &input);
@@ -1167,8 +1405,6 @@ void ui_main(void* argument) noexcept {
       frames_limit = click_frames;
     } else if (options->drag) {
       frames_limit = drag_frames;
-    } else if (options->eez) {
-      frames_limit = eez_frames;
     } else if (options->ui) {
       frames_limit = aidogui_frames;
     } else if (options->ui_nav) {
@@ -1215,6 +1451,7 @@ void ui_main(void* argument) noexcept {
   // --launch：按下点的落点要在抬起帧复用（屏可能在两帧之间切走，届时读不到控件）
   PanelPoint launch_back_pt{0, 0, false};
   PanelPoint launch_row_pt{0, 0, false};
+  Uint32 imu_last_log_ms = 0;  // --imu-log：上一条读数的时刻（0 = 还没打过）
   for (;;) {
     framework.step();
     ++frames_run;
@@ -1222,16 +1459,32 @@ void ui_main(void* argument) noexcept {
       break;
     }
 
-    // --- 合成输入（帧号驱动，确定性）-----------------------------------------
-    // 每帧重新读一次真实几何：屏会随前台切换换掉，坐标必须跟着走。
-    const PanelPoint clock_btn =
-        widget_center(objects.obj0, clock_button_fallback_x, clock_button_fallback_y);
-    const PanelPoint alarm_row = widget_center(objects.app_row_alarm, launcher_button_fallback_x,
-                                               launcher_button_fallback_y);
+    // --imu-log：每 500 ms 打一行（issue 08）。用 SDL 的时钟而不是 steady_clock：这个
+    // 程序的时间基准本来就只有它一份（帧节拍也是 SDL_Delay 打的），混用两个时钟会让
+    // "每 500 ms"与"每 N 帧"在慢机器上对不上。
+    if (options->imu_log) {
+      const Uint32 now_ms = SDL_GetTicks();
+      if (imu_last_log_ms == 0U || now_ms - imu_last_log_ms >= 500U) {
+        imu_last_log_ms = now_ms;
+        embark::hal::ImuSample sample;
+        const Error imu_error = hal.imu().read(sample);
+        if (imu_error == Error::none) {
+          std::printf("[imu] 帧 %d ax=%+.2f ay=%+.2f az=%+.2f gx=%+.1f gy=%+.1f gz=%+.1f T=%.1f\n",
+                      frames_run, static_cast<double>(sample.accel_x),
+                      static_cast<double>(sample.accel_y), static_cast<double>(sample.accel_z),
+                      static_cast<double>(sample.gyro_x), static_cast<double>(sample.gyro_y),
+                      static_cast<double>(sample.gyro_z),
+                      static_cast<double>(sample.temperature_c));
+        } else {
+          std::printf("[imu] 帧 %d 读失败（错误码 %d）\n", frames_run, static_cast<int>(imu_error));
+        }
+      }
+    }
 
+    // --- 合成输入（帧号驱动，确定性）-----------------------------------------
     if (options->launch) {
-      // 启动器与各屏都是 AiDoGUI 生成的：往返点击的落点必须从 AiDoGUI 控件表读真几何
-      // （objects.* 是 EEZ 时代的空指针，退回兜底坐标会点到空白处 —— 这条故事曾因此静默失效）。
+      // 往返点击的落点必须从 AiDoGUI 控件表按名读真几何（查不到名字才退回兜底坐标，
+      // 那时多半会点到空白处 —— 改控件名后要同步这里的名字）。
       if (frames_run == launch_switch_frame) {
         (void)framework.request_switch("clock");
       }
@@ -1270,44 +1523,19 @@ void ui_main(void* argument) noexcept {
         quit.type = SDL_QUIT;
         SDL_PushEvent(&quit);
       }
-    } else if (options->eez) {
-      // 点 launcher 屏「闹钟」行：Flow SetPage 到 clock 屏 → 桥的屏观察者把这次切屏翻成
-      // request_switch("clock")（帧 20 按下 → 帧 21/22 抬起 → 下次 tick 生效）。
-      if (frames_run == eez_switch_frame) {
-        scroll_into_view(objects.app_row_alarm);  // 同上：先滚进视口
-        const PanelPoint row = widget_center(objects.app_row_alarm, launcher_button_fallback_x,
-                                             launcher_button_fallback_y);
-        push_motion_and_press(options->scale, row.x, row.y);
-      }
-      if (frames_run == eez_switch_frame + click_release_delta) {
-        push_release(options->scale, alarm_row.x, alarm_row.y);
-      }
-      // 回程：点 clock 屏按钮 → Flow SetPage 回 launcher 屏 →
-      // 观察者 request_switch 回启动器（EEZ 屏内按钮承担返回，无导航壳）。
-      // 回程点击放帧 70：首次切页动画 22–62 期间 LVGL 屏蔽输入（prev_scr）。
-      if (frames_run == eez_home_frame) {
-        push_motion_and_press(options->scale, clock_btn.x, clock_btn.y);
-      }
-      if (frames_run == eez_home_frame + click_release_delta) {
-        push_release(options->scale, clock_btn.x, clock_btn.y);
-      }
-      if (frames_run == eez_quit_frame) {
-        SDL_Event quit{};
-        quit.type = SDL_QUIT;
-        SDL_PushEvent(&quit);
-      }
     } else if (options->click) {
+      // 落点从 AiDoGUI 控件表按名读真几何（设计器里挪位置也点得中）。
       if (frames_run == press_frame) {
-        scroll_into_view(objects.app_row_alarm);
-        const PanelPoint row = widget_center(objects.app_row_alarm, launcher_button_fallback_x,
-                                             launcher_button_fallback_y);
+        const PanelPoint row = aidogui_widget_center(
+            "launcher", "Card_Clock", launcher_button_fallback_x, launcher_button_fallback_y);
         push_motion_and_press(options->scale, row.x, row.y);
       }
-      // 帧 20：点 launcher 屏「闹钟」行（切到 clock）；帧 70：在 clock 屏点 (X,Y)
-      // （默认 = clock 屏按钮中心 → Flow SetPage 回 launcher 屏 → 回启动器；帧 70
-      // 落在首次切页动画 22–62 之后，避开输入屏蔽）。
+      // 帧 20：点 launcher 屏时钟卡（设计器事件 → 切到 clock）；帧 70：在 clock 屏点 (X,Y)
+      // （默认 = clock 屏返回键中心 → 回启动器）。
       if (frames_run == press_frame + click_release_delta) {
-        push_release(options->scale, alarm_row.x, alarm_row.y);
+        const PanelPoint row = aidogui_widget_center(
+            "launcher", "Card_Clock", launcher_button_fallback_x, launcher_button_fallback_y);
+        push_release(options->scale, row.x, row.y);
       }
       if (frames_run == click_second_frame) {
         push_motion_and_press(options->scale, options->click_x, options->click_y);
@@ -1649,8 +1877,7 @@ void ui_main(void* argument) noexcept {
 
   int exit_code = 0;
   if (options->launch) {
-    // 界面已是 AiDoGUI：观测也走 AiDoGUI 的账（EEZ 的 last_screen/current_screen 在本配置下
-    // 永远是空/未初始化，写进断言只会变成永远为假的死条件）。
+    // 观测走 AiDoGUI 的账：last_screen / current_screen 都从桥与导航桥读。
     const char* last_screen = embark::demo::aidogui_ui_nav_last_screen();
     const char* current_screen = embark::demo::aidogui_ui_bridge_current_screen();
     const bool launched_ok =
@@ -1682,15 +1909,16 @@ void ui_main(void* argument) noexcept {
     }
   }
   if (options->click) {
-    // 点 launcher 屏按钮 → 切 clock（EEZ 驱动）→ 在 clock 屏点 (X,Y)（默认回启动器）。
-    // 点击落点随前台切换走：同一套坐标只对当前屏的按钮有效，这正是薄壳切换的验收点。
-    const char* last_screen = embark::demo::eez_ui_nav_last_screen();
+    // 点 launcher 屏时钟卡 → 切 clock（设计器事件）→ 在 clock 屏点 (X,Y)（默认返回键 = 回启动器）。
+    // 点击落点随前台切换走：同一套坐标只对当前屏的控件有效，这正是换根控件切换的验收点。
+    const char* last_screen = embark::demo::aidogui_ui_nav_last_screen();
+    const char* current_screen = embark::demo::aidogui_ui_bridge_current_screen();
     const bool clicked_ok =
         framework.switches() == 2 && launcher->enters() == 1 && launcher->resumes() == 1 &&
         clock->enters() == 1 && clock->resumes() == 0 && settings->enters() == 0 &&
-        embark::demo::eez_ui_nav_switch_requests() == 2 && last_screen != nullptr &&
-        std::strcmp(last_screen, "launcher") == 0 &&
-        embark::demo::eez_ui_bridge_current_screen() == 1 && framework.foreground() == 0;
+        embark::demo::aidogui_ui_nav_click_hits() == 2 && last_screen != nullptr &&
+        std::strcmp(last_screen, "launcher") == 0 && current_screen != nullptr &&
+        std::strcmp(current_screen, "launcher") == 0 && framework.foreground() == 0;
     if (clicked_ok) {
       ELOG_INFO("〔click 验收通过〕");
     } else {
@@ -1701,7 +1929,7 @@ void ui_main(void* argument) noexcept {
     }
   }
   if (options->drag) {
-    // EEZ 屏上没有可拖动的槽位了：拖动只走输入通路，不误触按钮、不切 App。
+    // 启动器屏上没有可拖动的槽位：拖动只走输入通路，不误触按钮、不切 App。
     const bool dragged_ok =
         framework.switches() == 0 && launcher->enters() == 1 && framework.foreground() == 0;
     ELOG_INFO("〔drag 验收{}〕：拖动 {}px，前台 {}，switches={}", dragged_ok ? "通过" : "失败",
@@ -1786,88 +2014,6 @@ void ui_main(void* argument) noexcept {
       exit_code = 2;
     }
   }
-  if (options->eez) {
-    // 故事线：点 launcher 屏按钮 → Flow SetPage 到 clock 屏 → 桥的屏观察者 →
-    // request_switch("clock") → ClockApp 前台（switches 1）→ 点 clock 屏按钮回启动器（switches 2）。
-    // 这就是“EEZ 里切屏 = 切前台 App”（屏名约定 == App 名，见 eez_ui_nav.h）。
-    // 屏表（构建期从 EEZ 生成代码解析）自检：表非空，且每项都能名字→id 反查回来
-    // （未来按约定加屏，这里随之增长，不需要改本文件）。
-    const int screen_count = embark::demo::eez_ui_bridge_screen_count();
-    bool screen_table_ok = screen_count > 0;
-    for (int i = 0; i < screen_count; ++i) {
-      const char* screen_name = embark::demo::eez_ui_bridge_screen_name(i);
-      ELOG_INFO("eez 屏表[{}]：{}", i, screen_name != nullptr ? screen_name : "<null>");
-      if (screen_name == nullptr || embark::demo::eez_ui_bridge_screen_id(screen_name) < 0) {
-        screen_table_ok = false;
-      }
-    }
-    // 变量表（构建期从 eez-flow.h 的 FlowGlobalVariables 解析）自检：表非空、按名可查、
-    // 未命中返回 kEezVarNone；再对 launcher_tap_count 做 int/float/bool 三型读写往返
-    // （变量桥按名读写 == UI 显示数据的接口，见 eez_ui_bridge.h「四」）。
-    const int var_count = embark::demo::eez_ui_bridge_var_count();
-    bool var_table_ok = var_count > 0;
-    for (int i = 0; i < var_count; ++i) {
-      const char* var_name = embark::demo::eez_ui_bridge_var_name(i);
-      ELOG_INFO("eez 变量表[{}]：{}", i, var_name != nullptr ? var_name : "<null>");
-      if (var_name == nullptr || embark::demo::eez_ui_bridge_var_index(var_name) < 0) {
-        var_table_ok = false;
-      }
-    }
-    bool var_roundtrip_ok = true;
-    if (embark::demo::eez_ui_bridge_var_index("launcher_tap_count") == 0) {
-      std::int32_t got_int = 0;
-      float got_float = 0.0f;
-      bool got_bool = false;
-      const bool set_int = embark::demo::eez_ui_bridge_set_var_int("launcher_tap_count", 42);
-      const bool get_int = embark::demo::eez_ui_bridge_get_var_int("launcher_tap_count", got_int);
-      const bool set_float = embark::demo::eez_ui_bridge_set_var_float("launcher_tap_count", 3.5f);
-      const bool get_float =
-          embark::demo::eez_ui_bridge_get_var_float("launcher_tap_count", got_float);
-      const bool set_bool = embark::demo::eez_ui_bridge_set_var_bool("launcher_tap_count", true);
-      const bool get_bool =
-          embark::demo::eez_ui_bridge_get_var_bool("launcher_tap_count", got_bool);
-      var_roundtrip_ok = set_int && get_int && got_int == 42 && set_float && get_float &&
-                         got_float == 3.5f && set_bool && get_bool && got_bool;
-      ELOG_INFO("变量读写往返：int {} -> {}（{}），float {} -> {}（{}），bool true -> {}（{}）",
-                set_int ? "set" : "fail", got_int, get_int ? "get" : "fail",
-                set_float ? "set" : "fail", got_float, get_float ? "get" : "fail",
-                set_bool ? "set" : "fail", got_bool, get_bool ? "get" : "fail");
-    } else {
-      var_roundtrip_ok = false;
-    }
-    const bool no_such_var_ok =
-        embark::demo::eez_ui_bridge_var_index("no_such_var") == embark::demo::kEezVarNone;
-    if (!no_such_var_ok) {
-      var_roundtrip_ok = false;
-    }
-    const char* last_screen = embark::demo::eez_ui_nav_last_screen();
-    const bool eez_ok =
-        framework.switches() == 2 && launcher->enters() == 1 && launcher->resumes() == 1 &&
-        launcher->foreground_ticks() > 0 && clock->enters() == 1 && clock->resumes() == 0 &&
-        embark::demo::eez_ui_nav_switch_requests() == 2 && last_screen != nullptr &&
-        std::strcmp(last_screen, "launcher") == 0 &&
-        embark::demo::eez_ui_bridge_current_screen() == 1 && framework.foreground() == 0 &&
-        screen_table_ok && var_table_ok && var_roundtrip_ok && no_such_var_ok;
-    ELOG_INFO(
-        "eez: switches={} enters={} resumes={} ticks={} current_screen={} screens={} vars={} "
-        "nav_requests={} last_screen={}",
-        framework.switches(), launcher->enters(), launcher->resumes(), launcher->foreground_ticks(),
-        embark::demo::eez_ui_bridge_current_screen(), screen_count, var_count,
-        embark::demo::eez_ui_nav_switch_requests(),
-        last_screen != nullptr ? last_screen : "<none>");
-    if (eez_ok) {
-      ELOG_INFO("〔eez 验收通过〕");
-    } else if (kAidoguiOwnsAppLayer) {
-      // AiDoGUI 已接管 App 层（本构建定义了 EMBARK_AIDOGUI_UI）：App 只会 attach aidogui
-      // 的 nav，EEZ 屏也不再被装载，故切屏断言不成立 —— 这不是回归（ADR 0011）。
-      ELOG_INFO(
-          "〔eez 验收跳过〕AiDoGUI 已接管 App 层，EEZ nav 不再被 App attach；老 EEZ 屏未装载。");
-    } else {
-      ELOG_INFO("〔eez 验收失败〕");
-      exit_code = 2;
-    }
-  }
-
   framework.shutdown();
   hp::exit_process(exit_code);
 }

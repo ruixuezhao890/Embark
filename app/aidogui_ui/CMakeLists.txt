@@ -1,4 +1,4 @@
-# AiDoGUI 生成代码（ADR 0011：界面代码来源从 EEZ Studio 换成 AiDoGUI Designer）。
+# AiDoGUI 生成代码（ADR 0011：界面代码的唯一来源）。
 #
 # export/* —— AiDoGUI 自己的导出布局（GUI 导出向导与 tools/aidogui/export.ps1 写的是同一份）：
 #             ui.c/ui.h/ui_helpers.*/ui_comm.*/ui_events.h/filelist.txt + screens/ + components/
@@ -7,8 +7,7 @@
 # 屏表/控件表/字体表不在这里手写：cmake/embark_aidogui_tables.cmake 在配置期解析导出产物，
 # 生成 ${CMAKE_CURRENT_BINARY_DIR}/include/embark_aidogui_ui_tables.h（不手改、不入库）。
 #
-# 生成代码是第三方产物：压掉告警（-w），不让它进本仓库的告警门禁。与 EEZ 老目标
-# （app/eez_ui）的写法保持一致。
+# 生成代码是第三方产物：压掉告警（-w），不让它进本仓库的告警门禁。
 file(GLOB AIDOGUI_UI_SOURCES CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/export/*.c"
      "${CMAKE_CURRENT_SOURCE_DIR}/export/screens/*.c"
@@ -26,7 +25,7 @@ embark_generate_aidogui_tables("${CMAKE_CURRENT_SOURCE_DIR}/export"
                                "${CMAKE_CURRENT_BINARY_DIR}/include/embark_aidogui_ui_tables.h")
 
 # 唯一暴露给消费者的东西：构建期生成的表头（自含 —— 自己 extern 用到的符号 + <lvgl.h>，
-# 不 include 生成代码的 ui.h；EEZ 老目标也有一份 ui.h，两个 include 根同名必然打架）。
+# 不 include 生成代码的 ui.h —— 那份头是给屏内 C 代码互相包含用的，不该进 App 编译面）。
 target_include_directories(embark_aidogui_ui PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/include")
 # 生成代码自己按相对路径 include 彼此（screens/x.c → "../ui.h"），不需要额外的 include 根；
 # 只借 third_party 找 <lvgl/lvgl.h>。

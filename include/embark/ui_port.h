@@ -14,7 +14,7 @@
  *   - shutdown()     退出路径收尾。
  *
  * 端口实现见 platform/common/lvgl_ui_port.{h,cpp}（宿主与真机共用）；真机端口在
- * issue 11。框架导航壳已于 2026-10-06 退役（导航 UI 全部由 EEZ 屏承担，见
+ * issue 11。框架导航壳已于 2026-10-06 退役（导航 UI 全部由界面层承担，见
  * docs/adr/0006 后记），本端口不再有 set_foreground / set_foreground_policy /
  * take_home_request。
  * 测试用 tests/fakes/fake_ui_port.h。

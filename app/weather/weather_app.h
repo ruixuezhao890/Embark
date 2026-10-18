@@ -7,7 +7,7 @@
  *   L_NDesc 现在一句话（11px）   L_D{i}_Dow / _Icon / _Desc / _Range（i = 0..4，今天在 0）
  *   Btn_CityPrev / Btn_CityNext 左右切城市（lv_label 当按钮用，与 clock 屏翻月历同款）
  *
- * 数据来源 = 编译期桩 app/weather/weather_data.h（框架没有网络，ADR 0012）。城市选择存
+ * 数据来源 = 编译期桩 app/weather/weather_data.h（网络服务尚未落地，ADR 0012 / 0019）。城市选择存
  * hal().storage 的 "wx.city" 一个字节，下次启动还在那个城市；LauncherApp 的天气卡读同一
  * 个键同一张表，所以主屏卡片与天气屏永远一致。
  *

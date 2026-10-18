@@ -104,11 +104,12 @@
 > 两个后端的根：宿主 = 环境变量 `EMBARK_HOST_FS_ROOT` 优先、否则可执行文件旁的 `embark_host_fs/`；
 > 真机 = SD 卡挂载点 `/sdcard`（[`platform/esp32/src/esp32_sd.{h,cpp}`](../../platform/esp32/src/esp32_sd.h)，
 > 板级开关 `EMBARK_SD_ENABLED` 默认 0）。没插卡 / 没配引脚时真机 `hal::Context::filesystem` 是 `nullptr`，
-> 桥读不到 TTF ⇒ 7 个字号槽全指到内置 `embark_zh_14`（14 px），界面不空但字号不对。
+> 桥读不到 TTF ⇒ 所有字号槽全指到内置 `embark_zh_14`（14 px），界面不空但字号不对。
 >
 > 真机的**字库缓冲不在这几个常量里**：它走 `platform/esp32/src/esp32_board.h` 的 `font_psram_bytes`
-> （**192 KB** PSRAM 定容池，装整份 TTF + 7 档字形缓存，与 `lvgl_pool_bytes` 分开记账），机制见
-> ADR 0007 的 issue 25 落地小节；ADR 0017 之后每档字号的额度由 `fit_cache_quotas()` 按池容量收敛（见 GLOSSARY 的 Glyph cache budget）。
+> （**192 KB** PSRAM 定容池，装整份 TTF + 每个字号一份字形缓存，与 `lvgl_pool_bytes` 分开记账），机制见
+> ADR 0007 的 issue 25 落地小节；ADR 0017 之后各字号额度按公式 `max(4 KB, 8 × px²)` 给、再由
+> `fit_cache_quotas()` 按池容量收敛（`app/common/font_quota.h`，见 GLOSSARY 的 Glyph cache budget）。
 
 ---
 

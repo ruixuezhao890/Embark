@@ -1,8 +1,8 @@
 # AiDoGUI Designer 作为界面代码来源：薄桥按需建屏 + BIN 资源走 S 盘
 
 用户 2026-10-12 拍板：把 EEZ Studio 换成 **AiDoGUI Designer**（理由是 EEZ 不适合 AI
-开发——Studio 侧完全不可脚本化，改一个坐标必须人在 GUI 里点；见
-[docs/guides/scaffold-and-tools.md](../guides/scaffold-and-tools.md) §1.5）。
+开发——Studio 侧完全不可脚本化，改一个坐标必须人在 GUI 里点；见已归档的
+[ADR 0008](0008-eez-studio-adapter.md)）。
 AiDoGUI 的产物同样是 **LVGL C 代码**，所以 App 契约、屏名约定、控件表按名查找三条
 不变，换掉的只是「生成代码从哪来」和「资源怎么进程序」。本 ADR 取代
 [0008](0008-eez-studio-adapter.md)。
@@ -30,8 +30,8 @@ AiDoGUI 的产物同样是 **LVGL C 代码**，所以 App 契约、屏名约定�
    `pwsh -NoProfile -File tools/aidogui/export.ps1`（清空并重建 `export/`）。设计器
    位置三级查找：`AIDOGUI_HOME` → `.aidogui-home` → `tools/aidogui/home.txt`（最后
    一个是本机私有路径，已 gitignore）；设计器的 `.ai-workspace/`（含本机桥 token）也
-   已 gitignore。clang-format 门禁把 `app/aidogui_ui/` 整体排除（导出即覆盖，与
-   `app/eez_ui/` 同一口径）。
+   已 gitignore。clang-format 门禁把 `app/aidogui_ui/` 整体排除（导出即覆盖，
+   生成代码不参与手写规范检查）。
 2. **不调用生成的 `aidogui_init()`**：它一次性创建**全部**屏且从不回收，字体加载
    失败还直接 return（连屏都不建），与本框架「切走即释放」纪律冲突。桥
    （`app/common/aidogui_ui_bridge.{h,cpp}`）自己承担它里面的三件事：注册
@@ -103,8 +103,8 @@ AiDoGUI 的产物同样是 **LVGL C 代码**，所以 App 契约、屏名约定�
 9. **迁移节奏（三步，每步可验收）**：①宿主一屏跑通（launcher：屏表 + 控件表 + 字体 +
    切走即释放 + 重新装载，验收 `embark_host_ui --ui`，本次已完成）；②AiDoGUI 里画
    clock / settings 两屏接上（**clock 已完成**：25 个控件 + 「返回」回程 + 真数据上屏，
-   验收 `embark_host_ui --ui-nav`，剩 settings），然后删除 `app/eez_ui/`、两个 cmake 代码表
-   模块、EEZ 文档与 CI 例外，0008 标废弃；③真机立项：TF 槽引脚核实 → `esp_vfs_fat` → 新
+   验收 `embark_host_ui --ui-nav`，剩 settings），然后删除旧链路的生成代码、两个 cmake
+   代码表模块、旧文档与 CI 例外，0008 标归档；③真机立项：TF 槽引脚核实 → `esp_vfs_fat` → 新
    HAL 存储面 → SD → PSRAM → 字体/图片从 PSRAM 取用 → 加载失败降级 + 验收探针。
 10. **字体源**：本轮沿用 `ui_heiti.ttf`（「时尚中黑简体」，商业授权待确认）；要用在
    正式产品里换成 OFL 的 Noto Sans SC 更稳（换字体 = 换工程里的 font 引用 + 放 ttf +
@@ -151,7 +151,7 @@ embark_ui_open_settings x1」，生成代码里 `ui_event_launcher_Tile1_0` / `u
 第 24 / 42 帧截图 `.scratch/ui_hooks_clock.png`、`.scratch/ui_hooks_back.png`。
 
 **否决过的方案**：在设计器里给控件挂 `CHANGE_SCREEN` 事件做导航（`_ui_screen_change()`
-绕过桥的按需 init/destroy 纪律，见决策⑦，导航改在 C++ 侧声明式绑定）；保留 EEZ（Studio
+绕过桥的按需 init/destroy 纪律，见决策⑦，导航改在 C++ 侧声明式绑定）；保留旧方案（Studio
 不可脚本化，AI 改不了界面——正是本次要解决的痛点）；
 C 数组资源（资源进 `.rodata`，与「SD 卡 + PSRAM」的既定方向相反）；App 直接引
 `ui_<id>` 全局（改名静默断链）；图省事直接调 `aidogui_init()`（一次建全屏不回收 +
@@ -161,8 +161,8 @@ C 数组资源（资源进 `.rodata`，与「SD 卡 + PSRAM」的既定方向相
 在导出/渲染时才看得出来）。
 
 **代价与影响**：新增工具链 `tools/aidogui/`（Windows PowerShell + AiDoGUI 安装目录，
-非 Windows 协作环境只能吃已入库的产物）；`app/eez_ui/` 与 `third_party/eez-framework`
-在第二步退役（0008、`docs/guides/eez-*.md`、两个 cmake 代码表模块、CI 例外随之删除）；
+非 Windows 协作环境只能吃已入库的产物）；旧链路的生成代码与运行时在第二步退役
+（0008、旧指南、两个 cmake 代码表模块、CI 例外随之删除）；
 真机在第三步之前**仍然没有界面代码**（宿主是唯一验收环境）；BIN 资源意味着真机必须
 先有文件系统，加载失败要能看到降级日志而不是空屏。
 

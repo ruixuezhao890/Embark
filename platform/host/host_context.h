@@ -16,7 +16,9 @@
 
 #include "host_bus.h"
 #include "host_filesystem.h"
+#include "host_imu.h"
 #include "host_log_sink.h"
+#include "host_network.h"
 #include "host_persistence.h"
 #include "host_system.h"
 #include "host_time.h"
@@ -40,6 +42,11 @@ class HostHal {
   void attach_display(hal::IDisplay& display) noexcept { context_.display = &display; }
   void attach_input(hal::IInput& input) noexcept { context_.input = &input; }
 
+  /// 音频服务（issue 09）。宿主这份后端在 embark_platform_host_ui（要 SDL），而那个目标依赖
+  /// 本目标 —— 所以跟显示/输入一样走 attach：谁有 SDL 谁来挂，没挂就是 context_.audio ==
+  /// nullptr（与「没有这块硬件」的语义一致，见 ADR 0019 决策 1）。
+  void attach_audio(hal::IAudio& audio) noexcept { context_.audio = &audio; }
+
   [[nodiscard]] hal::Context& context() noexcept { return context_; }
 
   /// HAL 时间轴。宿主输入后端拿它给事件打时间戳（HostInput 的构造参数），
@@ -52,10 +59,21 @@ class HostHal {
   /// 真机侧的对应后端是 esp32_filesystem.cpp（挂到 SD 卡）。
   [[nodiscard]] HostFileSystem& filesystem() noexcept { return filesystem_; }
 
+  /// 音频服务（issue 09）：挂了才有，见 attach_audio()。
+  [[nodiscard]] hal::IAudio* audio() noexcept { return context_.audio; }
+
+  /// 姿态服务（issue 08）：没有真芯片，输出可复现的合成曲线。宿主侧没有 attach 步骤 ——
+  /// 它不需要外部资源，init() 只记时间原点。
+  [[nodiscard]] HostImu& imu() noexcept { return imu_; }
+
+  /// 网络服务（issue 10）：宿主直通 socket，不需要 SDL，所以像 imu 一样自持，不走 attach。
+  /// 「拨号」没有对端，connect 恒成功 —— 但状态机与真机同形（见 host_network.h）。
+  [[nodiscard]] HostNetwork& network() noexcept { return network_; }
+
  private:
   HostHal() noexcept
-      : binder_(log_),
-        context_{time_, storage_, log_, system_, bus_, nullptr, nullptr, &filesystem_} {}
+      : binder_(log_), context_{time_,   storage_,     log_,  system_, bus_,   nullptr,
+                                nullptr, &filesystem_, &imu_, nullptr, nullptr} {}
 
   HostTime time_;
   HostPersistence storage_;
@@ -63,6 +81,8 @@ class HostHal {
   HostSystem system_;
   HostBus bus_;
   HostFileSystem filesystem_;
+  HostImu imu_;
+  HostNetwork network_;
   LogSinkBinder binder_;  // 必须活在 logger 之后：elog 里存的是它的指针
   hal::Context context_;
 

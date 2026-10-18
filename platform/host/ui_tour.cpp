@@ -10,12 +10,13 @@
  *      （后台武装时机 = issue 23 / ADR 0009：boot 只武装默认前台；其余 App 等第一次被切进前台。
  *       ADR 0015 之后 demo 里没有一个 App 申请后台体：时间/天气是**前台渲染型**，只随前台帧推 ——
  *       ⑨ 的清单里有三项盯这件事）
- *   ④ 启动器主屏：EEZ Studio 的 launcher 屏 —— 点屏上「闹钟」行（Flow SetPage → clock 屏）
- *   ⑤ 前台切换 #1：EEZ 屏按钮驱动 → clock 进场（onEnter；同帧走一遍武装时机，无后台体）
- *   ⑥ EEZ 屏往返 + App 间消息：点 clock 屏「← 返回」按钮回启动器（SetPage 回 launcher 屏，
- *       屏名约定驱动切回归）；settings->bump_brightness(+10) 广播亮度消息 → clock 收到
+ *   ④ 启动器主屏：AiDoGUI Designer 的 launcher 屏 —— 点屏上时钟卡 Card_Clock（设计器
+ *      「调用函数」事件 → 切 clock）
+ *   ⑤ 前台切换 #1：屏上控件驱动 → clock 进场（onEnter；同帧走一遍武装时机，无后台体）
+ *   ⑥ 屏往返 + App 间消息：点 clock 屏「返回」按钮 Btn_Back 回启动器（屏名约定驱动切回
+ *      归）；settings->bump_brightness(+10) 广播亮度消息 → clock 收到
  *       （亮度百分比，界面在 AiDoGUI 设置屏上，App 只留逻辑入口）
- *   ⑦ 回程交给 EEZ 屏按钮：无导航壳 —— 用例在 clock 收尾（SetPage 回程由 EEZ 屏承担）
+ *   ⑦ 回程交给屏上的返回键：无导航壳 —— 用例在 clock 收尾（回程由屏内按钮承担）
  *   ⑧ 关窗退出：SDL_QUIT → framework.exit_requested() → 收尾统计 + LVGL 堆账
  *
  * 每一步都打一行中文解说，末尾再打一张"自检清单"（✓/✗ + 实测值），
@@ -29,8 +30,8 @@
  *   --screenshot FILE  收尾时把最后一帧存成 BMP
  *   --help             显示用法
  *
- * 界面文案：demo App 界面与 EEZ 生成屏都用 LVGL 默认字体（Montserrat）；导航壳已退役
- * （2026-10-06，返回与状态由 EEZ 屏承担）。日志是中文。
+ * 界面文案：demo App 的界面 = AiDoGUI 生成屏（字体走卡上的 ui_heiti.ttf，ADR 0017）；
+ * 导航壳已退役（2026-10-06，返回与状态由屏内控件承担）。日志是中文。
  */
 #include <cstdio>
 #include <cstdlib>
@@ -47,8 +48,8 @@
 #include <embark/version.h>
 #include <embark_limits.h>
 
+#include "aidogui_ui_bridge.h"
 #include "clock/clock_app.h"
-#include "eez_ui_bridge.h"
 #include "host_context.h"
 #include "host_display.h"
 #include "host_input.h"
@@ -57,7 +58,6 @@
 #include "lvgl_port.h"
 #include "lvgl_ui_port.h"
 #include "own_task_spawner.h"
-#include "screens.h"  // EEZ 生成的对象表：合成点击按真实控件几何算（见 widget_center）
 #include "settings/settings_app.h"
 #include "settings/settings_prefs.h"
 #include "ui_task.h"
@@ -66,35 +66,31 @@ namespace {
 
 // --- 用例时间线（帧号）-------------------------------------------------------
 // 每帧 = HAL 的一跳（默认 5 ms），帧号是确定性的，所以这条用例每次跑法完全一样。
-// 启动器主屏来自 EEZ Studio（app/eez_ui/src/ui/screens.c 的 launcher 屏）：屏上只有
-// 「闹钟」行 app_row_alarm 接了 Flow（SetPage → clock 屏），桥的屏观察者把切屏翻成
-// request_switch("clock")（屏名约定 == App 名，见 eez_ui_nav.h）；clock 屏的
-// 「← 返回」按钮 SetPage 回 launcher 屏。手绘 demo App 按钮已全部退役。
+// 启动器主屏来自 AiDoGUI Designer（app/aidogui_ui/export 的 launcher 屏）：屏上的时钟卡
+// Card_Clock 挂了「调用函数」事件 → embark_ui_open_clock → 切前台 clock App；clock 屏的
+// 「返回」按钮 Btn_Back 同样走设计器事件回 launcher。手绘 demo App 按钮已全部退役。
 //
-// 坐标不硬编码：widget_center() 每帧从生成代码的 objects 表读真实几何
-// （lv_obj_get_coords），改屏后自动跟着走。下面两个常量只是屏还没建好时的兜底。
-constexpr int launcher_button_fallback_x = 163;  ///< ④ launcher 屏「闹钟」行中心
-constexpr int launcher_button_fallback_y = 215;
-constexpr int clock_button_fallback_x = 188;  ///< ⑥ clock 屏「← 返回」按钮中心
-constexpr int clock_button_fallback_y = 295;
+// 坐标不硬编码：widget_center() 每帧从控件表按名读真实几何（lv_obj_get_coords），
+// 改屏后自动跟着走。下面两个常量只是屏还没建好时的兜底。
+constexpr int launcher_button_fallback_x = 120;  ///< ④ launcher 屏时钟卡 Card_Clock 中心
+constexpr int launcher_button_fallback_y = 78;
+constexpr int clock_button_fallback_x = 40;  ///< ⑥ clock 屏返回键 Btn_Back 中心
+constexpr int clock_button_fallback_y = 18;
 constexpr int click_release_delta = 2;  ///< 按下后隔两帧抬起（LVGL 分两个读周期）
 
-// EEZ Flow SetPage 切页动画 200ms≈40 帧，动画窗口内 LVGL 屏蔽输入
-// （lv_indev.c prev_scr 非空），后续点击须落在动画结束后：16→56、72→112、
-// 122→162。
+// AiDoGUI 的屏切换是「换根控件」，没有切页动画的输入屏蔽窗口：后续点击只要错开
+// 「按下 2 帧 + 切换在下个 step 边界生效」就够了（本用例各步之间隔了几十帧）。
 
 constexpr int arm_probe_frame = 12;  ///< ③b 还没点进 clock：确认它尚未武装、ticks 恒 0
-constexpr int eez_click_frame = 14;  ///< ④ 点 launcher 屏「闹钟」行：按下（→ clock）
+constexpr int ui_click_frame = 14;  ///< ④ 点 launcher 屏时钟卡：按下（→ clock）
 constexpr int tick_checkpoint_first = 28;  ///< 第一次看 clock 的后台节拍
-constexpr int clock_back_frame =
-    70;  ///< ⑥ 点 clock 屏「← 返回」：回 launcher 屏（→ 启动器）；16–56 动画结束后
+constexpr int clock_back_frame = 70;  ///< ⑥ 点 clock 屏「返回」：回 launcher 屏（→ 启动器）
 constexpr int tick_checkpoint_second = 82;  ///< 第二次看后台节拍（对比增长）
-constexpr int bump_level_frame = 80;        ///< ⑥ settings->bump_brightness(+10)：广播亮度消息
+constexpr int bump_level_frame = 80;  ///< ⑥ settings->bump_brightness(+10)：广播亮度消息
 constexpr int launcher_reenter_frame =
-    120;  ///< ⑦ 再点 launcher 屏「闹钟」行：进 clock（回程交给 EEZ 屏按钮）；72–112 后
-constexpr int screen_life_check_frame =
-    115;  ///< ⑧ 屏生命周期检查：第二段动画（72–112）结束后、⑦ 点击（120）前
-constexpr int quit_frame = 170;      ///< ⑩ 推关窗事件（122–162 动画结束后）
+    120;  ///< ⑦ 再点 launcher 屏时钟卡：进 clock（回程交给屏内返回键）
+constexpr int screen_life_check_frame = 115;  ///< ⑧ 屏生命周期检查：⑥ 回程之后、⑦ 点击（120）之前
+constexpr int quit_frame = 170;      ///< ⑩ 推关窗事件
 constexpr int tour_end_frame = 180;  ///< 默认帧数上限
 
 struct Options {
@@ -128,8 +124,8 @@ const char* policy_text(embark::BackgroundPolicy policy) {
   return "?";
 }
 
-// --- 真实控件几何（从 EEZ 生成代码的 objects 表读）-----------------------------
-// 合成点击必须落在控件真正的中心：屏幕随 EEZ 工程重画而移动，硬编码坐标每改一次屏
+// --- 真实控件几何（从 AiDoGUI 控件表按名读）-----------------------------------
+// 合成点击必须落在控件真正的中心：屏幕随设计稿重画而移动，硬编码坐标每改一次屏
 // 就失效一次。这里只读、不建控件不改样式。
 struct PanelPoint {
   int x;
@@ -146,12 +142,11 @@ PanelPoint widget_center(const lv_obj_t* obj, int fallback_x, int fallback_y) {
   return PanelPoint{(coords.x1 + coords.x2) / 2, (coords.y1 + coords.y2) / 2, true};
 }
 
-/// launcher 的 apps_list 内容 387 高、视口只有 195：「闹钟」行初始在屏外，
-/// 不先滚进视口，合成点击永远打不中。
-void scroll_into_view(lv_obj_t* obj) {
-  if (obj != nullptr) {
-    lv_obj_scroll_to_view(obj, LV_ANIM_OFF);
-  }
+/// 按名取控件的真实中心（控件名 = AiDoGUI 里的控件名；查不到才退回兜底坐标）。
+PanelPoint aidogui_widget_center(const char* screen, const char* widget, int fallback_x,
+                                 int fallback_y) {
+  return widget_center(embark::demo::aidogui_ui_bridge_widget(screen, widget), fallback_x,
+                       fallback_y);
 }
 
 // --- 合成输入（SDL_PushEvent → 真事件队列 → 输入后端）-------------------------
@@ -215,7 +210,7 @@ struct CheckList {
 namespace embark::platform::host {
 
 // 整个可执行文件只出现一次的 App 注册表（启动器首位 = 默认前台）：
-// LauncherApp（界面 = EEZ 屏 "launcher"）；ClockApp tick 100ms；SettingsApp suspend。
+// LauncherApp（界面 = AiDoGUI 屏 "launcher"）；ClockApp suspend；SettingsApp suspend。
 EMBARK_APP_TABLE(embark::demo::LauncherApp, embark::demo::ClockApp, embark::demo::SettingsApp)
 
 }  // namespace embark::platform::host
@@ -299,7 +294,7 @@ void ui_main(void* argument) noexcept {
   std::uint32_t prev_switches = 0;
   std::uint32_t prev_brightness = 0;
   int bump_before_percent = -1;  // bump 前的亮度百分比（KV 跨进程留存，期望值不能写死 70）
-  bool clock_released_after_leave = false;  // ⑧ 离开 clock 后其对象被回收、launcher 仍常驻
+  bool clock_released_after_leave = false;  // ⑧ 离开 clock 后其对象被回收、当前屏是 launcher
   auto* launcher = static_cast<embark::demo::LauncherApp*>(framework.app(0));
   auto* clock = static_cast<embark::demo::ClockApp*>(framework.app(1));
   auto* settings = static_cast<embark::demo::SettingsApp*>(framework.app(2));
@@ -307,9 +302,7 @@ void ui_main(void* argument) noexcept {
   int frames_run = 0;
   std::uint32_t fg_ticks_before_first_enter =
       0;  ///< 进 clock 之前采到的前台帧数（应为 0：没打开过就不推）
-  ELOG_INFO(
-      "④ UI 循环（5 ms/帧）：先点 EEZ launcher 屏的按钮 —— Flow SetPage 到 clock "
-      "屏，桥把切屏翻成切 App");
+  ELOG_INFO("④ UI 循环（5 ms/帧）：先点 launcher 屏的时钟卡 —— 设计器事件把前台切到 clock");
   for (;;) {
     framework.step();
     ++frames_run;
@@ -319,26 +312,23 @@ void ui_main(void* argument) noexcept {
 
     // --- 合成输入（帧号驱动，确定性）-----------------------------------------
     // 每帧重新读真实几何：屏会随前台切换换掉，坐标必须跟着走。
-    const PanelPoint clock_btn =
-        widget_center(objects.obj0, clock_button_fallback_x, clock_button_fallback_y);
-    const PanelPoint alarm_row = widget_center(objects.app_row_alarm, launcher_button_fallback_x,
-                                               launcher_button_fallback_y);
+    const PanelPoint card_pt = aidogui_widget_center(
+        "launcher", "Card_Clock", launcher_button_fallback_x, launcher_button_fallback_y);
+    const PanelPoint back_pt = aidogui_widget_center("clock", "Btn_Back", clock_button_fallback_x,
+                                                     clock_button_fallback_y);
 
-    if (frames_run == eez_click_frame || frames_run == launcher_reenter_frame) {
-      scroll_into_view(objects.app_row_alarm);  // 闹钟行在屏外：先滚进视口再点
-      const PanelPoint row = widget_center(objects.app_row_alarm, launcher_button_fallback_x,
-                                           launcher_button_fallback_y);
-      push_motion_and_press(options->scale, row.x, row.y);
+    if (frames_run == ui_click_frame || frames_run == launcher_reenter_frame) {
+      push_motion_and_press(options->scale, card_pt.x, card_pt.y);
     }
-    if (frames_run == eez_click_frame + click_release_delta ||
+    if (frames_run == ui_click_frame + click_release_delta ||
         frames_run == launcher_reenter_frame + click_release_delta) {
-      push_release(options->scale, alarm_row.x, alarm_row.y);
+      push_release(options->scale, card_pt.x, card_pt.y);
     }
     if (frames_run == clock_back_frame) {
-      push_motion_and_press(options->scale, clock_btn.x, clock_btn.y);
+      push_motion_and_press(options->scale, back_pt.x, back_pt.y);
     }
     if (frames_run == clock_back_frame + click_release_delta) {
-      push_release(options->scale, clock_btn.x, clock_btn.y);
+      push_release(options->scale, back_pt.x, back_pt.y);
     }
     if (frames_run == bump_level_frame) {
       // 亮度：逻辑入口是 bump_brightness(delta)，不再是「档位 +1」的 bump_level。
@@ -376,9 +366,9 @@ void ui_main(void* argument) noexcept {
           "0）；启动器前台帧={}（它在跑）",
           frames_run, clock->foreground_ticks(), launcher->foreground_ticks());
     }
-    if (frames_run == eez_click_frame + 6) {
+    if (frames_run == ui_click_frame + 6) {
       ELOG_INFO(
-          "⑤ EEZ 屏按钮驱动切前台：切到 {}（onEnter；同一帧走武装时机，但它没有后台体 —— "
+          "⑤ 屏上控件驱动切前台：切到 {}（onEnter；同一帧走武装时机，但它没有后台体 —— "
           "时间/日历从这一帧起随前台帧推）",
           framework.apps().at(framework.foreground())->name());
     }
@@ -388,13 +378,13 @@ void ui_main(void* argument) noexcept {
           clock->foreground_ticks());
     }
     if (frames_run == screen_life_check_frame) {
-      const bool clock_gone = !embark::demo::eez_ui_bridge_screen_created("clock");
-      const bool launcher_kept = embark::demo::eez_ui_bridge_screen_created("launcher");
-      clock_released_after_leave = clock_gone && launcher_kept;
+      const bool clock_gone = !embark::demo::aidogui_ui_bridge_screen_created("clock");
+      const bool launcher_alive = embark::demo::aidogui_ui_bridge_screen_created("launcher");
+      clock_released_after_leave = clock_gone && launcher_alive;
       ELOG_INFO(
           "⑧ 屏生命周期（第 {} 帧，离开 clock 后、回程点击前）：clock created={}（应为 0，"
-          "Delete on unload 回收），launcher created={}（应为 1，createAtStart 常驻）",
-          frames_run, clock_gone ? 0 : 1, launcher_kept ? 1 : 0);
+          "切走即释放），launcher created={}（应为 1，此刻它是当前屏）",
+          frames_run, clock_gone ? 0 : 1, launcher_alive ? 1 : 0);
     }
 
     if (options->frames > 0 && frames_run >= options->frames) {
@@ -432,10 +422,10 @@ void ui_main(void* argument) noexcept {
   checklist.check("武装失败计数 = 0", arm_failures == 0UL, arm_failures, 0UL);
   checklist.check("前台切换恰好 3 次（launcher→clock→launcher→clock）", framework.switches() == 3,
                   static_cast<unsigned long>(framework.switches()), 3UL);
-  checklist.check("启动器 enter=1 / resume=1（一次回程：EEZ 屏往返）",
+  checklist.check("启动器 enter=1 / resume=1（一次回程：屏往返）",
                   launcher->enters() == 1 && launcher->resumes() == 1,
                   static_cast<unsigned long>(launcher->enters() * 10U + launcher->resumes()), 11UL);
-  checklist.check("clock enter=1 / resume=1（EEZ 往返再进）",
+  checklist.check("clock enter=1 / resume=1（往返再进）",
                   clock->enters() == 1 && clock->resumes() == 1,
                   static_cast<unsigned long>(clock->enters() * 10U + clock->resumes()), 11UL);
   checklist.check(
@@ -450,29 +440,28 @@ void ui_main(void* argument) noexcept {
                   static_cast<unsigned long>(bump_expect));
   checklist.check("收件箱无溢出", framework.inbox_overflows() == 0,
                   static_cast<unsigned long>(framework.inbox_overflows()), 0UL);
-  checklist.check("结尾前台 = clock（回程交给 EEZ 屏按钮，导航壳已退役）",
+  checklist.check("结尾前台 = clock（回程交给屏内返回键，导航壳已退役）",
                   framework.foreground() == framework.id_of(*clock),
                   static_cast<unsigned long>(framework.foreground()), 1UL);
-  checklist.check("启动器前台帧 > 0（界面来自 EEZ 屏 launcher）", launcher->foreground_ticks() > 0,
+  checklist.check("启动器前台帧 > 0（界面来自 AiDoGUI 屏 launcher）",
+                  launcher->foreground_ticks() > 0,
                   static_cast<unsigned long>(launcher->foreground_ticks()), 1UL);
-  checklist.check("EEZ 屏表非空（屏名约定：screen == App 名）",
-                  embark::demo::eez_ui_bridge_screen_count() > 0,
-                  static_cast<unsigned long>(embark::demo::eez_ui_bridge_screen_count()), 1UL);
-  checklist.check("EEZ 变量表非空（构建期生成：launcher_tap_count）",
-                  embark::demo::eez_ui_bridge_var_count() > 0 &&
-                      embark::demo::eez_ui_bridge_var_index("launcher_tap_count") == 0,
-                  static_cast<unsigned long>(embark::demo::eez_ui_bridge_var_count()), 1UL);
-  checklist.check("屏生命周期：离开 clock 后对象被回收（launcher 常驻）",
+  checklist.check("AiDoGUI 屏表非空（屏名约定：screen == App 名）",
+                  embark::demo::aidogui_ui_bridge_screen_count() > 0,
+                  static_cast<unsigned long>(embark::demo::aidogui_ui_bridge_screen_count()), 1UL);
+  checklist.check("屏生命周期：离开 clock 后对象被回收（回来即重建，ADR 0015）",
                   clock_released_after_leave, clock_released_after_leave ? 1UL : 0UL, 1UL);
+  // 屏是"一次性资源"：切走即 destroy、回来即 init（ADR 0015 第 1 条）。所以回到 clock 时
+  // 只有 clock 的根控件存在，launcher 的已经被释放 —— 期望编码 10 = clock 1 / launcher 0。
   checklist.check(
-      "屏生命周期：回到 clock 后重建，launcher 仍常驻",
-      embark::demo::eez_ui_bridge_screen_created("clock") &&
-          embark::demo::eez_ui_bridge_screen_created("launcher"),
-      static_cast<unsigned long>(embark::demo::eez_ui_bridge_screen_created("clock")) * 10UL +
-          static_cast<unsigned long>(embark::demo::eez_ui_bridge_screen_created("launcher")),
-      11UL);
+      "屏生命周期：回到 clock 后 clock 重建、launcher 已释放（切走即释放）",
+      embark::demo::aidogui_ui_bridge_screen_created("clock") &&
+          !embark::demo::aidogui_ui_bridge_screen_created("launcher"),
+      static_cast<unsigned long>(embark::demo::aidogui_ui_bridge_screen_created("clock")) * 10UL +
+          static_cast<unsigned long>(embark::demo::aidogui_ui_bridge_screen_created("launcher")),
+      10UL);
 
-  ELOG_INFO("启动器最终：enters={} resumes={} 前台帧={}（界面 = EEZ 屏 launcher）",
+  ELOG_INFO("启动器最终：enters={} resumes={} 前台帧={}（界面 = AiDoGUI 屏 launcher）",
             launcher->enters(), launcher->resumes(), launcher->foreground_ticks());
   ELOG_INFO("LVGL 堆账：未回收 {} 字节（budget {}）", embark_lvgl_outstanding_bytes(),
             embark_lvgl_budget_bytes());

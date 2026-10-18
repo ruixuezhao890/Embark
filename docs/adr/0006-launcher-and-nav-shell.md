@@ -23,21 +23,21 @@ screen 容器、App 挂进去（破坏既有 `lv_scr_load` 契约，`lv_layer_to
 脏区小；中文标题必须进静态子集字库并过缺字审计（ADR 0007）；切换路径收敛为
 `request_switch` 与 `request_home` 两个入口；宿主验收新增壳与扇形互动的自动化开关。
 工作项与验收草案见 `.scratch/embark-v1/issues/16-launcher-fan-and-nav.md`。
-## 后续（EEZ 接管主屏后）：扇形自绘下线
-启动器界面改由 EEZ Studio 工程提供：屏名 == App 名，`launcher` 屏上的按钮经 Flow SetPage
-切到 `clock` 屏，桥的屏观察者把这次切屏翻成 `request_switch("clock")`（见 eez_ui_nav.h）。
+## 后续（设计器接管主屏后）：扇形自绘下线
+启动器界面改由设计器工程提供：屏名 == App 名，`launcher` 屏上的时钟卡经「调用函数」事件
+`embark_ui_open_clock` 切到 clock App，导航桥把这次意图翻成 `request_switch("clock")`（见 aidogui_ui_nav.h）。
 于是本文档第 2/3 条的扇形几何、拖动/滚轮/弹簧与手绘视觉全部删除
 （`include/embark/launcher_geometry.h` 与 `tests/kernel/test_launcher_geometry.cpp` 一并移除），
-LauncherApp 退化成与 EezDemoApp 同形的"EEZ 宿主"薄壳。第 4/5 条（导航壳属于框架、
+LauncherApp 退化成与其它屏宿主同形的薄壳。第 4/5 条（导航壳属于框架、
 状态行只报状态）不变。宿主验收随之改写：`--launch` 改为程序化 `request_switch` 启动，
-`--click`/`--eez` 改为点 EEZ 屏上的按钮驱动切 App。
+`--click` 改为点屏上的时钟卡驱动切 App。
 
 ## 后记（2026-10-06）：导航壳退役
 
 框架导航壳（`platform/common/nav_shell.{h,cpp}`：lv_layer_top 状态行 + 统一返回键）已整体退役：
-源文件删除，`framework` 不再持壳、`notify_foreground()` 移除。返回键与状态行的职责移交 EEZ 屏：
+源文件删除，`framework` 不再持壳、`notify_foreground()` 移除。返回键与状态行的职责移交界面屏：
 回主屏由屏内按钮（Flow SetPage 回 launcher 屏 → 屏观察者 `request_switch`）承担，状态信息由屏上
-控件呈现。App 侧 `request_home()` 公共 API 保留（App 或 EEZ action 显式调用 = 回注册表首位）。
+控件呈现。App 侧 `request_home()` 公共 API 保留（App 或屏上事件显式调用 = 回注册表首位）。
 
-第 1-5 条与「后续」节正文保留为历史设计记录；宿主验收（`--launch` / `--click` / `--eez` / tour）
-已改为由 EEZ 屏按钮驱动往返（前台切换次数随之更新，见根 README 的开关表）。
+第 1-5 条与「后续」节正文保留为历史设计记录；宿主验收（`--launch` / `--click` / tour）
+已改为由屏上控件驱动往返（前台切换次数随之更新，见根 README 的开关表）。
