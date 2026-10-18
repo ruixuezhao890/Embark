@@ -19,6 +19,9 @@
 
 **完成标志**：窗口出现 launcher 屏，点按钮能切到 clock 屏。
 
+> **改一行就想看见结果？** `pwsh -NoProfile -File tools/aidogui/dev.ps1 -Screen clock` ——
+> 导出 → 构建 → 起窗口；之后改 C++ 它自动重建重启，`export/` 里的东西窗口内热重载
+> （`--watch`），细节见 [tools.md](tools.md) §2。
 ## 第 2 分钟：最短验收
 
 ```sh
@@ -54,7 +57,7 @@ cp -r app/music app/my_app     # 121 行的最薄样板（薄壳 + 同名屏 + �
 | 现象 | 原因 / 处理 |
 | --- | --- |
 | 屏上按钮点了没反应 | 屏名 ≠ App 名；或控件挂的是 CHANGE_SCREEN 动作（会绕过桥的按需 init/destroy）——改成「调用函数」`embark_ui_open_<App 名>` |
-| 改了屏 / 变量不生效 | 屏表 / 变量表是**配置期**生成的：改动后要重新 `cmake -B build` |
+| 改了屏不生效 | 屏表是**配置期**生成的：改动后要重新 `cmake -B build`（或用 `tools/aidogui/dev.ps1`，它把导出 + 配置 + 构建串成一条） |
 | 界面文字是方框 | 卡上的 `ui_heiti.ttf` 缺字——跑 `node tools/font/audit_glyphs.mjs` 看缺哪个字（ADR 0017） |
 | 想给自己的 App 加数据上屏 | 按控件名拿 `lv_obj_t*` 后直接写：`aidogui_ui_bridge_widget("my_app", "Label_Count")`；控件值会随屏重建丢失，所以用 `ui_backend_bind_repaint` 声明重推（ADR 0015）|
 | 真机上没有界面 | 真机当前没定义 `EMBARK_AIDOGUI_UI`（桥调用编译成空操作），见根 README 状态 |

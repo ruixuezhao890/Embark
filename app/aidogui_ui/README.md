@@ -72,6 +72,17 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 设计器位置三级查找：`AIDOGUI_HOME` → 仓库根 `.aidogui-home` → `tools/aidogui/home.txt`
 （本机路径，已 gitignore）。换机器时改最后一处即可。
 
+**想「改一行就看见结果」**（issue 06）：
+
+```powershell
+pwsh -NoProfile -File tools/aidogui/dev.ps1 -Screen clock
+```
+
+导出 → 构建 → 起 `embark_host_ui --screen clock --watch`。跑起来之后：`export/` 里变了
+（图片 BIN 这类运行期才读的）窗口内**当场热重载、不重启进程**；改 `.cpp` 它会停窗口、
+重新构建、再起一个。**改了 `.aid` 的文案或几何仍要重新导出 + 重新构建** —— 那是编进
+二进制的 C 代码，别指望运行期变。细节见 [../../docs/guides/tools.md](../../docs/guides/tools.md) §2。
+
 ## 改完界面跑一次控件表
 
 `docs/reference/ui-widgets.md` 是「设计器里的控件 ↔ 代码里谁在用」的对照表，自动生成：

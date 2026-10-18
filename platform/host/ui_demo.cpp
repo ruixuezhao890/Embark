@@ -35,6 +35,11 @@
  *   --net-test      网络服务验收（issue 10）：状态机 → 拨号 → GET example.com → no_space →
  *                   断开后 not_ready。**会真的发网络请求**，机器没网时退 2（环境问题）
  *                   （状态机本身的单测在 tests/hal/test_network.cpp，不需要网络）
+ *   --screen <名>   启动直接进这块屏（屏名 == App 名：clock / weather / music / album /
+ *                   settings），省掉手动导航。配 --watch 就是 tools/aidogui/dev.ps1 的循环。
+ *   --watch         每 200 ms 看一次 export/ 的指纹，变了就把当前屏卸了重装（不重启进程）。
+ *                   能力边界：生成的是 C 代码、编进二进制 —— 改 .aid 的**文案/几何**仍要
+ *                   重新导出 + 重新构建；本开关当场能看见的是运行期才从 S: 盘读的图片 BIN。
  *   --screenshot FILE 最后一帧把窗口内容存成 BMP（用 Python/Pillow 转 PNG 便于查看）
  *   --frames N / --scale S / --delay MS / --quit-at N / --help 同旧版。
  *
@@ -44,9 +49,12 @@
  * 退出码：0 = 正常；1 = 后端起不来或用法错误；2 = 验收失败（日志写明哪一步）。
  */
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <limits>
 #include <string_view>
 #include <thread>
 
@@ -274,6 +282,8 @@ struct Options {
   bool imu_shake = false;  // --imu-shake：把合成姿态换成正弦（宿主没有真芯片，见 host_imu.h）
   bool audio_test = false;  // --audio-test：播一遍 chime.wav 并验状态迁移（issue 09）
   bool net_test = false;    // --net-test：真拉一个 HTTP 响应并验状态机（issue 10）
+  const char* screen = nullptr;  // --screen：启动直接进这块屏（屏名 == App 名）
+  bool watch = false;  // --watch：export/ 变了就重建当前屏（开发循环用，issue 06）
 };
 
 void print_usage() {
@@ -300,6 +310,9 @@ void print_usage() {
       "  --imu-shake         姿态改出正弦曲线（周期 2 s、幅度 0.5 g，配 --imu-log 看变化）\n"
       "  --audio-test        音频验收：播 chime.wav，验 播放→暂停→继续→跳转→停止（issue 09）\n"
       "  --net-test          网络验收：GET example.com，验状态机与 body 缓冲（issue 10，需联网）\n"
+      "  --screen NAME       启动直接进这块屏（屏名 == App 名，如 clock / weather / settings）\n"
+      "  --watch             每 200 ms 看一次 export/：变了就重建当前屏（开发循环用；改了文案\n"
+      "                      或几何仍要重新导出 + 重新构建 —— 那些是编进二进制的 C 代码）\n"
       "  --screenshot FILE  最后一帧存 BMP\n"
       "  --shot-frame N FILE 第 N 帧存 BMP（配各故事线抓中途屏）\n"
       "  --scale S           窗口放大倍数（默认 1 = 240×320 1:1）\n"
@@ -470,6 +483,10 @@ Options parse_options(int argc, char** argv) {
       options.audio_test = true;
     } else if (std::strcmp(arg, "--net-test") == 0) {
       options.net_test = true;
+    } else if (std::strcmp(arg, "--screen") == 0 && !next_is_flag()) {
+      options.screen = argv[++i];
+    } else if (std::strcmp(arg, "--watch") == 0) {
+      options.watch = true;
     } else if (std::strcmp(arg, "--help") == 0) {
       print_usage();
       std::exit(0);
@@ -1346,6 +1363,69 @@ int run_net_test(embark::hal::INetwork& network) noexcept {
 }
 }  // namespace
 
+#if defined(EMBARK_AIDOGUI_UI)
+// --- 开发循环（issue 06）：--watch 的重建逻辑 ---------------------------------
+/// export/ 目录的「内容指纹」：最新修改时间 + 文件数。
+/// 为什么不只看目录自己的 mtime：覆盖写已有文件**不**会改父目录的修改时间（设计器导出向导
+/// 是原地覆盖，只有 tools/aidogui/export.ps1 才整目录重建），只看目录会漏掉一半的改动。
+struct ExportStamp {
+  // ⚠️ 初值必须是「最小」，不能是 0：MinGW 的 file_time_type 与 Unix 纪元不同，实测同一个
+  // 文件的时间戳是负数（-4.6e18），拿 0 当初值会让 newest_ticks 永远停在 0、永远判「没变」。
+  std::int64_t newest_ticks = std::numeric_limits<std::int64_t>::lowest();
+  std::uint64_t files = 0;
+  bool operator==(const ExportStamp& other) const noexcept {
+    return newest_ticks == other.newest_ticks && files == other.files;
+  }
+};
+
+ExportStamp export_dir_stamp(const char* root) {
+  ExportStamp stamp;
+  if (root == nullptr || *root == '\0') {
+    return stamp;
+  }
+  std::error_code error;
+  std::filesystem::recursive_directory_iterator it(
+      root, std::filesystem::directory_options::skip_permission_denied, error);
+  const std::filesystem::recursive_directory_iterator end;
+  for (; it != end && !error; it.increment(error)) {
+    const bool is_file = it->is_regular_file(error);
+    if (error) {
+      error.clear();
+      continue;
+    }
+    if (!is_file) {
+      continue;
+    }
+    ++stamp.files;
+    const auto written = std::filesystem::last_write_time(it->path(), error);
+    if (error) {
+      error.clear();
+      continue;
+    }
+    const auto ticks = static_cast<std::int64_t>(written.time_since_epoch().count());
+    if (ticks > stamp.newest_ticks) {
+      stamp.newest_ticks = ticks;
+    }
+  }
+  return stamp;
+}
+
+/// 重建当前屏。桥的 load_screen 对「已经是当前屏」直接 return 不重建
+/// （app/common/aidogui_ui_bridge.cpp:116），所以刷新的姿势只能是「先卸再装」：
+/// unload 把显示器交给空屏、不留悬空 act_scr；load 之后观察者会重挂点击绑定，
+/// 并让 App 把值重推一遍（app/common/aidogui_ui_nav.cpp:109）。
+bool reload_current_aidogui_screen() {
+  const char* current = embark::demo::aidogui_ui_bridge_current_screen();
+  if (current == nullptr) {
+    return false;
+  }
+  char name[32];  // 屏名来自生成表，长不了（app/common/ui_screen_names.h 的 app_name_max 也是 32）
+  std::snprintf(name, sizeof(name), "%s", current);  // 卸载会把 g_current 置空，先拷一份
+  embark::demo::aidogui_ui_bridge_unload_current();
+  return embark::demo::aidogui_ui_bridge_load_screen(name);
+}
+#endif /* EMBARK_AIDOGUI_UI */
+
 /// 唯一 UI 任务（spec §6：唯一能碰 LVGL 的线程，窗口事件也在它上面泵）。
 void ui_main(void* argument) noexcept {
   const Options* options = static_cast<const Options*>(argument);
@@ -1393,6 +1473,35 @@ void ui_main(void* argument) noexcept {
 
   ELOG_INFO("框架就绪：{} 个 App，默认前台 {}（上限 {}）", framework.apps().size(),
             framework.apps().at(0)->name(), embark::max_apps);
+  // --screen <名>：启动直接进这块屏，省掉手动导航（issue 06）。屏名 == App 名，所以走的是
+  // request_switch —— App 的 onEnter/onResume 照常跑、界面照常一步步装出来，不是「塞」进去的。
+  // 真正的切换发生在下一帧的 framework.step()。
+  if (options->screen != nullptr) {
+    const embark::AppId target = framework.apps().find(options->screen);
+    if (!framework.apps().valid(target)) {
+      std::fprintf(stderr, "--screen：没有名叫 %s 的 App。可选：", options->screen);
+      for (std::size_t i = 0; i < framework.apps().size(); ++i) {
+        std::fprintf(stderr, "%s%s", i == 0 ? "" : " / ", framework.apps().at(i)->name());
+      }
+      std::fprintf(stderr, "\n");
+      hp::exit_process(1);
+    }
+    const Error switch_error = framework.request_switch(target);
+    if (switch_error != Error::none) {
+      char text[32];
+      std::fprintf(stderr, "--screen：切到 %s 失败（%s）\n", options->screen,
+                   embark::error_text(text, switch_error));
+      hp::exit_process(1);
+    }
+  }
+
+#if defined(EMBARK_AIDOGUI_UI)
+  if (options->watch) {
+    const char* watch_root = embark::platform::aidogui_res_fs_root();
+    ELOG_INFO("--watch：每 200 ms 看一次 {}（变了重建当前屏；文案/几何仍要重导出 + 重构建）",
+              watch_root != nullptr ? watch_root : "<S: 未挂载>");
+  }
+#endif
 
   const auto* weather = static_cast<const embark::demo::WeatherApp*>(framework.app(3));
 
@@ -1452,6 +1561,13 @@ void ui_main(void* argument) noexcept {
   PanelPoint launch_back_pt{0, 0, false};
   PanelPoint launch_row_pt{0, 0, false};
   Uint32 imu_last_log_ms = 0;  // --imu-log：上一条读数的时刻（0 = 还没打过）
+#if defined(EMBARK_AIDOGUI_UI)
+  // --watch：轮询间隔 200 ms（票面先要能跑，ReadDirectoryChangesW 属于过早优化）
+  constexpr Uint32 watch_poll_ms = 200U;
+  ExportStamp watch_stamp;    // 上一次看到的指纹
+  bool watch_seeded = false;  // 第一次只看不重建：启动时那一份不是「变化」
+  Uint32 watch_last_poll_ms = 0;
+#endif
   for (;;) {
     framework.step();
     ++frames_run;
@@ -1837,6 +1953,31 @@ void ui_main(void* argument) noexcept {
         SDL_PushEvent(&quit);
       }
     }
+
+#if defined(EMBARK_AIDOGUI_UI)
+    // --watch（issue 06）：开发循环用 —— export/ 一变就把当前屏卸了重装，进程不重启。
+    // 能看见什么要说清楚：生成的是 C 代码、编进二进制，所以改 .aid 的**文案与几何**必须
+    // 重新导出 + 重新构建；这里当场刷出来的是运行期才从 S: 盘读的东西（图片 BIN），
+    // 顺带证明「屏还装得出来」。tools/aidogui/dev.ps1 把两件事串成一条命令。
+    if (options->watch) {
+      const Uint32 now_ms = SDL_GetTicks();
+      if (watch_last_poll_ms == 0U || now_ms - watch_last_poll_ms >= watch_poll_ms) {
+        watch_last_poll_ms = now_ms;
+        const ExportStamp stamp = export_dir_stamp(embark::platform::aidogui_res_fs_root());
+        if (!watch_seeded) {
+          watch_stamp = stamp;
+          watch_seeded = true;
+        } else if (!(stamp == watch_stamp)) {
+          watch_stamp = stamp;
+          ELOG_INFO("--watch：export/ 变了（{} 个文件），重建当前屏", stamp.files);
+          if (!reload_current_aidogui_screen()) {
+            ELOG_WARN("--watch：当前屏重建失败 —— 生成代码里已经没有这块屏了，重新导出再试");
+          }
+        }
+      }
+    }
+#endif
+
     if (options->shot_path != nullptr && frames_run == options->shot_frame) {
       if (!save_screenshot(display, options->shot_path)) {
         hp::exit_process(1);

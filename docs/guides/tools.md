@@ -9,14 +9,16 @@
 
 | 脚本 | 作用 | 何时跑 | 会写什么 |
 | --- | --- | --- | --- |
+| `tools/aidogui/dev.ps1` | **日常开发循环**：导出 → 构建 → 起 `embark_host_ui --screen <屏> --watch`，盯源码变了就重建重启（见 §2） | 想「改一行就看见结果」的时候 | 同 export.ps1 + 构建产物 |
 | `tools/aidogui/export.ps1` | **无头重导出** AiDoGUI 界面代码（不开设计器） | 没开 GUI / CI / 想敲一条命令重生成 | 清空并重建 `app/aidogui_ui/export/` |
 | `tools/aidogui/gen_ui.cjs` | 上面那个的**内核**：借 AiDoGUI 自己的 Node 跑它自己的生成器 | 一般不直接调 | 同上 |
 | `tools/aidogui/html_to_aid.mjs` | **HTML 草稿 → 屏**：无头浏览器量真坐标，合并进 `screen.aid` 的指定屏（详见 [html-to-screen.md](html-to-screen.md)） | 想不打开设计器改屏 / 只想写语义不写坐标 | 默认不写盘；`--apply` 只写 `screens[<屏>].widgets`，没变的控件原样保留 |
-| `tools/aidogui/aid_probe.js` | 上面那个注入浏览器的**量测探针**（在页面里收集 rect + 计算样式） | 不直接调 | 无（拷进临时目录跑） || `tools/aidogui/gen_widget_doc.mjs` | **控件对照表**：把 `screen.aid` 的控件与 `app/`、`platform/host/` 里的调用点 join 起来 → `docs/reference/ui-widgets.md`（详见 [reference/ui-widgets.md](../reference/ui-widgets.md)） | 改完屏（尤其控件改名 / 删控件）后 | 只写 `docs/reference/ui-widgets.md`；`--check` 只比对不写 |
+| `tools/aidogui/aid_probe.js` | 上面那个注入浏览器的**量测探针**（在页面里收集 rect + 计算样式） | 不直接调 | 无（拷进临时目录跑） |
+| `tools/aidogui/gen_widget_doc.mjs` | **控件对照表**：把 `screen.aid` 的控件与 `app/`、`platform/host/` 里的调用点 join 起来 → `docs/reference/ui-widgets.md`（详见 [reference/ui-widgets.md](../reference/ui-widgets.md)） | 改完屏（尤其控件改名 / 删控件）后 | 只写 `docs/reference/ui-widgets.md`；`--check` 只比对不写 |
 | `tools/font/gen_font.mjs` | 生成 **LVGL 静态子集字库** `embark_zh_14`（内置默认字体） | 内置字库要加字时 | `assets/fonts/embark_zh_14.c` + `tools/font/embark_zh_14.json` |
 | `tools/font/audit_glyphs.mjs` | **缺字审计**（CI 门禁） | 加/改界面文案后 | 只读；缺字打印码点 + `文件:行号` 并 `exit 1` |
 
-七个脚本都遵守同一条纪律：**默认不写盘 / 可重复跑 / 找锚点失败就报错退出**，绝不"尽力而为"地半改文件。
+八个脚本都遵守同一条纪律：**默认不写盘 / 可重复跑 / 找锚点失败就报错退出**，绝不"尽力而为"地半改文件。
 
 **加 App 没有一键脚本**——照 `app/music/` 抄一份薄壳，见 [new-app-guide.md](new-app-guide.md) §2。
 
@@ -42,6 +44,8 @@
 
 辅助开关：`--frames N` / `--scale S` / `--delay MS` / `--screenshot FILE` / `--shot-frame N FILE` / `--quit-at N` / `--help`。
 
+开发用开关：`--screen NAME`（启动直接进这块屏，屏名 == App 名）/ `--watch`（每 200 ms 看一次 `export/`，变了就把当前屏卸了重装，进程不重启）。两者配起来就是 `dev.ps1` 里跑的那条命令，见 §2。
+
 **退出码**：`0` = 正常；`1` = 后端起不来或用法错误；`2` = **验收失败**（日志写明哪一步）。
 
 > **带合成点击/手势的验收必须给 `--delay 40`（或更大）**：LVGL 约每 30 ms 读一次输入；
@@ -54,7 +58,36 @@
 
 ---
 
-## 2. `tools/aidogui/export.ps1`：无头重导出界面
+## 2. 日常循环：`tools/aidogui/dev.ps1`
+
+```powershell
+pwsh -NoProfile -File tools/aidogui/dev.ps1 -Screen clock   # 导出 → 构建 → 起窗口（clock 屏）
+pwsh -NoProfile -File tools/aidogui/dev.ps1 -SkipExport     # 只改了 C++，省掉一次导出
+pwsh -NoProfile -File tools/aidogui/dev.ps1 -NoRun          # 只导出 + 构建，不起窗口（CI）
+```
+
+它按顺序做三件事：`export.ps1` → `cmake -S . -B build` + `cmake --build build --target embark_host_ui`
+→ 起 `embark_host_ui --screen <屏> --watch`。跑起来之后它还在盯着 `src/ app/ include/ platform/ cmake/`
+的源文件：一发现变了就**停窗口 → 重新构建 → 再起一个**（进程级重启；Q3 已明确排除 C++ 热重载）。
+
+**两件事别混，否则会以为热重载坏了**：
+
+| 你改了什么 | 谁负责让它生效 |
+| --- | --- |
+| `export/` 里的东西（图片 BIN 这类运行期才从 `S:` 盘读的） | `--watch`：进程内卸掉当前屏再装上，**窗口不重启** |
+| `.aid` 的**文案与几何**（导出成 C 代码、编进二进制） | `dev.ps1` 的第 1、2 步：必须重新导出 + 重新构建 |
+| `.cpp` / `.h` | `dev.ps1` 的重启循环：停窗口 → 构建 → 再起 |
+
+热重载为什么必须「先卸再装」（`app/common/aidogui_ui_bridge.cpp` 的 `load_entry`）：
+桥对「已经是当前屏」直接 `return true`，不重建。所以 `--watch` 走的是
+`aidogui_ui_bridge_unload_current()` → `aidogui_ui_bridge_load_screen(同一块屏)`：卸的那步把显示器
+交给空屏（不留悬空 `act_scr`），装的那步观察者会重挂点击绑定、并让 App 把值重推一遍。
+
+> `--watch` 缺省关闭，`--screen` 缺省是 `launcher`：不带这两个开关时 `embark_host_ui` 的行为与以前完全一样，
+> 四条验收故事不受影响。
+
+---
+## 3. `tools/aidogui/export.ps1`：无头重导出界面
 
 主路径是 GUI（在 AiDoGUI Designer 里改屏 → 导出向导 → 输出目录选 `app/aidogui_ui/export`）。
 本脚本是**可选路径**：给"没开设计器 / CI / 想敲一条命令重生成"用，走同一个生成器、写同一个目录，产物完全一样。
@@ -77,7 +110,7 @@ pwsh -NoProfile -File tools/aidogui/export.ps1 -Project app/aidogui_ui/screen.ai
 
 ---
 
-## 3. 字体：`gen_font.mjs` + `audit_glyphs.mjs`
+## 4. 字体：`gen_font.mjs` + `audit_glyphs.mjs`
 
 仓库里同时有**两套字体**，别搞混：
 
@@ -147,7 +180,7 @@ node tools/font/audit_glyphs.mjs --ttf 别的字体.ttf --include-symbols --root
 
 ---
 
-## 4. 给仓库加一个新脚本时
+## 5. 给仓库加一个新脚本时
 
 照现有四个的规矩来，评审时才不会被退：
 
@@ -159,7 +192,7 @@ node tools/font/audit_glyphs.mjs --ttf 别的字体.ttf --include-symbols --root
 
 ---
 
-## 5. 相关文档
+## 6. 相关文档
 
 - 新手路径：[quickstart.md](quickstart.md) → [new-app-guide.md](new-app-guide.md)
 - 界面代码从哪来、怎么改：[../../app/aidogui_ui/README.md](../../app/aidogui_ui/README.md)
