@@ -50,6 +50,7 @@ ctest --test-dir build --output-on-failure
 | [guides/new-app-guide.md](guides/new-app-guide.md) | **新手指南（当前）**：30 分钟加一个带界面的 App（跑起来 → C++ 薄壳 → AiDoGUI 设计工程里画同名屏 + 补字符表 → 重导出 → 构建验收，端到端） |
 | [guides/state-machine-and-messages.md](guides/state-machine-and-messages.md) | 状态机与消息：`etl::fsm` 怎么接进 App 契约（收消息即切状态、事件从 `onBackgroundTick` 喂、运行语义与坑） |
 | [../app/aidogui_ui/README.md](../app/aidogui_ui/README.md) | **界面怎么改（当前）**：AiDoGUI 设计工程 → 一条命令重生成 → 编译；目录、字体与真机资源约定 |
+| [guides/html-to-screen.md](guides/html-to-screen.md) | **画屏的另一条路（当前）**：写 HTML 草稿 → 无头浏览器量真坐标 → 合并进 `screen.aid` 的指定屏；`data-*` 方言、默认不写盘、六屏往返自检 |
 | [adr/0011-aidogui-ui-source.md](adr/0011-aidogui-ui-source.md) | **界面来源决策（当前）**：BIN 资源走 S 盘、薄桥按需建屏、空屏不变量、三步迁移 |
 | [adr/0012-weather-data-source.md](adr/0012-weather-data-source.md) | **天气数据来源（当前）**：立项时框架无网络 ⇒ 编译期桩；一处数据两处画；换成真数据的前瞻见 [0019](adr/0019-service-layer-and-public-hardware.md) |
 | [adr/0013-launcher-paged-tiles.md](adr/0013-launcher-paged-tiles.md) | **主屏磁贴分页（当前）**：磁贴按注册表运行时生成（加 App 自动多一个）、吸附式横向翻页；`max_apps` 8 → 12。**非主屏上滑返回已被 [0014](adr/0014-in-screen-back.md) 撤回**，其余决策仍有效 |
@@ -67,6 +68,7 @@ ctest --test-dir build --output-on-failure
 | 文档 | 内容 |
 | --- | --- |
 | [reference/hooks-and-api.md](reference/hooks-and-api.md) | **8 个钩子的契约表**（几次 / 哪个线程 / 该放什么 / 不该放什么）+ App、Framework、桥、HAL 的 API 全集 |
+| [reference/ui-widgets.md](reference/ui-widgets.md) | **控件对照表**（自动生成）：6 屏 124 个控件的几何/文本/事件 + 代码里谁在用 + 死控件 / 孤儿引用清单 |
 | [reference/limits.md](reference/limits.md) | `config/embark_limits.h` 全部容量常量的含义与"改它意味着什么" |
 | [reference/pitfalls.md](reference/pitfalls.md) | 常见坑：ETL 定容行为、消息非聚合、保留 id、无异常/无堆、MinGW 对齐分配、日志 384 字节上限、派生打印（`E_FMT_DERIVE`）、宏前置条件…… |
 

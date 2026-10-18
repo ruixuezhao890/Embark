@@ -72,6 +72,19 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 设计器位置三级查找：`AIDOGUI_HOME` → 仓库根 `.aidogui-home` → `tools/aidogui/home.txt`
 （本机路径，已 gitignore）。换机器时改最后一处即可。
 
+## 改完界面跑一次控件表
+
+`docs/reference/ui-widgets.md` 是「设计器里的控件 ↔ 代码里谁在用」的对照表，自动生成：
+
+```sh
+node tools/aidogui/gen_widget_doc.mjs          # 重写那张表
+node tools/aidogui/gen_widget_doc.mjs --check   # 只比对，过期 exit 1（CI 可用）
+```
+
+改完屏（尤其**改控件名 / 删控件**）就跑一次。控件改名**不会**编译失败 ——
+代码只会静默拿到 `nullptr`，界面那一格从此停在设计器初值上。那张表的
+「死控件」「孤儿引用」「导出目录过期」三节就是用来提前发现这件事的。
+
 ## 六块屏与导航（第 2 步）
 
 | 屏（id == name） | 控件 | 数据 | 回程 |

@@ -11,10 +11,12 @@
 | --- | --- | --- | --- |
 | `tools/aidogui/export.ps1` | **无头重导出** AiDoGUI 界面代码（不开设计器） | 没开 GUI / CI / 想敲一条命令重生成 | 清空并重建 `app/aidogui_ui/export/` |
 | `tools/aidogui/gen_ui.cjs` | 上面那个的**内核**：借 AiDoGUI 自己的 Node 跑它自己的生成器 | 一般不直接调 | 同上 |
+| `tools/aidogui/html_to_aid.mjs` | **HTML 草稿 → 屏**：无头浏览器量真坐标，合并进 `screen.aid` 的指定屏（详见 [html-to-screen.md](html-to-screen.md)） | 想不打开设计器改屏 / 只想写语义不写坐标 | 默认不写盘；`--apply` 只写 `screens[<屏>].widgets`，没变的控件原样保留 |
+| `tools/aidogui/aid_probe.js` | 上面那个注入浏览器的**量测探针**（在页面里收集 rect + 计算样式） | 不直接调 | 无（拷进临时目录跑） || `tools/aidogui/gen_widget_doc.mjs` | **控件对照表**：把 `screen.aid` 的控件与 `app/`、`platform/host/` 里的调用点 join 起来 → `docs/reference/ui-widgets.md`（详见 [reference/ui-widgets.md](../reference/ui-widgets.md)） | 改完屏（尤其控件改名 / 删控件）后 | 只写 `docs/reference/ui-widgets.md`；`--check` 只比对不写 |
 | `tools/font/gen_font.mjs` | 生成 **LVGL 静态子集字库** `embark_zh_14`（内置默认字体） | 内置字库要加字时 | `assets/fonts/embark_zh_14.c` + `tools/font/embark_zh_14.json` |
 | `tools/font/audit_glyphs.mjs` | **缺字审计**（CI 门禁） | 加/改界面文案后 | 只读；缺字打印码点 + `文件:行号` 并 `exit 1` |
 
-四个脚本都遵守同一条纪律：**默认不写盘 / 可重复跑 / 找锚点失败就报错退出**，绝不"尽力而为"地半改文件。
+七个脚本都遵守同一条纪律：**默认不写盘 / 可重复跑 / 找锚点失败就报错退出**，绝不"尽力而为"地半改文件。
 
 **加 App 没有一键脚本**——照 `app/music/` 抄一份薄壳，见 [new-app-guide.md](new-app-guide.md) §2。
 
@@ -70,6 +72,8 @@ pwsh -NoProfile -File tools/aidogui/export.ps1 -Project app/aidogui_ui/screen.ai
 - **屏表/控件表/字体表不在这里生成**：`cmake/embark_aidogui_tables.cmake` 在 **CMake 配置期**解析 `export/screens/ui_*.h` 与 `export/ui.c`，写到构建目录的 `include/embark_aidogui_ui_tables.h`。
 
 > 改了界面并重导出后，**构建会自动重跑配置**（`CONFIGURE_DEPENDS`）；但如果是手工改了导出文件又只 `cmake --build`，保险起见跑一次 `cmake -S . -B build`。
+
+不想打开设计器、只想写一段 HTML 把屏改出来 → [html-to-screen.md](html-to-screen.md)。
 
 ---
 
