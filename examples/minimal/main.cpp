@@ -10,7 +10,7 @@
  * 与 platform/host/user_main.cpp 的区别：那份是"演示入口"（App 表里是 demo 三件套），
  * 这份是"从零写一个 App 的最小样本"（一个 App、一块手绘屏、一个主循环）。
  *
- * 对照阅读：docs/index.md → guides/quickstart.md（跑起来）→ concepts/app-lifecycle.md
+ * 对照阅读：docs/index.md → guides/getting-started.md（跑起来）→ concepts/app-lifecycle.md
  * （为什么主循环长这样）。
  */
 #include <cstdio>

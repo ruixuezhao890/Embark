@@ -15,30 +15,16 @@
 
 ## 30 秒上手
 
-先跑这三条。**其余文档等卡住了再查 —— 不读也能开始。**
-
 ```sh
-cmake --build build --target embark_host_ui               # ① 编（build/ 已 Configure 过，不用再 cmake -G）
+cmake -G Ninja -B build && cmake --build build --target embark_host_ui   # build/ 还不存在时先配置
 cd build/platform/host
-./embark_host_ui.exe --frames 60 --screenshot probe.bmp   # ② 看（无头也看得见，240×320 BMP）
-./embark_host_ui.exe --ui --delay 40 --frames 40          # ③ 验（合成输入必须带 --delay 40）
+./embark_host_ui.exe --frames 60 --screenshot probe.bmp   # 看（无头也看得见）
+./embark_host_ui.exe --ui --delay 40 --frames 40          # 验（合成输入必须带 --delay 40）
 ```
 
-**每天只碰这三个地方**
-
-| 想改什么 | 打开 | 改完 |
-| --- | --- | --- |
-| 界面（文字 / 坐标 / 颜色 / 控件） | `app/aidogui_ui/screen.aid`（设计器 GUI） | `pwsh -File tools/aidogui/export.ps1`，再编 |
-| 界面（让 AI 画，绕开 GUI） | 一份 HTML 草稿 | `node tools/aidogui/html_to_aid.mjs --html x.html --screen clock --apply`，再导出 |
-| App 逻辑 | `app/music/music_app.cpp` 这类薄壳（`app/<名>/`） | 直接编，不用导出 |
-
-- **不想敲命令**：双击 `tools/devpanel/start.cmd` —— 浏览器里点按钮：构建 / 导出屏 / 运行 / 看实时画面 / 跑验收 / 加 App / 退 App / 换界面工程 / **烧真机 + 看串口**。
-- **别手改 `app/aidogui_ui/export/`** —— 那是导出产物，下次导出就覆盖。
-- **改完就想看见**：`pwsh -NoProfile -File tools/aidogui/dev.ps1 -Screen clock`（改源码自动重编、屏变了自动重载、不重启窗口）。
-- **加 / 退 App**：`node tools/new_app.mjs my_app --title 短标题 --apply`（标题 ≤5 汉字，超了主屏磁贴会裁；
-  顺带往 `.aid` 里补一张同名占位屏，所以建完就有页面）；退掉是同一个脚本加 `--delete --apply`。
-- **烧到板子上**：面板「真机」组，或 `pwsh -NoProfile -File tools/esp/idf.ps1 -Task flash -Port COM3`（端口按实际选，本机板子通常是 COM3）。
-- **卡住了**：[docs/guides/daily-loop.md](docs/guides/daily-loop.md) 的「我改了没反应」；concepts / reference / adr 是查手册用的。
+**第一次来** → **[docs/guides/getting-started.md](docs/guides/getting-started.md)**：装工具 → clone → 配置 → 编 → 跑 → 最短验收 →「改了没反应」速查，一条线走完。
+**不想敲命令** → 双击 `tools/appconsole/start.cmd`（加 App / 退 App / 导出屏 / 构建宿主，都在浏览器里点）。
+**之后每天** → [docs/guides/daily-loop.md](docs/guides/daily-loop.md)：改哪儿动哪个文件、跑哪几条验收、提交前自检什么。
 
 ---
 
@@ -112,9 +98,9 @@ ctest --test-dir build --output-on-failure
 看到 240×320 的竖屏窗口、里面是 launcher 屏、点按钮能切到 clock 屏 —— 就算跑起来了。
 
 > 已经 clone 过但没带子模块：`git submodule update --init --recursive`。
-> 装工具的逐步说明（含 Windows 上的踩坑）在 [docs/guides/quickstart.md](docs/guides/quickstart.md)。
+> 装工具的逐步说明（含 Windows 上的踩坑）在 [docs/guides/getting-started.md](docs/guides/getting-started.md)。
 
-**下一步**：[加一个自己的 App](docs/guides/new-app-guide.md)（30 分钟端到端，含画界面屏），
+**下一步**：[加一个自己的 App](docs/guides/new-app-guide.md)（给只会 Arduino 的人：13 个钩子各该放什么 + 一个秒表完整例子），
 或者先让脚本把骨架搭出来：`node tools/new_app.mjs my_app --title 短标题 --apply`。
 **每天怎么干活**（改哪儿、跑哪条验收、提交前自检什么）：[docs/guides/daily-loop.md](docs/guides/daily-loop.md)。
 
@@ -146,7 +132,7 @@ ctest --test-dir build --output-on-failure
 | 层 | 回答 | 入口 |
 | --- | --- | --- |
 | **concepts** | 为什么这么设计 | [分层总图 + 一帧数据流](docs/concepts/index.md) |
-| **guides** | 怎么用 | [5 分钟跑起来](docs/guides/quickstart.md) → [加一个 App](docs/guides/new-app-guide.md) → [每天怎么干活](docs/guides/daily-loop.md) |
+| **guides** | 怎么用 | [从这里开始](docs/guides/getting-started.md) → [加一个 App](docs/guides/new-app-guide.md) → [每天怎么干活](docs/guides/daily-loop.md) |
 | **reference** | 具体是多少 / 叫什么 | [8 个钩子的契约表 + API 全集](docs/reference/hooks-and-api.md) |
 
 另外：架构决策记录在 [docs/adr/](docs/adr/)（每条都写了被否决的方案），

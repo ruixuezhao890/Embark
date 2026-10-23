@@ -1,7 +1,7 @@
 # 原理篇（concepts）：框架是怎么跑起来的
 
 > **这一层回答"为什么"**。读完你就能判断"我这么写对不对"，也能看懂框架内部的取舍。
-> 要动手做事去 [../guides/](../guides/quickstart.md)；要查具体数字去 [../reference/](../reference/hooks-and-api.md)。
+> 要动手做事去 [../guides/](../guides/getting-started.md)；要查具体数字去 [../reference/](../reference/hooks-and-api.md)。
 
 ---
 
@@ -86,7 +86,7 @@ flowchart TD
 
 ### 主线二：消息 —— App 之间怎么说话
 
-[messages-and-background.md](messages-and-background.md)：总线广播（同任务）与收件箱信封（跨任务）
+[app-lifecycle.md](app-lifecycle.md)：总线广播（同任务）与收件箱信封（跨任务）
 两条路、消息类型怎么定义、三种后台策略怎么选（含判据表）；后台现在是显式申请的例外（[ADR 0015](../adr/0015-app-retention-and-refresh.md)）。
 
 ### 主线三：可移植性 —— 换一块板子要动什么
@@ -111,7 +111,7 @@ flowchart TD
 
 | 你想知道 | 去哪 |
 | --- | --- |
-| 先跑起来看一眼 | [../guides/quickstart.md](../guides/quickstart.md) |
+| 先跑起来看一眼 | [../guides/getting-started.md](../guides/getting-started.md) |
 | 加一个自己的 App | [../guides/new-app-guide.md](../guides/new-app-guide.md) |
 | 这个钩子到底什么时候被调 | [../reference/hooks-and-api.md](../reference/hooks-and-api.md) §1 |
 | 容量上限是多少、改它会怎样 | [../reference/limits.md](../reference/limits.md) |

@@ -2,7 +2,7 @@
 
 > 目标读者：App 壳已经能跑，需要"收到某条消息就换一种行为"的开发者（人，或 agent）。
 > 本文只讲 `etl::fsm` 怎么接进 App 契约。消息本身（类型定义、`publish` / `post`、收件箱信封）
-> 见 [concepts/messages-and-background.md](../concepts/messages-and-background.md)；
+> 见 [concepts/app-lifecycle.md](../concepts/app-lifecycle.md) §6（消息）；
 > 后台策略怎么选见同篇；"状态表达不绑任何范式"的定调见
 > [adr/0004-background-tick-and-state-policy.md](../adr/0004-background-tick-and-state-policy.md)。
 > 本文的示例代码已实测**编译 + 运行通过**：`g++ -std=c++17 -Wall -Wextra -Wpedantic -fno-exceptions
@@ -193,7 +193,7 @@ class LampApp final : public embark::App {
 7. **`etl::fsm` 的构造参数是 router id** —— 只有真把它挂到 `etl::message_bus` 上时才必须唯一；
    走 `onMessage` 转投时给 `0` 即可。
 8. **别在 `on_event` / `on_enter_state` 里做耗时活** —— `receive()` 在调用它的那条路径上同步跑；
-   从 `onBackgroundTick` 喂事件时，它就在唯一 UI 任务里（`tick` 策略，见 messages-and-background.md）。**今天全仓没有 App 声明后台体**，所以这份样板读作「将来真需要后台时怎么做」；纯前台时序改用 `onForegroundTick`（[ADR 0015](../adr/0015-app-retention-and-refresh.md)）。
+   从 `onBackgroundTick` 喂事件时，它就在唯一 UI 任务里（`tick` 策略，见 [app-lifecycle.md](../concepts/app-lifecycle.md) §6）。**今天全仓没有 App 声明后台体**，所以这份样板读作「将来真需要后台时怎么做」；纯前台时序改用 `onForegroundTick`（[ADR 0015](../adr/0015-app-retention-and-refresh.md)）。
 
 ## 6. 验收清单
 

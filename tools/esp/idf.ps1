@@ -3,7 +3,7 @@ tools/esp/idf.ps1 —— 真机构建/烧录的一层薄壳：注入 ESP-IDF 环
 
 为什么需要它：IDF 那套环境变量每次都得重新注入（道理见 platform/esp32/README.md §3），
 手打十几行容易漏一个，然后 CMake 挑到 PATH 里 Rust 的 esp 工具链报「Tool doesn't match」。
-开发台面板调的就是这个脚本；你在命令行里也能直接用它，参数与 idf.py 一一对应。
+在命令行里直接用它，参数与 idf.py 一一对应（App 管理台不管烧录，这条路只有命令行）。
 
   pwsh -NoProfile -File tools/esp/idf.ps1 -Task build
   pwsh -NoProfile -File tools/esp/idf.ps1 -Task flash -Port COM3

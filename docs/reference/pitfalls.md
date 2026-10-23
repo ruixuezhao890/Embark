@@ -36,9 +36,11 @@ struct BrightnessMessage : public embark::MessageT<0x21> {  // 有基类！
 
 ## kernel 里没有异常，也没有堆
 
-- 内核与 App 默认 `-fno-exceptions -fno-rtti`、零堆分配：`throw` 编不过，
-  `new` 会编不过或必须走静态池。失败用 `embark::Error` /
-  `etl::expected`（`unexpected(...)` 便捷函数）。
+- 内核与 App 默认 `-fno-exceptions -fno-rtti`、零堆分配：`throw` **真的编不过**
+  （`-fno-exceptions`），但 `new` 没有链接期/运行期拦截——拦住它的是
+  零堆纪律与零分配审计测试（`tests/kernel/test_zero_alloc.cpp`），不是编译器。
+  换句话说：违反这一点不会当场报错，只会在别的地方坏。
+  失败用 `embark::Error` / `etl::expected`（`unexpected(...)` 便捷函数）。
 - `tests` 目标没有这些限制（才能装全局 new 计数钩子做零分配审计，
   见 `tests/detail/zero_alloc_hooks.cpp`）；那是测试专用，不要照抄进内核。
 - 宿主 LVGL 的堆由 `platform/host/host_lvgl_mem.cpp` 显式配置；
@@ -271,3 +273,12 @@ REQUIRES 时用它跑一遍各组件 CMakeLists）：
 - **`sizeof` 带命名空间的类型名要当心**：`sizeof std::int16_t` 在 GCC 15（MinGW）报
   `error: expected primary-expression before ',' token`（被当成表达式解析）。写 `sizeof(buf[0])`
   或 `sizeof(std::int16_t)` 加括号。
+
+## 烧真机 / 看串口（从旧的网页面板文档里搬过来）
+
+- **真机没有画面回传**：宿主 `embark_host_ui` 的实时图是宿主自己的画面，真机画面只能看板子本身
+  （串口传 240×320 一帧要好几秒，不值得做）。
+- **串口是独占的**：烧录前先停掉正在读串口的进程，否则打不开口；反过来也别一边烧一边挂着监视。
+- **串口里的中文显示成 `???`**：这是固件侧日志的编码问题，不是转发把字吃了。
+- **端口要选对**：本机实测板子是 `COM3`（USB-Serial/JTAG），另一个 `COM9` 是 CH340 ——
+  接到它上面只会得到 `No serial data received`。

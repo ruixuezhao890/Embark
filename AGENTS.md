@@ -18,15 +18,15 @@
 见 ADR 0019 与 `.scratch/app-platform/spec.md`。
 
 **改了工具或开关，就跑一次 `node tools/check_docs.mjs`。** 它检查文档里的路径 / `embark_host_ui`
-开关 / 脚本参数 / 锚注释还对不对得上。这个仓库栽过一次：工具早换了，`quickstart.md` 还在教旧做法 ——
+开关 / 脚本参数 / 锚注释还对不对得上。这个仓库栽过一次：工具早换了，入门文档还在教旧做法 ——
 过期的指路比缺文档更害人，因为读者会照着做。
 
 ## Agent skills
 
 ### Issue tracker
 
-Issues live as markdown files under `.scratch/<feature>/` in this repo. See `docs/agents/issue-tracker.md`.
+Issues live as markdown files under `.scratch/<feature>/` in this repo. See `docs/agents/README.md` §2.
 
 ### Domain docs
 
-Single-context layout: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context layout: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/README.md` §1.

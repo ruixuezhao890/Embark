@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>App 管理台</title>
+<style>
+:root {
+  --bg: #0e1014;
+  --panel: #161a21;
+  --panel-2: #1c212a;
+  --line: #262c37;
+  --fg: #e7eaf0;
+  --dim: #98a1b0;
+  --accent: #5b8cff;
+  --ok: #3fb950;
+  --bad: #f85149;
+  --warn: #d9a039;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", Roboto, sans-serif;
+  padding: 20px 22px 60px;
+  max-width: 1180px;
+}
+h1 { font-size: 19px; margin: 0 0 2px; letter-spacing: .3px; }
+h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+.sub, .hint, .dim { color: var(--dim); }
+.sub { margin: 0; font-size: 12.5px; }
+header { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; justify-content: space-between; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.chip {
+  font: 12px/1.5 var(--mono);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  padding: 3px 8px; color: var(--dim); max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chip b { color: var(--fg); font-weight: 500; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0 4px; }
+button {
+  font: inherit; font-size: 13px; color: var(--fg); background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: 7px; padding: 6px 12px; cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: #3a4457; background: #222936; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary { background: #24446f; border-color: #2f5c96; }
+button.primary:hover:not(:disabled) { background: #2a5085; }
+button.danger { border-color: #6b2b28; color: #ffb3ae; }
+button.danger:hover:not(:disabled) { background: #3a1d1b; }
+button.small { padding: 3px 9px; font-size: 12px; }
+.card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; margin-top: 14px;
+}
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+td.mono, .mono { font-family: var(--mono); font-size: 12.5px; }
+.badge { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11.5px; border: 1px solid var(--line); }
+.badge.full { color: var(--ok); border-color: #24492c; background: #17281b; }
+.badge.part { color: var(--warn); border-color: #4a3a17; background: #2a2314; }
+.badge.none { color: var(--bad); border-color: #4d2422; background: #2b1917; }
+.badge.muted { color: var(--dim); }
+.actions { display: flex; gap: 6px; justify-content: flex-end; }
+form { display: grid; grid-template-columns: 150px 1fr; gap: 10px 14px; align-items: start; max-width: 800px; }
+form label { color: var(--dim); font-size: 13px; padding-top: 6px; }
+input[type=text], select {
+  font: inherit; font-size: 13px; color: var(--fg); background: #10141a;
+  border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; width: 100%; max-width: 360px;
+}
+input[type=text]:focus, select:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+.field-note { grid-column: 2; font-size: 12px; color: var(--dim); margin-top: -4px; }
+.field-note.bad { color: var(--bad); }
+.field-note.warn { color: var(--warn); }
+.check { display: flex; gap: 8px; align-items: center; color: var(--fg); font-size: 13px; }
+.check input { accent-color: var(--accent); }
+.form-actions { grid-column: 2; display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+pre {
+  background: #0c0f14; border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px; overflow: auto; font: 12.5px/1.55 var(--mono); margin: 0;
+  max-height: 420px; white-space: pre;
+}
+#log { max-height: 320px; min-height: 90px; }
+.log-line { display: block; white-space: pre-wrap; word-break: break-word; }
+.log-line .tag { color: var(--dim); margin-right: 8px; }
+.log-line.error, .log-line.warn { color: #ffb3ae; }
+.log-line.panel { color: #9fd0ff; }
+.entry { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+.entry-head {
+  font-size: 12.5px; padding: 6px 10px; background: var(--panel-2); border-bottom: 1px solid var(--line);
+}
+.entry-head .mark { font-family: var(--mono); font-weight: 700; margin-right: 6px; }
+.entry-head .mark.ins { color: var(--ok); }
+.entry-head .mark.del { color: var(--bad); }
+.entry pre { border: none; border-radius: 0; max-height: 260px; }
+ol.guide { margin: 0; padding-left: 22px; }
+ol.guide li { margin-bottom: 8px; }
+ol.guide code, .kbd { font-family: var(--mono); background: #10141a; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font-size: 12.5px; }
+.result-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 0; }
+.hidden { display: none !important; }
+a { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>App 管理台</h1>
+    <p class="sub">加 / 退 App、导出屏、构建宿主。实时画面、点画面、烧录在命令行（见 docs/guides/tools.md）。</p>
+  </div>
+  <div class="chips" id="chips"><span class="chip">读状态…</span></div>
+</header>
+
+<div class="toolbar">
+  <button id="btn-refresh">刷新状态</button>
+  <button id="btn-designer">打开设计器</button>
+  <button id="btn-export">导出屏</button>
+  <button id="btn-build">构建宿主</button>
+  <span class="hint" id="busy-hint"></span>
+</div>
+
+<section class="card">
+  <h2>App 一览 <span class="hint">（真相源：app/*/&lt;名&gt;_app.cpp + 三处登记 + .aid 里的屏）</span></h2>
+  <table>
+    <thead>
+      <tr>
+        <th>App</th><th>类名</th><th>标题</th><th>图标</th>
+        <th>宿主</th><th>真机</th><th>屏</th><th></th>
+      </tr>
+    </thead>
+    <tbody id="app-rows"><tr><td colspan="8" class="dim">读状态…</td></tr></tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>新建 App</h2>
+  <form id="form-new" autocomplete="off">
+    <label for="f-name">App 名</label>
+    <input type="text" id="f-name" placeholder="music_second" spellcheck="false">
+    <div class="field-note" id="name-note">小写字母开头，只含小写字母 / 数字 / 下划线；不能以 _sub 结尾（那是子页屏名的保留后缀）。</div>
+
+    <label for="f-title">中文标题</label>
+    <input type="text" id="f-title" placeholder="音乐二">
+    <div class="field-note" id="title-note">主屏磁贴的标签宽 = 磁贴宽，一行约 3 个汉字；超了会被裁且不报错，建议 ≤5 个字。</div>
+
+    <label for="f-icon">图标</label>
+    <select id="f-icon"></select>
+    <div class="field-note">建完想换，改 <code>&lt;名&gt;_app.h</code> 里的 icon()。</div>
+
+    <label>登记</label>
+    <div>
+      <label class="check"><input type="checkbox" id="f-device" checked>
+        真机也登记（cmake 的 DEVICE 清单 + platform/esp32/project/main/main.cpp）</label>
+      <div class="field-note">不勾就只做宿主。勾了以后真机磁贴和宿主一致。</div>
+    </div>
+
+    <label>建完顺手</label>
+    <div>
+      <label class="check"><input type="checkbox" id="f-export" checked> 导出屏（tools/aidogui/export.ps1，会先清空 export/）</label>
+      <label class="check"><input type="checkbox" id="f-build" checked> 构建宿主（cmake --target embark_host_ui，确认编得过）</label>
+    </div>
+
+    <div class="form-actions">
+      <button type="button" id="btn-plan">看计划</button>
+      <button type="button" class="primary" id="btn-create">建它</button>
+      <span class="hint" id="form-hint"></span>
+    </div>
+  </form>
+</section>
+
+<section class="card hidden" id="plan-card">
+  <h2 id="plan-title">计划预览</h2>
+  <div id="plan-body"></div>
+</section>
+
+<section class="card">
+  <h2>画界面这三条别记错</h2>
+  <ol class="guide">
+    <li><b>屏名必须 == App 名。</b>设计器里那块屏叫 <code>music_second</code>，App 就叫 <code>music_second</code> —— 名字对不上，代码生成时找不到屏。</li>
+    <li><b><code>app/aidogui_ui/export/</code> 不许手改。</b>它是导出生成的，每次导出先清空再重建；要改界面就改 <code>.aid</code>（设计器或 <code>html_to_aid.mjs</code>），然后重新导出。</li>
+    <li><b>返回键挂 <code>embark_ui_open_launcher</code>。</b>占位屏抄的就是这个；换成别的函数会让「返回」回不到主屏。</li>
+  </ol>
+  <p class="hint" style="margin:12px 0 0">新 App 的占位屏已经补进 <code>.aid</code> 了（抄 album 那块，7 个控件）。要真画界面：点上面的「打开设计器」。</p>
+</section>
+
+<section class="card">
+  <h2>日志 <span class="hint">（导出、构建、脚本输出都在这；一个时刻只跑一个任务）</span></h2>
+  <pre id="log"></pre>
+</section>
+
+<script>
+"use strict";
+
+var ICONS = [
+  "LV_SYMBOL_FILE", "LV_SYMBOL_AUDIO", "LV_SYMBOL_IMAGE", "LV_SYMBOL_HOME", "LV_SYMBOL_SETTINGS",
+  "LV_SYMBOL_REFRESH", "LV_SYMBOL_TINT", "LV_SYMBOL_WIFI", "LV_SYMBOL_PLAY", "LV_SYMBOL_LIST",
+  "LV_SYMBOL_BELL", "LV_SYMBOL_GPS", "LV_SYMBOL_CALL", "LV_SYMBOL_ENVELOPE", "LV_SYMBOL_CALENDAR",
+  "LV_SYMBOL_CLOCK", "LV_SYMBOL_DRIVE", "LV_SYMBOL_SD_CARD", "LV_SYMBOL_USB", "LV_SYMBOL_VIDEO",
+  "LV_SYMBOL_EDIT", "LV_SYMBOL_TRASH", "LV_SYMBOL_PLUS", "LV_SYMBOL_LEFT", "LV_SYMBOL_RIGHT",
+  "LV_SYMBOL_EYE_OPEN", "LV_SYMBOL_WARNING", "LV_SYMBOL_POWER", "LV_SYMBOL_KEYBOARD", "LV_SYMBOL_SAVE"
+];
+
+var SCREEN_LABEL = {
+  missing: "没有", empty: "空屏", placeholder: "占位屏", designed: "已设计", unknown: "读不到"
+};
+
+var state = null;
+var busy = false;
+
+function $(id) { return document.getElementById(id); }
+
+function esc(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function api(path, body) {
+  var options = { method: "POST", headers: { "Content-Type": "application/json" } };
+  if (body) options.body = JSON.stringify(body);
+  return fetch(path, options).then(function (response) {
+    return response.json().then(function (json) {
+      json.__status = response.status;
+      return json;
+    });
+  });
+}
+
+function setBusy(value) {
+  busy = !!value;
+  $("btn-refresh").disabled = busy;
+  $("btn-designer").disabled = busy;
+  $("btn-export").disabled = busy;
+  $("btn-build").disabled = busy;
+  $("btn-create").disabled = busy;
+  $("btn-plan").disabled = busy;
+  $("busy-hint").textContent = busy ? "有任务在跑，等它结束…" : "";
+}
+
+/* --- 状态 ----------------------------------------------------------------- */
+
+function loadState() {
+  return fetch("/api/state").then(function (r) { return r.json(); }).then(function (data) {
+    if (!data.ok) {
+      $("chips").innerHTML = '<span class="chip">读状态失败：' + esc(data.error || "") + '</span>';
+      return;
+    }
+    state = data;
+    renderChips(data);
+    renderTable(data);
+    setBusy(data.busy);
+  }).catch(function (error) {
+    $("chips").innerHTML = '<span class="chip">读状态失败：' + esc(error.message) + '</span>';
+  });
+}
+
+function renderChips(data) {
+  var chips = [];
+  chips.push("<span class=\"chip\">端口 <b>" + esc(data.port) + "</b></span>");
+  chips.push("<span class=\"chip\" title=\"" + esc(data.repo) + "\">仓库 <b>" + esc(shortRepo(data.repo)) + "</b></span>");
+  var aid = data.aid || {};
+  chips.push("<span class=\"chip\" title=\"" + esc(aid.path || "") + "\">界面工程 <b>"
+    + esc(aid.rel || "?") + "</b> "
+    + (aid.ok ? esc((aid.screens || []).length) + " 块屏" : "<b style=\"color:var(--bad)\">读不到</b>")
+    + "</span>");
+  var designer = data.designer || {};
+  chips.push("<span class=\"chip\" title=\"" + esc(designer.exe || "") + "\">设计器 "
+    + (designer.ok ? "<b>找到了</b>" : "<b style=\"color:var(--warn)\">没找到</b>") + "</span>");
+  $("chips").innerHTML = chips.join("");
+}
+
+function shortRepo(repo) {
+  var text = String(repo || "");
+  var parts = text.split(/[\\/]/).filter(function (part) { return part.length > 0; });
+  if (parts.length <= 2) return text;
+  return "…" + parts.slice(-2).join("/");
+}
+
+function badge(done, total) {
+  var cls = done === 0 ? "none" : (done === total ? "full" : "part");
+  return '<span class="badge ' + cls + '">' + done + "/" + total + "</span>";
+}
+
+function screenBadge(screen) {
+  var label = SCREEN_LABEL[screen.state] || screen.state;
+  var cls = screen.state === "designed" ? "full"
+    : (screen.state === "missing" || screen.state === "unknown" ? "none" : "part");
+  var count = screen.widgets ? " (" + screen.widgets + ")" : "";
+  return '<span class="badge ' + cls + '" title="' + esc(screen.state) + '">' + esc(label) + count + "</span>";
+}
+
+function renderTable(data) {
+  var rows = (data.apps || []).map(function (app) {
+    var missing = (app.registrations || []).filter(function (item) { return !item.present; });
+    var title = missing.length === 0 ? "登记齐了" : "缺：" + missing.map(function (item) { return item.label; }).join("、");
+    var actions = app.protected
+      ? '<span class="dim">主屏，不给删</span>'
+      : '<button class="small" data-plan="' + esc(app.name) + '">计划</button>'
+        + '<button class="small danger" data-del="' + esc(app.name) + '">退掉</button>';
+    return "<tr>"
+      + '<td class="mono">' + esc(app.name) + "</td>"
+      + '<td class="mono dim">' + esc(app.pascal) + "</td>"
+      + "<td>" + esc(app.title) + "</td>"
+      + '<td class="mono">' + esc(app.icon) + "</td>"
+      + '<td title="' + esc(title) + '">' + badge(app.host.done, app.host.total) + "</td>"
+      + "<td>" + badge(app.device.done, app.device.total) + "</td>"
+      + "<td>" + screenBadge(app.screen) + "</td>"
+      + '<td><div class="actions">' + actions + "</div></td>"
+      + "</tr>";
+  });
+  $("app-rows").innerHTML = rows.length > 0 ? rows.join("") : '<tr><td colspan="8" class="dim">一个 App 都没读到</td></tr>';
+  Array.prototype.forEach.call(document.querySelectorAll("[data-plan]"), function (button) {
+    button.addEventListener("click", function () {
+      showPlan({ mode: "create", name: button.getAttribute("data-plan") });
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-del]"), function (button) {
+    button.addEventListener("click", function () {
+      var name = button.getAttribute("data-del");
+      showPlan({ mode: "delete", name: name });
+      $("plan-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  });
+}
+
+/* --- 计划预览 ------------------------------------------------------------- */
+
+function entriesHtml(edits) {
+  if (!edits || edits.length === 0) return '<p class="dim">没有要改的登记。</p>';
+  return edits.map(function (entry) {
+    var mark = entry.kind === "insert" ? "+" : "-";
+    var lines = [];
+    (entry.before || []).forEach(function (line) { lines.push("  " + line); });
+    (entry.lines || []).forEach(function (line) { lines.push(mark + " " + line); });
+    (entry.after || []).forEach(function (line) { lines.push("  " + line); });
+    return '<div class="entry">'
+      + '<div class="entry-head"><span class="mark ' + (entry.kind === "insert" ? "ins" : "del") + '">'
+      + mark + "</span>" + esc(entry.rel) + " · " + esc(entry.label)
+      + ' <span class="dim">第 ' + esc(entry.line) + " 行</span></div>"
+      + "<pre>" + esc(lines.join("\n")) + "</pre>"
+      + "</div>";
+  }).join("");
+}
+
+function screenHtml(screen) {
+  if (!screen) return "";
+  var action = screen.action;
+  var text;
+  if (action === "no_aid") text = "没读到 .aid，屏这一步跳过。";
+  else if (action === "exists") text = "已经有一块叫 " + screen.name + " 的屏（" + screen.widgets + " 个控件）—— 不动它。";
+  else if (action === "fill_empty") text = ".aid 里已有一块空屏 —— 把 " + screen.template + " 那套 " + screen.widgets + " 个控件填进去。";
+  else if (action === "insert") text = "要加一张屏：抄 " + screen.template + " 那块占位屏的 " + screen.widgets + " 个控件，id 前缀换成 " + screen.name + "_。";
+  else if (action === "absent") text = "本来就没有这块屏 —— 没什么要撤的。";
+  else if (action === "keep") text = "那块屏有 " + screen.widgets + " 个控件，不是你当初抄出来的占位屏（看着改过了）—— 不动它，要删只能在设计器里删。";
+  else if (action === "remove_empty") text = "要删那张空屏。";
+  else if (action === "remove_placeholder") text = "要删那张仍是占位屏的屏。";
+  else text = esc(JSON.stringify(screen));
+  return '<p><span class="dim">界面工程（' + esc(screen.rel) + "）：</span>" + esc(text) + "</p>";
+}
+
+function showPlan(body) {
+  $("plan-card").classList.remove("hidden");
+  $("plan-title").textContent = (body.mode === "delete" ? "退出计划：" : "新建计划：") + body.name;
+  $("plan-body").innerHTML = '<p class="dim">算计划中…</p>';
+  return api("/api/plan", body).then(function (plan) {
+    if (plan.ok === false) {
+      $("plan-body").innerHTML = '<p style="color:var(--bad)">' + esc(plan.error || "计划失败") + '</p>';
+      return plan;
+    }
+    var html = [];
+    if (plan.mode === "delete") {
+      html.push('<p>要删的目录：<span class="mono">' + esc(plan.dir) + "</span>（整个目录）</p>");
+      html.push("<h3 style=\"font-size:13px;margin:14px 0 6px\">要撤的登记（" + plan.edits.length + " 行）</h3>");
+      html.push(entriesHtml(plan.edits));
+      if (plan.absent && plan.absent.length > 0) {
+        html.push('<p class="dim">它本来就没有的登记（老 App 允许）：' + esc(plan.absent.join("；")) + "</p>");
+      }
+      html.push(screenHtml(plan.screen));
+      html.push('<div class="form-actions" style="margin-top:14px;grid-column:auto">'
+        + '<input type="text" id="del-confirm" placeholder="想好了就再敲一遍 ' + esc(body.name) + '" style="max-width:260px">'
+        + '<button class="danger" id="btn-delete">确认删掉 ' + esc(body.name) + "</button>"
+        + "</div>");
+      $("plan-body").innerHTML = html.join("");
+      $("btn-delete").addEventListener("click", function () {
+        var typed = ($("del-confirm").value || "").trim();
+        if (typed !== body.name) {
+          $("del-confirm").focus();
+          $("del-confirm").style.borderColor = "var(--bad)";
+          return;
+        }
+        runApply({ mode: "delete", name: body.name }, body.name);
+      });
+      return plan;
+    }
+    html.push('<p><span class="mono">' + esc(plan.app.name) + "</span> → 类 <span class=\"mono\">"
+      + esc(plan.app.pascal) + "</span>，标题「" + esc(plan.app.title) + "」，图标 <span class=\"mono\">"
+      + esc(plan.app.icon) + "</span>，" + (plan.app.device ? "真机也登记" : "只做宿主") + "</p>");
+    html.push("<h3 style=\"font-size:13px;margin:14px 0 6px\">要写的文件（" + plan.files.length + " 个）</h3><p class=\"mono\">"
+      + plan.files.map(function (file) { return esc(file.rel) + "（" + file.lines + " 行）"; }).join("<br>") + "</p>");
+    html.push("<h3 style=\"font-size:13px;margin:14px 0 6px\">要登记的位置（" + plan.edits.length + " 行）</h3>");
+    html.push(entriesHtml(plan.edits));
+    html.push(screenHtml(plan.screen));
+    if (plan.next && plan.next.length > 0) {
+      html.push('<p class="dim">建完还有：</p><ol class="guide dim">'
+        + plan.next.map(function (line) { return "<li>" + esc(line) + "</li>"; }).join("") + "</ol>");
+    }
+    html.push('<div class="form-actions" style="margin-top:14px;grid-column:auto">'
+      + '<button class="primary" id="btn-commit">就按这个建</button></div>');
+    $("plan-body").innerHTML = html.join("");
+    $("btn-commit").addEventListener("click", function () {
+      runApply(readForm("create"), body.name);
+    });
+    return plan;
+  });
+}
+
+/* --- 执行 ----------------------------------------------------------------- */
+
+function readForm(mode) {
+  var steps = [];
+  if ($("f-export").checked) steps.push("export");
+  if ($("f-build").checked) steps.push("build");
+  return {
+    mode: mode === "delete" ? "delete" : "create",
+    name: ($("f-name").value || "").trim(),
+    title: ($("f-title").value || "").trim(),
+    icon: $("f-icon").value,
+    device: $("f-device").checked,
+    steps: steps
+  };
+}
+
+function runApply(body, name) {
+  if (!body.name) { $("form-hint").textContent = "先填 App 名"; return; }
+  setBusy(true);
+  $("form-hint").textContent = "跑着…（日志在下面）";
+  api("/api/apply", body).then(function (result) {
+    setBusy(false);
+    $("form-hint").textContent = "";
+    var html = [];
+    if (result.ok) {
+      html.push('<p style="color:var(--ok)">' + (result.mode === "delete" ? "退掉了 " : "建好了 ") + esc(name) + "</p>");
+    } else {
+      html.push('<p style="color:var(--bad)">' + esc(result.error || "没成功（看日志最后几行）") + "</p>");
+    }
+    if (result.steps && result.steps.length > 0) {
+      html.push('<div class="result-row">' + result.steps.map(function (step) {
+        var label = step.step === "export" ? "导出屏" : "构建宿主";
+        return '<span class="badge ' + (step.ok ? "full" : "none") + '">'
+          + esc(label) + (step.ok ? " 通过" : " 失败" + (step.code !== undefined ? "（" + step.code + "）" : "")) + "</span>";
+      }).join("") + "</div>");
+    }
+    $("plan-body").innerHTML = html.join("");
+    loadState();
+  }).catch(function (error) {
+    setBusy(false);
+    $("form-hint").textContent = "请求失败：" + error.message;
+  });
+}
+
+function simpleTask(path, label) {
+  setBusy(true);
+  $("busy-hint").textContent = label + "…";
+  api(path, {}).then(function (result) {
+    setBusy(false);
+    if (!result.ok) {
+      var detail = result.error || ((result.steps && result.steps[0] && result.steps[0].error) || "失败");
+      logLine("error", label + "失败：" + detail);
+    } else {
+      logLine("panel", label + "通过");
+    }
+    loadState();
+  }).catch(function (error) {
+    setBusy(false);
+    logLine("error", label + "请求失败：" + error.message);
+  });
+}
+
+/* --- 日志 ----------------------------------------------------------------- */
+
+var logEl = null;
+
+function logLine(channel, text) {
+  if (!logEl) logEl = $("log");
+  var line = document.createElement("span");
+  line.className = "log-line " + channel;
+  var tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = channel;
+  line.appendChild(tag);
+  line.appendChild(document.createTextNode(text));
+  logEl.appendChild(line);
+  var lines = logEl.querySelectorAll(".log-line");
+  if (lines.length > 900) lines[0].remove();
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function subscribe() {
+  var source = new EventSource("/api/events");
+  source.onmessage = function (event) {
+    try {
+      var entry = JSON.parse(event.data);
+      logLine(entry.channel, entry.text);
+    } catch (error) {
+      logLine("panel", event.data);
+    }
+  };
+  source.onerror = function () {
+    logLine("panel", "日志连接断了，浏览器会自己重连…");
+  };
+}
+
+/* --- 表单 ----------------------------------------------------------------- */
+
+function validateName() {
+  var name = ($("f-name").value || "").trim();
+  var note = $("name-note");
+  note.className = "field-note";
+  if (name === "") {
+    note.textContent = "小写字母开头，只含小写字母 / 数字 / 下划线；不能以 _sub 结尾。";
+    return true;
+  }
+  if (!/^[a-z][a-z0-9_]*$/.test(name)) {
+    note.className = "field-note bad";
+    note.textContent = "只能小写字母开头，后面是小写字母 / 数字 / 下划线 —— " + name + " 不行";
+    return false;
+  }
+  if (/_sub$/.test(name)) {
+    note.className = "field-note bad";
+    note.textContent = "不能以 _sub 结尾（那是子页屏名的保留后缀）";
+    return false;
+  }
+  if (state && (state.apps || []).some(function (app) { return app.name === name; })) {
+    note.className = "field-note bad";
+    note.textContent = "app/" + name + " 已经存在 —— 不覆盖";
+    return false;
+  }
+  note.textContent = "可以：" + name + "（类名 " + pascalOf(name) + "）";
+  return true;
+}
+
+function pascalOf(name) {
+  return name.split("_").filter(function (part) { return part.length > 0; })
+    .map(function (part) { return part.charAt(0).toUpperCase() + part.slice(1); })
+    .join("") + "App";
+}
+
+function validateTitle() {
+  var title = ($("f-title").value || "").trim();
+  var note = $("title-note");
+  note.className = "field-note";
+  var length = Array.from(title).length;
+  if (length > 5) {
+    note.className = "field-note warn";
+    note.textContent = "「" + title + "」有 " + length + " 个字：主屏标签一行约 3 个汉字，超了会被裁。";
+  } else {
+    note.textContent = "主屏磁贴的标签宽 = 磁贴宽，一行约 3 个汉字；超了会被裁且不报错，建议 ≤5 个字。";
+  }
+}
+
+/* --- 启动 ----------------------------------------------------------------- */
+
+function boot() {
+  $("f-icon").innerHTML = ICONS.map(function (icon) {
+    return '<option value="' + esc(icon) + '"' + (icon === "LV_SYMBOL_FILE" ? " selected" : "") + ">" + esc(icon) + "</option>";
+  }).join("");
+
+  $("f-name").addEventListener("input", validateName);
+  $("f-title").addEventListener("input", validateTitle);
+  $("btn-refresh").addEventListener("click", loadState);
+  $("btn-designer").addEventListener("click", function () {
+    api("/api/designer", {}).then(function (result) {
+      logLine(result.ok ? "panel" : "error", result.ok
+        ? "已开设计器：" + result.exe
+        : "打不开设计器：" + result.error);
+    }).catch(function (error) { logLine("error", "请求失败：" + error.message); });
+  });
+  $("btn-export").addEventListener("click", function () { simpleTask("/api/export", "导出屏"); });
+  $("btn-build").addEventListener("click", function () { simpleTask("/api/build", "构建宿主"); });
+
+  $("btn-plan").addEventListener("click", function () {
+    if (!validateName()) return;
+    showPlan(readForm("create"));
+    $("plan-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+  $("btn-create").addEventListener("click", function () {
+    if (!validateName()) return;
+    var body = readForm("create");
+    if (!body.name) return;
+    runApply(body, body.name);
+  });
+  $("form-new").addEventListener("submit", function (event) { event.preventDefault(); });
+
+  subscribe();
+  loadState();
+}
+
+boot();
+</script>
+</body>
+</html>

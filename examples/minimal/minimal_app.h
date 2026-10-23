@@ -13,7 +13,7 @@
  *   - onExit            关机路径（v1 只有这一条路径会触发）
  *
  * 后台策略用默认值（suspend）：这个例子不需要后台跑。要后台节拍就覆写 settings()，
- * 见 app/clock/clock_app.h 与 docs/concepts/messages-and-background.md。
+ * 见 app/clock/clock_app.h 与 docs/concepts/app-lifecycle.md。
  *
  * 界面文字用 ASCII：LVGL 内置字体只含 ASCII，中文要自己生成字体子集
  * （tools/font/gen_font.mjs，见 docs/guides/tools.md）。

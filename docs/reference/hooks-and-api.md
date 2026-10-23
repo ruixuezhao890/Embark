@@ -44,7 +44,7 @@
 
 ### 后台周期是帧粒度
 
-`ceil(period_ms / ui_loop_period_ms)` 个帧——宿主 5 ms 一拍（`config/embark_limits.h:85`）。
+`ceil(period_ms / ui_loop_period_ms)` 个帧——宿主 5 ms 一拍（`ui_loop_period_ms`，`config/embark_limits.h:91`）。
 所以 `period_ms = 100` 实际是 20 帧；宿主墙钟因 Windows 定时器粒度约 2×（见 spec §3）。
 
 ### 武装时机：为什么"声明了策略却一次都没跑"
@@ -67,7 +67,7 @@
 
 | 成员 | 签名 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `name` | `[[nodiscard]] virtual const char* name() const = 0` | 无（**必须实现**） | 注册表键；**必须与 AiDoGUI 屏名一致**（屏名约定）；同名会编译期报错 |
+| `name` | `[[nodiscard]] virtual const char* name() const = 0` | 无（**必须实现**） | 注册表键；**必须与 AiDoGUI 屏名一致**（屏名约定）。重名**没有**编译期检查，`find()` 是运行时 `strcmp` 线性查找、取第一个命中 |
 | `title` | `virtual const char* title() const` | `name()` | 给人看的名字 |
 | `icon` | `virtual const char* icon() const` | `nullptr` | `LV_SYMBOL_*`；空则用标题首字符兜底 |
 | `accent` | `virtual std::uint32_t accent() const` | `design_tokens::accent` | 强调色。**禁止魔法颜色值**，从 design tokens 取 |
@@ -104,7 +104,7 @@ E_FMT_DERIVE(struct AppSettings {
 
 **四字段写法照旧可用**（`arm` 有默认值）：`AppSettings{BackgroundPolicy::tick, 100U, 0U, 0U}`。
 
-三种策略的语义、怎么选，见 [concepts/messages-and-background.md](../concepts/messages-and-background.md) §「后台策略」。
+三种策略的语义、怎么选，见 [concepts/app-lifecycle.md](../concepts/app-lifecycle.md) §4「后台运行」与 §4.4「怎么申请后台」。
 
 ---
 

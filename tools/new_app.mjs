@@ -9,17 +9,25 @@
  *
  * 用法：
  *   node tools/new_app.mjs my_app --title 我的应用 --icon LV_SYMBOL_FILE   只看计划（dry-run，默认）
- *   node tools/new_app.mjs my_app --apply                                 真写文件 + 登记 4 处
- *   node tools/new_app.mjs --self-check                                   模板与 4 个锚点还认得出吗
- *   node tools/new_app.mjs my_app --delete --apply                         退掉一个 App（撤 5 行登记 + 删目录 + 撤那张占位屏）
+ *   node tools/new_app.mjs my_app --apply                                 真写文件 + 登记 7 行（宿主 4 + 真机 3）
+ *   node tools/new_app.mjs --self-check                                   模板与 6 个锚点还认得出吗
+ *   node tools/new_app.mjs --status                                       每个 App 的登记 / 屏 / 真机状态
+ *   node tools/new_app.mjs my_app --delete --apply                         退掉一个 App（撤登记 + 删目录 + 撤那张占位屏）
  *
  * 屏侧：.aid 里没有同名屏时，顺手插一张「占位屏」（复制仓库里 album 那块占位屏的形状：
  * 背景 + 返回键 + 标题 + 占位卡片）。这样 App 一建出来点进去就有页面，而不是一屏黑。
  * 屏代码仍由设计器导出（tools/aidogui/export.ps1），脚本不生成 C。
  *
- * 它不动另外三张 App 表（ui_tour.cpp / user_main.cpp / esp32 main.cpp 各有用途，不是所有 App 都该进）。
+ * 加一个 App 要动的面是六处：两个新文件 + 宿主源清单 + 真机源清单 + 宿主 App 表 +
+ * 真机 App 表（platform/esp32/project/main/main.cpp）+ 设计器导航入口 + .aid 里一张同名屏。
+ * --no-device 表示「只做宿主」，那两处真机登记就不动（真机的磁贴也就不会有它）。
+ *
+ * 给 tools/appconsole/（App 管理台）用的机器接口是 --json / --status：stdout 只有一段 JSON，
+ * 人看的那套打印全部跳过。管理台只做界面 + 起子进程 —— 登记逻辑只有这一份，别在那边再写一遍。
+ *
+ * 它不动 ui_tour.cpp / user_main.cpp 那两张表（各有用途，不是所有 App 都该进）。
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -32,7 +40,8 @@ const CMAKE_SOURCES = join(REPO_ROOT, 'cmake', 'embark_sources.cmake');
 const UI_DEMO = join(REPO_ROOT, 'platform', 'host', 'ui_demo.cpp');
 const UI_HOOKS = join(REPO_ROOT, 'app', 'common', 'aidogui_ui_hooks.h');
 const AID_DEFAULT = join(REPO_ROOT, 'app', 'aidogui_ui', 'screen.aid');
-const AID_STATE = join(REPO_ROOT, 'tools', 'devpanel', '.state.json');
+const ESP32_MAIN = join(REPO_ROOT, 'platform', 'esp32', 'project', 'main', 'main.cpp');
+const DESIGNER_EXE = 'AiDoGUIDesigner.exe';
 
 /* 占位屏抄谁：album 是仓库里那块「界面还没做」的占位屏（背景 + 返回键 + 标题 + 占位卡片）。 */
 const PLACEHOLDER_TEMPLATE_SCREEN = 'album';
@@ -40,11 +49,15 @@ const PLACEHOLDER_TEMPLATE_SCREEN = 'album';
 const USAGE = [
   '用法：',
   '  node tools/new_app.mjs <app名> [--title 中文名] [--icon LV_SYMBOL_X]   只看计划（dry-run，默认）',
-  '  node tools/new_app.mjs <app名> --apply                                真写文件 + 登记 5 行 + .aid 里补一张占位屏',
+  '  node tools/new_app.mjs <app名> --apply                                真写文件 + 登记 7 行 + .aid 里补一张占位屏',
   '  node tools/new_app.mjs <app名> --delete [--apply]                     退掉一个 App（撤登记 + 删目录 + 撤占位屏）',
+  '  node tools/new_app.mjs --status                                       每个 App 的登记 / 屏 / 真机状态',
   '  node tools/new_app.mjs --self-check                                   检查模板、锚点、.aid 占位屏还在',
   '',
-  '  --aid <文件>   目标 .aid（默认跟 tools/devpanel/.state.json 里记住的那份，否则 app/aidogui_ui/screen.aid）',
+  '  --device / --no-device  真机三处（cmake 的 DEVICE 清单 + platform/esp32/project/main/main.cpp 的头与表）：',
+  '                          默认登记；--no-device 只做宿主（真机上就没有它的磁贴）',
+  '  --aid <文件>            目标 .aid（默认 app/aidogui_ui/screen.aid）',
+  '  --json                  只往 stdout 打一段 JSON（App 管理台用）：计划 / 状态 / 错误都在里面',
   '',
   '规则：App 名 ^[a-z][a-z0-9_]*$，不能以 _sub 结尾（子页保留后缀），同名目录已存在则拒绝。',
 ].join('\n');
@@ -73,6 +86,8 @@ const REGISTRATION_ANCHORS = [
   [CMAKE_SOURCES, 'set(EMBARK_APP_SOURCES_DEVICE', 'cmake/embark_sources.cmake · EMBARK_APP_SOURCES_DEVICE'],
   [UI_DEMO, 'EMBARK_APP_TABLE(embark::demo::LauncherApp', 'platform/host/ui_demo.cpp · App 表'],
   [UI_HOOKS, '#define EMBARK_AIDOGUI_HOOK_APPS(X)', 'app/common/aidogui_ui_hooks.h · 打开 App 的 C 入口'],
+  [ESP32_MAIN, 'EMBARK_APP_TABLE(embark::demo::LauncherApp', 'platform/esp32/project/main/main.cpp · App 表'],
+  [ESP32_MAIN, '#include "weather_app.h"', 'platform/esp32/project/main/main.cpp · App 头'],
 ];
 
 /* 主屏不能删：启动器是磁贴的来源，删了就回不到桌面。 */
@@ -133,26 +148,38 @@ function relOf(target) {
 
 function resolveAidPath(options) {
   if (options.aid !== null) return { path: resolve(REPO_ROOT, options.aid), source: '命令行 --aid' };
-  try {
-    const remembered = JSON.parse(readFileSync(AID_STATE, 'utf8'));
-    if (remembered && typeof remembered.aid === 'string') {
-      const candidate = join(REPO_ROOT, remembered.aid);
-      if (existsSync(candidate)) {
-        return { path: candidate, source: 'tools/devpanel/.state.json 里记住的那份（开发台换过界面工程）' };
-      }
-    }
-  } catch (error) {
-    /* 没有 .state.json 就走默认，这里不该报错 */
-  }
   return { path: AID_DEFAULT, source: '默认' };
 }
 
+/* 设计器装在哪：与 tools/aidogui/export.ps1 同一套查找顺序（参数 → 环境变量 →
+   .aidogui-home → tools/aidogui/home.txt）。管理台要「用设计器打开」这个按钮，就靠它。 */
+function resolveDesigner() {
+  const candidates = [];
+  if (process.env.AIDOGUI_HOME) candidates.push({ dir: process.env.AIDOGUI_HOME, source: '$env:AIDOGUI_HOME' });
+  const files = [
+    [join(REPO_ROOT, '.aidogui-home'), '.aidogui-home'],
+    [join(REPO_ROOT, 'tools', 'aidogui', 'home.txt'), 'tools/aidogui/home.txt'],
+  ];
+  for (const [file, source] of files) {
+    if (!existsSync(file)) continue;
+    const first = readText(file).split(/\r?\n/).map((line) => line.trim()).find((line) => line !== '');
+    if (first) candidates.push({ dir: first, source });
+  }
+  for (const candidate of candidates) {
+    const exe = join(candidate.dir, DESIGNER_EXE);
+    if (existsSync(exe)) return { ok: true, exe: exe, home: candidate.dir, source: candidate.source, tried: [] };
+  }
+  return { ok: false, exe: null, home: null, source: null, tried: candidates.map((c) => c.dir) };
+}
+
 /* 拿不到 .aid 不算致命：App 的 C++ 薄壳照建，屏那一步打个招呼（加 --aid 指对位置就行）。 */
-function loadAidOrWarn(aidChoice) {
+function loadAidOrWarn(aidChoice, warnings) {
   try {
     return readAid(aidChoice.path);
   } catch (error) {
-    console.warn('提醒：' + error.message + ' —— 屏那一步跳过（App 薄壳照建）。');
+    const message = error.message + ' —— 屏那一步跳过（App 薄壳照建）。';
+    if (Array.isArray(warnings)) warnings.push(message);
+    else console.warn('提醒：' + message);
     return null;
   }
 }
@@ -316,6 +343,61 @@ function buildSource(app) {
   return doc + out;
 }
 
+/* 把一个 include 行插在已知锚点之后（新 App 追加在组尾，与 App 表的顺序同口径）。 */
+function addInclude(text, needle, line, where) {
+  requireIncludes(text, needle, where);
+  const at = text.indexOf(needle) + needle.length;
+  return text.slice(0, at) + '\n' + line + text.slice(at);
+}
+
+/* App 表项插在收尾括号前，缩进照抄收尾括号那一行（launcher 留在第一位）。 */
+function addToAppTable(text, app, where) {
+  const tableNeedle = 'EMBARK_APP_TABLE(embark::demo::LauncherApp';
+  requireIncludes(text, tableNeedle, where);
+  const tableAt = text.indexOf(tableNeedle);
+  const closeAt = text.indexOf(')', tableAt);
+  if (closeAt < 0) fail(where + ' 的 App 表没有收尾括号');
+  const closeLineStart = text.lastIndexOf('\n', closeAt) + 1;
+  const indent = text.slice(closeLineStart, closeAt).match(/^[ ]*/)[0];
+  return text.slice(0, closeAt) + ',\n' + indent + 'embark::demo::' + app.pascal + text.slice(closeAt);
+}
+
+/* 计划预览：把「刚插进去的那一行」找出来，连上下文两行一起报（不做完整 diff）。 */
+function insertEntry(rel, label, updatedText, needle, occurrence) {
+  const lines = updatedText.split('\n');
+  let seen = 0;
+  let at = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (lines[i].includes(needle)) {
+      seen += 1;
+      if (seen === occurrence) { at = i; break; }
+    }
+  }
+  if (at < 0) fail('计划预览找不到刚插进去的「' + needle + '」（' + rel + '）—— 脚本自己对不上，别信这份计划');
+  return {
+    rel: rel,
+    label: label,
+    kind: 'insert',
+    line: at + 1,
+    lines: [lines[at]],
+    before: lines.slice(Math.max(0, at - 2), at),
+    after: lines.slice(at + 1, at + 3),
+  };
+}
+
+function removeEntry(rel, label, oldText, index, removedLines) {
+  const lines = oldText.split('\n');
+  return {
+    rel: rel,
+    label: label,
+    kind: 'remove',
+    line: index + 1,
+    lines: removedLines || [lines[index]],
+    before: lines.slice(Math.max(0, index - 2), index),
+    after: lines.slice(index + 1, index + 3),
+  };
+}
+
 function planFor(app) {
   const srcLine = '        "${EMBARK_ROOT}/app/' + app.name + '/' + app.name + '_app.cpp"';
 
@@ -326,31 +408,32 @@ function planFor(app) {
   const anchorAt = cmakeText.indexOf(anchor);
   let cmakeOut = cmakeText.slice(0, anchorAt) + srcLine + '\n' + cmakeText.slice(anchorAt);
 
-  const devMarker = 'set(EMBARK_APP_SOURCES_DEVICE';
-  const devAt = cmakeOut.indexOf(devMarker);
-  if (devAt < 0) fail('cmake/embark_sources.cmake 里找不到 ' + devMarker);
-  const glueNeedle = 'app/common/aidogui_ui_nav.cpp"';
-  const glueAt = cmakeOut.indexOf(glueNeedle, devAt);
-  if (glueAt < 0) fail('EMBARK_APP_SOURCES_DEVICE 里找不到胶水源 ' + glueNeedle);
-  const glueLineStart = cmakeOut.lastIndexOf('\n', glueAt) + 1;
-  cmakeOut = cmakeOut.slice(0, glueLineStart) + srcLine + '\n' + cmakeOut.slice(glueLineStart);
+  /* ② 真机源清单：--no-device 时不动 */
+  if (app.device) {
+    const devMarker = 'set(EMBARK_APP_SOURCES_DEVICE';
+    const devAt = cmakeOut.indexOf(devMarker);
+    if (devAt < 0) fail('cmake/embark_sources.cmake 里找不到 ' + devMarker);
+    const glueNeedle = 'app/common/aidogui_ui_nav.cpp"';
+    const glueAt = cmakeOut.indexOf(glueNeedle, devAt);
+    if (glueAt < 0) fail('EMBARK_APP_SOURCES_DEVICE 里找不到胶水源 ' + glueNeedle);
+    const glueLineStart = cmakeOut.lastIndexOf('\n', glueAt) + 1;
+    cmakeOut = cmakeOut.slice(0, glueLineStart) + srcLine + '\n' + cmakeOut.slice(glueLineStart);
+  }
 
-  /* ③ 宿主与真机模拟器的 App 表（launcher 必须留在第一位）。两处：include + 表项 ——
+  /* ③ 宿主 App 表（launcher 必须留在第一位）。两处：include + 表项 ——
      App 表引用的是类名，头不可见就编不过。 */
-  let demoText = readText(UI_DEMO);
-  const includeNeedle = '#include "music/music_app.h"';
-  requireIncludes(demoText, includeNeedle, 'platform/host/ui_demo.cpp');
-  const includeAt = demoText.indexOf(includeNeedle) + includeNeedle.length;
-  demoText = demoText.slice(0, includeAt) + '\n#include "' + app.name + '/' + app.name + '_app.h"' + demoText.slice(includeAt);
-  const tableNeedle = 'EMBARK_APP_TABLE(embark::demo::LauncherApp';
-  requireIncludes(demoText, tableNeedle, 'platform/host/ui_demo.cpp');
-  const tableAt = demoText.indexOf(tableNeedle);
-  const closeAt = demoText.indexOf(')', tableAt);
-  if (closeAt < 0) fail('platform/host/ui_demo.cpp 的 App 表没有收尾括号');
-  const closeLineStart = demoText.lastIndexOf('\n', closeAt) + 1;
-  const indent = demoText.slice(closeLineStart, closeAt).match(/^[ ]*/)[0];
-  const tableItem = ',\n' + indent + 'embark::demo::' + app.pascal;
-  const demoOut = demoText.slice(0, closeAt) + tableItem + demoText.slice(closeAt);
+  const demoOut = addToAppTable(
+    addInclude(readText(UI_DEMO), '#include "music/music_app.h"',
+      '#include "' + app.name + '/' + app.name + '_app.h"', 'platform/host/ui_demo.cpp'),
+    app, 'platform/host/ui_demo.cpp');
+
+  /* ④ 真机 App 表：与宿主同序（main.cpp 的注释要求两边登记一致）。--no-device 时整段不动。 */
+  const mainOut = app.device
+    ? addToAppTable(
+      addInclude(readText(ESP32_MAIN), '#include "weather_app.h"',
+        '#include "' + app.name + '_app.h"', 'platform/esp32/project/main/main.cpp'),
+      app, 'platform/esp32/project/main/main.cpp')
+    : '';
 
   /* ④ 设计器事件能「调用函数」打开它 */
   const hooksText = readText(UI_HOOKS);
@@ -375,6 +458,26 @@ function planFor(app) {
   hookLines.splice(terminator + 1, 0, '  X(' + app.name + ')');
   const hooksOut = hookLines.join('\n');
 
+  const edits = [
+    { rel: 'cmake/embark_sources.cmake', path: CMAKE_SOURCES, updated: cmakeOut },
+    { rel: 'platform/host/ui_demo.cpp', path: UI_DEMO, updated: demoOut },
+    { rel: 'app/common/aidogui_ui_hooks.h', path: UI_HOOKS, updated: hooksOut },
+  ];
+  if (app.device) edits.push({ rel: 'platform/esp32/project/main/main.cpp', path: ESP32_MAIN, updated: mainOut });
+
+  /* 计划预览：逐处说清「插进去的是哪一行、前后两行长什么样」。 */
+  const report = [insertEntry('cmake/embark_sources.cmake', 'EMBARK_APP_SOURCES', cmakeOut, srcLine.trim(), 1)];
+  if (app.device) {
+    report.push(insertEntry('cmake/embark_sources.cmake', 'EMBARK_APP_SOURCES_DEVICE', cmakeOut, srcLine.trim(), 2));
+  }
+  report.push(insertEntry('platform/host/ui_demo.cpp', 'include', demoOut, '#include "' + app.name + '/' + app.name + '_app.h"', 1));
+  report.push(insertEntry('platform/host/ui_demo.cpp', 'App 表项 embark::demo::' + app.pascal, demoOut, 'embark::demo::' + app.pascal, 1));
+  if (app.device) {
+    report.push(insertEntry('platform/esp32/project/main/main.cpp', 'include', mainOut, '#include "' + app.name + '_app.h"', 1));
+    report.push(insertEntry('platform/esp32/project/main/main.cpp', 'App 表项 embark::demo::' + app.pascal, mainOut, 'embark::demo::' + app.pascal, 1));
+  }
+  report.push(insertEntry('app/common/aidogui_ui_hooks.h', 'EMBARK_AIDOGUI_HOOK_APPS(X)', hooksOut, 'X(' + app.name + ')', 1));
+
   return {
     srcLine,
     files: [
@@ -389,11 +492,8 @@ function planFor(app) {
         content: buildSource(app),
       },
     ],
-    edits: [
-      { rel: 'cmake/embark_sources.cmake', path: CMAKE_SOURCES, updated: cmakeOut },
-      { rel: 'platform/host/ui_demo.cpp', path: UI_DEMO, updated: demoOut },
-      { rel: 'app/common/aidogui_ui_hooks.h', path: UI_HOOKS, updated: hooksOut },
-    ],
+    edits: edits,
+    report: report,
   };
 }
 
@@ -404,13 +504,61 @@ function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function removeExactLine(text, line, where) {
+/* 撤一行：找得到就撤（返回新文本 + 它原来在第几行），找不到返回 null ——
+   由调用方决定「必须存在」（宿主那几处）还是「容忍缺失」（真机那几处，老 App 本来就没有）。 */
+function removeExactLine(text, line) {
   const target = line.trim();
   const lines = text.split('\n');
   const at = lines.findIndex((l) => l.trim() === target);
-  if (at < 0) fail(where + ' 里找不到要撤的那一行：「' + target + '」—— 有人手工改过？先看一眼再删');
+  if (at < 0) return null;
   lines.splice(at, 1);
-  return lines.join('\n');
+  return { text: lines.join('\n'), index: at };
+}
+
+function removeRequiredLine(text, line, where) {
+  const out = removeExactLine(text, line);
+  if (out === null) {
+    fail(where + ' 里找不到要撤的那一行：「' + line.trim() + '」—— 有人手工改过？先看一眼再删');
+  }
+  return out;
+}
+
+/* App 表里那一项可能是「上一行末尾逗号 + 换行 + 缩进 + 类名」，也可能跟别人挤在同一行
+   （table 里 album 就挨着 music）。两种都按相邻逗号撤：前一项有逗号就撤逗号到本项末尾，
+   本项是表头第一个（前面是括号）就撤本项到后面的逗号。
+   required=false 时找不到就跳过（真机表可能本来就没有它）。 */
+function removeTableItem(text, app, where, required) {
+  const needle = 'embark::demo::' + app.pascal;
+  const re = new RegExp(escapeRegExp(needle) + '(?=[ \t]*[),])');
+  const m = re.exec(text);
+  if (!m) {
+    if (required) fail(where + ' 的 App 表里找不到 ' + needle + '（可能被手工改过）');
+    return null;
+  }
+  let start = m.index;
+  let end = m.index + m[0].length;
+  let cut = start;
+  while (cut > 0 && (text[cut - 1] === ' ' || text[cut - 1] === '\t' || text[cut - 1] === '\n'
+    || text[cut - 1] === '\r')) cut -= 1;
+  if (text[cut - 1] === ',') {
+    /* 前一项还留着，撤「逗号 → 本项末尾」（中间换行缩进一起没了） */
+    start = cut - 1;
+    while (start > 0 && (text[start - 1] === ' ' || text[start - 1] === '\t')) start -= 1;
+    end = m.index + m[0].length;
+  } else {
+    /* 本项是表头第一个：撤「本项 → 后面的逗号 + 换行缩进」 */
+    let after = end;
+    while (after < text.length && (text[after] === ' ' || text[after] === '\t')) after += 1;
+    if (text[after] === ',') {
+      after += 1;
+      if (text[after] === '\r') after += 1;
+      if (text[after] === '\n') after += 1;
+      while (after < text.length && (text[after] === ' ' || text[after] === '\t')) after += 1;
+      end = after;
+    }
+  }
+  const index = text.slice(0, m.index).split('\n').length - 1;
+  return { text: text.slice(0, start) + text.slice(end), index: index, removed: needle };
 }
 
 function planDelete(app) {
@@ -419,42 +567,85 @@ function planDelete(app) {
     fail('app/' + app.name + '/ 不像一个 App（缺 ' + app.name + '_app.cpp）—— 不敢按 App 删');
   }
   const srcLine = '        "${EMBARK_ROOT}/app/' + app.name + '/' + app.name + '_app.cpp"';
+  const edits = [];
+  const report = [];
+  const absent = [];  // 「本来就没有」的真机登记：预览里说清楚，别让人以为撤漏了
 
-  /* ① + ② cmake 两份源清单（同一个文件名出现两次，各删一次） */
-  let cmakeOut = readText(CMAKE_SOURCES);
-  cmakeOut = removeExactLine(cmakeOut, srcLine, 'cmake/embark_sources.cmake · EMBARK_APP_SOURCES');
-  cmakeOut = removeExactLine(cmakeOut, srcLine, 'cmake/embark_sources.cmake · EMBARK_APP_SOURCES_DEVICE');
-
-  /* ③ include + App 表项 */
-  let demoText = readText(UI_DEMO);
-  demoText = removeExactLine(demoText, '#include "' + app.name + '/' + app.name + '_app.h"', 'platform/host/ui_demo.cpp · include');
-  const itemNeedle = 'embark::demo::' + app.pascal;
-  const itemRe = new RegExp(',\\r?\\n[ \\t]*' + escapeRegExp(itemNeedle));
-  if (!itemRe.test(demoText)) {
-    fail('platform/host/ui_demo.cpp 的 App 表里找不到 ' + itemNeedle + '（可能被手工改过）');
+  /* ① 宿主源清单（必须有）+ ② 真机源清单（老 App 可能本来没有，容忍） */
+  const cmakeText = readText(CMAKE_SOURCES);
+  const cmakeHost = removeRequiredLine(cmakeText, srcLine, 'cmake/embark_sources.cmake · EMBARK_APP_SOURCES');
+  report.push(removeEntry('cmake/embark_sources.cmake', 'EMBARK_APP_SOURCES', cmakeText, cmakeHost.index));
+  const cmakeDev = removeExactLine(cmakeHost.text, srcLine);
+  if (cmakeDev === null) {
+    absent.push('cmake/embark_sources.cmake · EMBARK_APP_SOURCES_DEVICE');
+  } else {
+    report.push(removeEntry('cmake/embark_sources.cmake', 'EMBARK_APP_SOURCES_DEVICE', cmakeHost.text, cmakeDev.index));
   }
-  demoText = demoText.replace(itemRe, '');
+  edits.push({
+    rel: 'cmake/embark_sources.cmake',
+    path: CMAKE_SOURCES,
+    updated: cmakeDev === null ? cmakeHost.text : cmakeDev.text,
+  });
 
-  /* ④ hooks 宏体那行 X(名)；撤完把宏体末行多余的续行反斜杠去掉 */
-  const hookLines = readText(UI_HOOKS).split('\n');
-  const at = hookLines.findIndex((l) => l.trim() === 'X(' + app.name + ')');
-  if (at < 0) fail('app/common/aidogui_ui_hooks.h 里找不到 X(' + app.name + ') —— 有人手工改过？');
-  hookLines.splice(at, 1);
-  for (let i = at - 1; i >= 0; i -= 1) {
-    if (hookLines[i].trim() === '') continue;
-    hookLines[i] = hookLines[i].replace(/[ \t]*\\[ \t]*$/, '');
-    break;
+  /* ③ 宿主 include + App 表项（必须有） */
+  const demoText = readText(UI_DEMO);
+  const demoInc = removeRequiredLine(demoText, '#include "' + app.name + '/' + app.name + '_app.h"', 'platform/host/ui_demo.cpp · include');
+  report.push(removeEntry('platform/host/ui_demo.cpp', 'include', demoText, demoInc.index));
+  const demoItem = removeTableItem(demoInc.text, app, 'platform/host/ui_demo.cpp', true);
+  report.push(removeEntry('platform/host/ui_demo.cpp', 'App 表项 embark::demo::' + app.pascal,
+    demoInc.text, demoItem.index, [demoItem.removed]));
+  edits.push({ rel: 'platform/host/ui_demo.cpp', path: UI_DEMO, updated: demoItem.text });
+
+  /* ④ 真机 include + App 表项（老 App 多半没有：容忍） */
+  if (existsSync(ESP32_MAIN)) {
+    const mainText = readText(ESP32_MAIN);
+    let mainOut = mainText;
+    const mainInc = removeExactLine(mainOut, '#include "' + app.name + '_app.h"');
+    if (mainInc === null) {
+      absent.push('platform/esp32/project/main/main.cpp · include');
+    } else {
+      report.push(removeEntry('platform/esp32/project/main/main.cpp', 'include', mainOut, mainInc.index));
+      mainOut = mainInc.text;
+    }
+    const mainItem = removeTableItem(mainOut, app, 'platform/esp32/project/main/main.cpp', false);
+    if (mainItem === null) {
+      absent.push('platform/esp32/project/main/main.cpp · App 表项');
+    } else {
+      report.push(removeEntry('platform/esp32/project/main/main.cpp', 'App 表项 embark::demo::' + app.pascal,
+        mainOut, mainItem.index, [mainItem.removed]));
+      mainOut = mainItem.text;
+    }
+    if (mainOut !== mainText) edits.push({ rel: 'platform/esp32/project/main/main.cpp', path: ESP32_MAIN, updated: mainOut });
   }
 
-  return {
-    dir,
-    rel: 'app/' + app.name + '/',
-    edits: [
-      { rel: 'cmake/embark_sources.cmake', path: CMAKE_SOURCES, updated: cmakeOut },
-      { rel: 'platform/host/ui_demo.cpp', path: UI_DEMO, updated: demoText },
-      { rel: 'app/common/aidogui_ui_hooks.h', path: UI_HOOKS, updated: hookLines.join('\n') },
-    ],
-  };
+  /* ⑤ hooks 宏体那行 X(名)（有的 App 从没登记过，容忍）；撤完把末行多余的续行反斜杠去掉 */
+  const hooksText = readText(UI_HOOKS);
+  const hookLines = hooksText.split('\n');
+  const hookAt = hookLines.findIndex((l) => l.trim() === 'X(' + app.name + ')');
+  if (hookAt < 0) {
+    absent.push('app/common/aidogui_ui_hooks.h · X(' + app.name + ')');
+  } else {
+    report.push(removeEntry('app/common/aidogui_ui_hooks.h', 'EMBARK_AIDOGUI_HOOK_APPS(X)', hooksText, hookAt));
+    hookLines.splice(hookAt, 1);
+    for (let i = hookAt - 1; i >= 0; i -= 1) {
+      if (hookLines[i].trim() === '') continue;
+      hookLines[i] = hookLines[i].replace(/[ \t]*\\[ \t]*$/, '');
+      break;
+    }
+    edits.push({ rel: 'app/common/aidogui_ui_hooks.h', path: UI_HOOKS, updated: hookLines.join('\n') });
+  }
+
+  return { dir: dir, rel: 'app/' + app.name + '/', edits: edits, report: report, absent: absent };
+}
+
+function printEntries(report, indent) {
+  for (const entry of report) {
+    const mark = entry.kind === 'insert' ? '+' : '-';
+    console.log(indent + mark + ' ' + entry.rel + ' · ' + entry.label + '（第 ' + entry.line + ' 行）');
+    for (const line of entry.before) console.log(indent + '      ' + line);
+    for (const line of entry.lines) console.log(indent + '    ' + mark + ' ' + line);
+    for (const line of entry.after) console.log(indent + '      ' + line);
+  }
 }
 
 function printDeletePlan(app, plan, aidChoice) {
@@ -462,13 +653,13 @@ function printDeletePlan(app, plan, aidChoice) {
   console.log('');
   console.log('要删的目录：' + plan.rel + '（整个目录）');
   console.log('');
-  console.log('要撤的登记（5 行 / 3 个文件）：');
-  console.log('  1. cmake/embark_sources.cmake · EMBARK_APP_SOURCES');
-  console.log('  2. cmake/embark_sources.cmake · EMBARK_APP_SOURCES_DEVICE');
-  console.log('  3. platform/host/ui_demo.cpp · include');
-  console.log('  4. platform/host/ui_demo.cpp · App 表项 embark::demo::' + app.pascal);
-  console.log('  5. app/common/aidogui_ui_hooks.h · X(' + app.name + ')');
-  console.log('');
+  console.log('要撤的登记（' + plan.report.length + ' 行）：');
+  printEntries(plan.report, '  ');
+  if (plan.absent.length > 0) {
+    console.log('');
+    console.log('它本来就没有的登记（老 App 允许，不用管）：');
+    for (const item of plan.absent) console.log('  - ' + item);
+  }
   console.log('');
   console.log('界面工程（' + aidChoice.source + '）：' + plan.screen.rel);
   if (plan.screen.action === 'no_aid') {
@@ -492,31 +683,23 @@ function applyDelete(app, plan, aidFile) {
     writeFileSync(aidFile.path, serializeAid(aidFile), 'utf8');
   }
   console.log('');
-  console.log('已撤 5 行登记，已删 ' + plan.rel);
+  console.log('已撤 ' + plan.report.length + ' 行登记，已删 ' + plan.rel);
   if (aidFile !== null && (plan.screen.action === 'remove_empty' || plan.screen.action === 'remove_placeholder')) {
     console.log('已从 ' + plan.screen.rel + ' 里撤掉那块屏 ' + app.name + '。');
   }
   console.log('下一步：pwsh -File tools/aidogui/export.ps1（导出目录里还留着它的旧屏文件），再 cmake -S . -B build && cmake --build build。');
 }
 function printPlan(app, plan, aidChoice) {
-  console.log('App：' + app.name + ' → 类 ' + app.pascal + '，标题「' + app.title + '」，图标 ' + app.icon);
+  console.log('App：' + app.name + ' → 类 ' + app.pascal + '，标题「' + app.title + '」，图标 ' + app.icon
+    + '，' + (app.device ? '真机也登记' : '只做宿主（--no-device）'));
   console.log('');
   console.log('要写的文件（2 个）：');
   for (const file of plan.files) {
     console.log('  ' + file.rel + '（' + file.content.split('\n').length + ' 行）');
   }
   console.log('');
-  console.log('要登记的位置（5 处 / 4 个文件）：');
-  console.log('  1. cmake/embark_sources.cmake · EMBARK_APP_SOURCES：插在「# 新 App 登记锚点（加在这里）」之前');
-  console.log('       + ' + plan.srcLine.trim());
-  console.log('  2. cmake/embark_sources.cmake · EMBARK_APP_SOURCES_DEVICE：插在胶水源 aidogui_ui_nav.cpp 那一行之前');
-  console.log('       + ' + plan.srcLine.trim());
-  console.log('  3. platform/host/ui_demo.cpp · include：在 music 那一行之后补一行（表里要用类名）');
-  console.log('       + #include "' + app.name + '/' + app.name + '_app.h"');
-  console.log('  4. platform/host/ui_demo.cpp · App 表：在收尾括号前补一项（launcher 留在第一位）');
-  console.log('       + , embark::demo::' + app.pascal);
-  console.log('  5. app/common/aidogui_ui_hooks.h · EMBARK_AIDOGUI_HOOK_APPS(X)：宏体末补一行');
-  console.log('       + X(' + app.name + ')');
+  console.log('要登记的位置（' + plan.report.length + ' 行）：');
+  printEntries(plan.report, '  ');
   console.log('');
   console.log('界面工程（' + aidChoice.source + '）：' + plan.screen.rel);
   if (plan.screen.action === 'no_aid') {
@@ -533,20 +716,25 @@ function printPlan(app, plan, aidChoice) {
   }
 }
 
+function todoLines(app) {
+  return [
+    'pwsh -File tools/aidogui/export.ps1 重新导出（这一步才会生成屏的 C 代码）',
+    'cmake -S . -B build && cmake --build build --target embark_host_ui',
+    '改界面：node tools/aidogui/html_to_aid.mjs --from-aid ' + app.name
+      + ' --out .scratch/draft/' + app.name + '.html，改完量回去：--html .scratch/draft/' + app.name
+      + '.html --screen ' + app.name + ' --apply（也可以在设计器里直接画，屏名还是 ' + app.name + '）',
+    '想让别的屏打开它：那个按钮的「调用函数」写 embark_ui_open_' + app.name
+      + '（X(' + app.name + ') 已在 app/common/aidogui_ui_hooks.h 里）',
+    'node tools/aidogui/gen_widget_doc.mjs 刷控件表；node tools/aidogui/dev.ps1 -Screen ' + app.name + ' 日常循环',
+  ];
+}
+
 function printTodos(app) {
   console.log('');
   console.log('屏侧（.aid 里已经补了一张占位屏，屏名 == App 名）：');
-  console.log('  1. pwsh -File tools/aidogui/export.ps1 重新导出（这一步才会生成屏的 C 代码）');
-  console.log('  2. cmake -S . -B build && cmake --build build --target embark_host_ui');
-  console.log('  3. 改界面：node tools/aidogui/html_to_aid.mjs --from-aid ' + app.name + ' --out .scratch/draft/' + app.name + '.html');
-  console.log('     改完量回去：--html .scratch/draft/' + app.name + '.html --screen ' + app.name + ' --apply');
-  console.log('     也可以在设计器里直接画（屏名还是 ' + app.name + '）');
-  console.log('  4. 想让别的屏打开它：那个按钮的「调用函数」写 embark_ui_open_' + app.name);
-  console.log('     （第 5 处登记已经把 X(' + app.name + ') 加进 app/common/aidogui_ui_hooks.h）');
-  console.log('  5. node tools/aidogui/gen_widget_doc.mjs 刷控件表；node tools/aidogui/dev.ps1 -Screen ' + app.name + ' 日常循环');
+  todoLines(app).forEach((line, i) => console.log('  ' + (i + 1) + '. ' + line));
   console.log('');
-  console.log('没做的（有意）：不生成屏的 C 代码（那是设计器导出的事），也不动');
-  console.log('ui_tour.cpp / user_main.cpp / esp32 main.cpp 那三张 App 表。');
+  console.log('没做的（有意）：不生成屏的 C 代码（那是设计器导出的事）。');
 }
 
 function writePlan(app, plan, aidFile) {
@@ -556,7 +744,8 @@ function writePlan(app, plan, aidFile) {
   console.log('');
   console.log('已写（UTF-8 无 BOM）：');
   for (const file of plan.files) console.log('  ' + file.rel);
-  console.log('已登记 5 行：cmake/embark_sources.cmake（2）、platform/host/ui_demo.cpp（include + 表项）、app/common/aidogui_ui_hooks.h（1）');
+  console.log('已登记 ' + plan.report.length + ' 行：');
+  for (const entry of plan.report) console.log('  + ' + entry.rel + ' · ' + entry.label);
   if (plan.screen.action === 'insert') {
     writeFileSync(aidFile.path, serializeAid(aidFile), 'utf8');
     console.log('已在 ' + plan.screen.rel + ' 里加了一张屏 ' + app.name + '（' + plan.screen.widgets + ' 个控件）');
@@ -567,13 +756,21 @@ function writePlan(app, plan, aidFile) {
 }
 
 function parseArgs(argv) {
-  const options = { name: null, title: null, icon: null, aid: null, apply: false, delete: false, selfCheck: false, help: false };
+  const options = {
+    name: null, title: null, icon: null, aid: null,
+    apply: false, delete: false, selfCheck: false, status: false, json: false,
+    device: true, help: false, warnings: [],
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--apply') options.apply = true;
     else if (arg === '--delete') options.delete = true;
     else if (arg === '--dry-run') options.apply = false;
     else if (arg === '--self-check') options.selfCheck = true;
+    else if (arg === '--status') options.status = true;
+    else if (arg === '--json') options.json = true;
+    else if (arg === '--device') options.device = true;
+    else if (arg === '--no-device') options.device = false;
     else if (arg === '--help' || arg === '-h') options.help = true;
     else if (arg === '--title') {
       i += 1;
@@ -614,7 +811,7 @@ function validate(options) {
     if (!existsSync(join(REPO_ROOT, 'app', name))) {
       fail('app/' + name + ' 不存在 —— 没东西可删');
     }
-    return { name, title: name, icon: 'LV_SYMBOL_FILE', pascal: classFor(name), date: '' };
+    return { name: name, title: name, icon: 'LV_SYMBOL_FILE', pascal: classFor(name), date: '', device: options.device };
   }
   if (existsSync(join(REPO_ROOT, 'app', name))) {
     fail('app/' + name + ' 已经存在 —— 不覆盖（要重做请先自己删掉那个目录）');
@@ -627,12 +824,12 @@ function validate(options) {
   const date = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0')
     + '-' + String(today.getDate()).padStart(2, '0');
   const title = options.title === null ? name : options.title;
-  const title_chars = Array.from(title).length;
-  if (title_chars > 5) {
-    console.warn('提醒：标题「' + title + '」有 ' + title_chars + ' 个字。主屏磁贴的标签宽 = 磁贴宽、'
+  const titleChars = Array.from(title).length;
+  if (titleChars > 5) {
+    options.warnings.push('标题「' + title + '」有 ' + titleChars + ' 个字：主屏磁贴的标签宽 = 磁贴宽、'
       + '14px 字号、默认换行，一行约 3 个汉字 —— 超了会被裁且不报错，建议 ≤5 个字。');
   }
-  return { name, title, icon, pascal: classFor(name), date };
+  return { name: name, title: title, icon: icon, pascal: classFor(name), date: date, device: options.device };
 }
 
 function selfCheck() {
@@ -672,7 +869,7 @@ function selfCheck() {
   if (problems.length === 0) {
     /* 再演练一次生成：模板替换、guard、App 表缩进、宏续行这些只有真跑才暴露。 */
     try {
-      planFor({ name: 'zz_self_check', title: '自检', icon: 'LV_SYMBOL_FILE', pascal: 'ZzSelfCheck', date: '2026-01-01' });
+      planFor({ name: 'zz_self_check', title: '自检', icon: 'LV_SYMBOL_FILE', pascal: 'ZzSelfCheck', date: '2026-01-01', device: true });
     } catch (error) {
       problems.push('演练生成失败：' + error.message);
     }
@@ -682,8 +879,125 @@ function selfCheck() {
     for (const problem of problems) console.error('  - ' + problem);
     return 1;
   }
-  console.log('〔自检通过〕模板 app/music/、4 处登记锚点（落成 5 行改动）、.aid 里的占位屏 ' + PLACEHOLDER_TEMPLATE_SCREEN + ' 都还在，照现在的形状生成没问题。');
+  console.log('〔自检通过〕模板 app/music/、6 个登记锚点（落成 7 行改动）、.aid 里的占位屏 ' + PLACEHOLDER_TEMPLATE_SCREEN + ' 都还在，照现在的形状生成没问题。');
   return 0;
+}
+
+/* --- --status：每个 App 登记齐了没有 --------------------------------------
+   App 管理台不重复这份知识（哪几处登记、占位屏长什么样）：它只转发这里的结果。 */
+
+function describeApp(name, ctx) {
+  const dir = join(REPO_ROOT, 'app', name);
+  const headerPath = join(dir, name + '_app.h');
+  const header = existsSync(headerPath) ? readText(headerPath) : '';
+  const pascalMatch = /class\s+(\w+)\s+final\s*:\s*public\s+App/.exec(header);
+  const pascal = pascalMatch ? pascalMatch[1] : classFor(name);
+  const titleMatch = /title\(\)\s*const\s*override\s*\{\s*return\s*"([^"]*)"/.exec(header);
+  const iconMatch = /icon\(\)\s*const\s*override[\s\S]{0,200}?(LV_SYMBOL_[A-Z0-9_]+)/.exec(header);
+  const srcNeedle = '"${EMBARK_ROOT}/app/' + name + '/' + name + '_app.cpp"';
+  const srcCount = ctx.cmakeText.split(srcNeedle).length - 1;
+  const registrations = [
+    { key: 'cmake_host', label: '宿主源清单', present: srcCount >= 1 },
+    { key: 'host_include', label: '宿主 App 头', present: ctx.demoText.includes('#include "' + name + '/' + name + '_app.h"') },
+    { key: 'host_table', label: '宿主 App 表', present: ctx.demoText.includes('embark::demo::' + pascal) },
+    { key: 'hooks', label: '导航入口', present: ctx.hooksText.includes('X(' + name + ')') },
+    { key: 'cmake_device', label: '真机源清单', present: srcCount >= 2 },
+    { key: 'device_include', label: '真机 App 头', present: ctx.mainText !== '' && ctx.mainText.includes('#include "' + name + '_app.h"') },
+    { key: 'device_table', label: '真机 App 表', present: ctx.mainText !== '' && ctx.mainText.includes('embark::demo::' + pascal) },
+  ];
+  const hostKeys = ['cmake_host', 'host_include', 'host_table', 'hooks'];
+  const deviceKeys = ['cmake_device', 'device_include', 'device_table'];
+
+  let screen = { name: name, state: 'unknown', widgets: 0 };
+  if (ctx.aidObj) {
+    const found = (ctx.aidObj.screens || []).find((item) => item.name === name);
+    if (!found) {
+      screen = { name: name, state: 'missing', widgets: 0 };
+    } else {
+      const widgets = Array.isArray(found.widgets) ? found.widgets : [];
+      let placeholder = false;
+      try {
+        const expected = buildPlaceholderScreen(ctx.aidObj, { name: name, title: titleMatch ? titleMatch[1] : name })
+          .widgets.map((widget) => widget.name).join(',');
+        placeholder = widgets.length > 0 && widgets.map((widget) => widget.name).join(',') === expected;
+      } catch (error) {
+        placeholder = false;
+      }
+      screen = {
+        name: name,
+        state: widgets.length === 0 ? 'empty' : (placeholder ? 'placeholder' : 'designed'),
+        widgets: widgets.length,
+      };
+    }
+  }
+
+  return {
+    name: name,
+    pascal: pascal,
+    title: titleMatch ? titleMatch[1] : '',
+    icon: iconMatch ? iconMatch[1] : '',
+    protected: PROTECTED_APPS.indexOf(name) >= 0,
+    registrations: registrations,
+    host: { done: registrations.filter((item) => item.present && hostKeys.indexOf(item.key) >= 0).length, total: hostKeys.length },
+    device: { done: registrations.filter((item) => item.present && deviceKeys.indexOf(item.key) >= 0).length, total: deviceKeys.length },
+    screen: screen,
+  };
+}
+
+function statusReport() {
+  const aidChoice = resolveAidPath({ aid: null });
+  const aid = { rel: relOf(aidChoice.path), path: aidChoice.path, source: aidChoice.source, ok: false, error: null, screens: [] };
+  let aidObj = null;
+  try {
+    const file = readAid(aidChoice.path);
+    aidObj = file.obj;
+    aid.ok = true;
+    aid.screens = file.obj.screens.map((screen) => ({
+      name: screen.name,
+      widgets: Array.isArray(screen.widgets) ? screen.widgets.length : 0,
+    }));
+  } catch (error) {
+    aid.error = error.message;
+  }
+  const ctx = {
+    cmakeText: readText(CMAKE_SOURCES),
+    demoText: readText(UI_DEMO),
+    hooksText: readText(UI_HOOKS),
+    mainText: existsSync(ESP32_MAIN) ? readText(ESP32_MAIN) : '',
+    aidObj: aidObj,
+  };
+  const apps = [];
+  for (const entry of readdirSync(join(REPO_ROOT, 'app'), { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (!existsSync(join(REPO_ROOT, 'app', entry.name, entry.name + '_app.cpp'))) continue;
+    apps.push(describeApp(entry.name, ctx));
+  }
+  apps.sort((a, b) => (a.protected === b.protected ? a.name.localeCompare(b.name) : (a.protected ? -1 : 1)));
+  return { ok: true, aid: aid, designer: resolveDesigner(), apps: apps, warnings: [] };
+}
+
+function printStatus(report) {
+  console.log('界面工程：' + report.aid.rel
+    + (report.aid.ok ? '（' + report.aid.screens.length + ' 块屏）' : '（读不到：' + report.aid.error + '）'));
+  console.log('设计器  ：' + (report.designer.ok ? report.designer.exe : '没找到（设 AIDOGUI_HOME 或写 .aidogui-home）'));
+  console.log('');
+  for (const app of report.apps) {
+    console.log('  ' + app.name + ' · ' + app.pascal + ' ·「' + app.title + '」 · ' + app.icon
+      + ' · 宿主 ' + app.host.done + '/' + app.host.total
+      + ' · 真机 ' + app.device.done + '/' + app.device.total
+      + ' · 屏 ' + app.screen.state + (app.screen.widgets ? '(' + app.screen.widgets + ')' : ''));
+  }
+}
+
+function silenceHumanOutput() {
+  const muted = () => {};
+  console.log = muted;
+  console.warn = muted;
+}
+
+function reportJson(payload) {
+  process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+  return payload.ok === false ? 1 : 0;
 }
 
 function main() {
@@ -693,9 +1007,27 @@ function main() {
     return 0;
   }
   if (options.selfCheck) return selfCheck();
+  if (options.json) silenceHumanOutput();
+  if (options.status) {
+    const report = statusReport();
+    if (options.json) return reportJson(report);
+    printStatus(report);
+    return 0;
+  }
   const app = validate(options);
+  if (!options.json) {
+    for (const warning of options.warnings) console.warn('提醒：' + warning);
+  }
   const aidChoice = resolveAidPath(options);
-  const aidFile = loadAidOrWarn(aidChoice);
+  const aidFile = loadAidOrWarn(aidChoice, options.warnings);
+  const base = {
+    ok: true,
+    app: { name: app.name, pascal: app.pascal, title: app.title, icon: app.icon, device: app.device },
+    aid: { rel: relOf(aidChoice.path), source: aidChoice.source },
+    applied: options.apply,
+    warnings: options.warnings,
+  };
+
   if (options.delete) {
     const gone = planDelete(app);
     gone.screen = aidFile === null ? { rel: relOf(aidChoice.path), action: 'no_aid' } : planScreenRemoval(aidFile, app);
@@ -703,27 +1035,53 @@ function main() {
     if (!options.apply) {
       console.log('');
       console.log('（dry-run：一个字节都没删。加 --apply 才真删。）');
-      return 0;
+    } else {
+      applyDelete(app, gone, aidFile);
     }
-    applyDelete(app, gone, aidFile);
+    if (options.json) {
+      return reportJson(Object.assign(base, {
+        mode: 'delete',
+        dir: gone.rel,
+        edits: gone.report,
+        absent: gone.absent,
+        screen: gone.screen,
+      }));
+    }
     return 0;
   }
+
   const plan = planFor(app);
   plan.screen = aidFile === null ? { rel: relOf(aidChoice.path), action: 'no_aid' } : planScreen(aidFile, app);
   printPlan(app, plan, aidChoice);
   if (!options.apply) {
     console.log('');
     console.log('（dry-run：一个字节都没写。加 --apply 才落盘。）');
-    return 0;
+  } else {
+    writePlan(app, plan, aidFile);
+    printTodos(app);
   }
-  writePlan(app, plan, aidFile);
-  printTodos(app);
+  if (options.json) {
+    return reportJson(Object.assign(base, {
+      mode: 'create',
+      files: plan.files.map((file) => ({ rel: file.rel, lines: file.content.split('\n').length })),
+      edits: plan.report,
+      absent: [],
+      screen: plan.screen,
+      next: todoLines(app),
+    }));
+  }
   return 0;
 }
 
+const jsonMode = process.argv.indexOf('--json') >= 0;
 try {
   process.exitCode = main();
 } catch (error) {
-  console.error('错误：' + error.message);
+  if (jsonMode) {
+    process.stdout.write(JSON.stringify({ ok: false, error: error.message }, null, 2) + '\n');
+  } else {
+    console.error('错误：' + error.message);
+  }
   process.exitCode = 1;
 }
+

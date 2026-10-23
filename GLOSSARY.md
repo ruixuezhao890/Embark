@@ -10,6 +10,10 @@ Embark 是一个可移植的嵌入式应用框架：把应用逻辑拆成若干 
 框架的能力单元，承载一块独立的应用逻辑。它是逻辑模块，不是 FreeRTOS 任务。
 _Avoid_: 任务、线程、页面、界面
 
+**App 管理台（App console）**：
+本地网页控制台（`tools/appconsole/`），只管一件事：加 / 退 App —— 看每个 App 的登记齐没齐、改之前先给计划、点确认落盘，并顺手导出屏 + 构建宿主。它不存第二份登记知识（那是 `tools/new_app.mjs` 的事），也不做实时画面、点画面、串口、烧录。
+_Avoid_: 开发台、面板
+
 **Foreground app（前台 App）**：
 同时持有输入焦点、渲染权与事件循环权的那个 App，全局至多一个。
 _Avoid_: 当前页、活跃任务
@@ -75,7 +79,7 @@ _Avoid_: 主任务、GUI 线程、主循环
 _Avoid_: 动态注册、插件表
 
 **App contract（App 契约）**：
-`embark::App` 的七个钩子（`onCreate`/`onEnter`/`onPause`/`onResume`/`onExit` + 后台 tick/消息，后两者可默认）与 `settings()`（后台策略）；切换只能经 `request_switch(id)` 请求，由框架在 step 边界执行。
+`embark::App` 的 **6 个必写**（`name()` + `onCreate`/`onEnter`/`onPause`/`onResume`/`onExit`）与 **7 个有默认实现**（`title`/`icon`/`accent`/`settings()`/`onBackgroundTick`/`onForegroundTick`/`onMessage`）；集合 = spec §5 + 前台节拍，`include/embark/app.h:14-15` 明写「除此之外不再增加」。切换只能经 `request_switch(id)` 请求，由框架在 step 边界执行。
 _Avoid_: 生命周期回调、状态机
 
 **UI port（UI 端口）**：

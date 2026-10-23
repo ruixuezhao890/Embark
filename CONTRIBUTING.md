@@ -16,7 +16,7 @@ ctest --test-dir build --output-on-failure
 ```
 
 前置工具（Git / CMake ≥ 3.24 / Ninja / C++17 编译器 / SDL2）与 Windows 上的装法见
-[docs/guides/quickstart.md](docs/guides/quickstart.md)。只改内核与测试的话不需要 SDL2 ——
+[docs/guides/getting-started.md](docs/guides/getting-started.md)。只改内核与测试的话不需要 SDL2 ——
 CMake 找不到 SDL2 时会**跳过**带窗口的目标，内核与单测照常构建。
 
 **提交之前，本地至少跑这三条**：
@@ -136,7 +136,7 @@ ctest --test-dir build --output-on-failure
 - 工单：`.scratch/embark-v1/issues/NN-<slug>.md`，一个工单一个文件，编号从 `01` 起
 - 工单顶部有 `Status:` 行记录状态；讨论追加在文件底部的 `## Comments` 下
 
-约定细节见 [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md)。
+约定细节见 [docs/agents/README.md](docs/agents/README.md) §2。
 **提交工单文件与提交代码一样重要** —— 它们是设计决策的一手记录，也是这个仓库最值得读的部分之一。
 
 ---

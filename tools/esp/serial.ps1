@@ -1,12 +1,12 @@
 <#
-tools/esp/serial.ps1 —— 读真机串口，一行一行打出来（开发台面板的「看串口」就是它）。
+tools/esp/serial.ps1 —— 读真机串口，一行一行打出来（给人和脚本看的纯文本）。
 
 为什么不用 idf.py monitor：monitor 会接管终端、发 ANSI 控制序列、还等键盘输入，
 塞进网页日志里全是乱码。这里只做一件事：把串口读成纯文本行。
 
   pwsh -NoProfile -File tools/esp/serial.ps1 -Port COM3
 
-它会一直挂着直到进程被杀（面板上「停串口」就是杀它）。烧录之前要先停 —— 串口是独占的。
+它会一直挂着直到 Ctrl+C 或进程被杀。烧录之前要先停 —— 串口是独占的。
 #>
 param(
   [Parameter(Mandatory = $true)][string]$Port,

@@ -1,11 +1,11 @@
-# Embark 运行时机制：前后台切换与后台运行
+# Embark 运行时：切换、后台、own task 与消息
 
 > 本文件用图讲清楚框架**是怎么跑起来的**：boot 装配顺序、唯一 UI 任务里的每一拍
 > 做什么、前台切换在哪一刻生效、三种后台策略各自挂在哪儿、own task 从创建到回收
 > 的完整生命周期。看懂这些，写任何 App 都不会在「什么时候被调、在哪条线程上跑、
 > 能不能 publish」上犯迷糊。
 >
-> 对应"怎么用"（示例代码）见 [messages-and-background.md](messages-and-background.md)；
+> 「怎么用」（示例代码与判据）也收在本文：§4.4 申请后台、§5.8 own_task 写法、§6 消息；
 > 契约原文见 [app.h](../../include/embark/app.h)、[framework.h](../../include/embark/framework.h)、
 > [task_spawner.h](../../include/embark/task_spawner.h)；
 > 决策背景见 [adr/0001](../adr/0001-single-ui-task-logic-apps.md)、[0004](../adr/0004-background-tick-and-state-policy.md)、[0005](../adr/0005-static-task-slots-and-pool.md)。
@@ -212,6 +212,97 @@ AppSettings settings() const override {
 - **视图状态 App 自己存**：屏每次装载都是新建的，控件值就是你拿到的设计稿初值。要留的东西存成成员变量：launcher 的磁贴页码（`onPause` 记 `launcher_tiles_current_page()`，重推时跳回）、clock 的月历视图月（`cal_view_y_` / `cal_view_m_` 在重推里不清）。
 - **控件值重推挂到屏装载后**：`ui_backend_bind_repaint(屏名, fn)`（`onCreate` 声明一次）——桥的屏观察者第三次扩展，与点击绑定 / 逻辑动作绑定对称。不声明的话，屏重建后控件值会停在设计稿（launcher 时间停在 `11:31` 就是这么来的）。
 
+### 4.4 怎么申请后台：一次声明 + 判据
+
+> **今天全仓没有 App 声明后台体**（默认 `suspend`）：clock 与 launcher 已退役 `tick`，改走前台节拍
+> （`onForegroundTick`）+ 屏装载后重推，见 [ADR 0015](../adr/0015-app-retention-and-refresh.md)。三种策略都还在，
+> 但**后台是显式申请的例外** —— 本节读作「想申请时怎么做」。
+
+声明就是 `settings()` 里那一行 —— 前 4 个字段必填，第 5 个（武装时机）有默认值：
+
+```cpp
+// tick：每 100 ms 一次（历史样板，2026-10-16 退役，见 ADR 0015）
+AppSettings settings() const override {
+  return AppSettings{BackgroundPolicy::tick, 100U, 0U, 0U};
+}
+// own_task：每 50 ms 一次，256 字栈（宿主 2 KB；真机按 stack_word_bytes 换算）
+AppSettings settings() const override {
+  return AppSettings{BackgroundPolicy::own_task, 50U, 256U, 4U};
+}
+```
+
+占用的容量是编译期定死的（改在 `config/embark_limits.h`）：`max_apps`、`max_bus_subscribers`、
+`max_background_timers`、`message_queue_depth`、`max_own_tasks`（同时在跑的 `own_task` 上限，
+也是静态任务池的槽数）。
+
+#### 能力矩阵：这条策略里能做什么
+
+| 维度 | `suspend` | `tick` | `own_task` |
+| --- | --- | --- | --- |
+| 跑在哪条线程 | 不跑 | 唯一 UI 任务 | 自己的任务（真机钉核 0，UI 在核 1） |
+| 能碰 LVGL 对象 | — | 能 | **绝对不能**（跨任务碰 LVGL 未定义） |
+| 能 `publish()` | — | 能 | **不能**，只能 `post` 信封回 UI 再进总线 |
+| 并发上限 | — | `max_background_timers` | `max_own_tasks`（默认 2） |
+| `period_ms` 语义 | — | 周期；`0` 等价 `suspend` | `> 0` 常驻循环；`== 0` 跑一轮就结束、槽位回收 |
+| 栈 | — | 借 UI 任务的（`ui_task_stack_words`） | 自己一份（默认 512 字，宿主 1 字 8 字节 = 4 KB） |
+| 周期精度 | — | UI 帧粒度：`ceil(period_ms / ui_loop_period_ms)` | `vTaskDelay`，毫秒级 |
+| 超限 / 失败 | — | 装配期定时器表满 → `no_space`；武装 `start` 失败记 `arm_failures()` | 装配期数量超限 → `no_space`（boot 直接失败）；运行期 `no_space` / `busy` / `unsupported` |
+
+#### 判据：不是「这活重不重」，而是「这一拍最坏等多久」
+
+微秒级的寄存器读写放哪都行；毫秒级的等 NMEA / 等网络 / 等 Flash 才是灾难。周期长短也不影响
+线程归属 —— `period_ms` 是 `std::uint32_t` 毫秒，60000（1 分钟）完全合法：
+
+```mermaid
+flowchart TD
+    Q0["这件事退到后台还要继续做吗"] -->|"不要（只有前台看得见时才做）"| FG["onForegroundTick<br/>每帧一次，离开前台自然停<br/>不需要后台策略"]
+    Q0 -->|"要"| Q1["这一拍最坏等多久<br/>同步接口按最坏耗时算<br/>带超时参数的，超时值就是答案"]
+    Q1 -->|"≤ 2 ms 且确定"| TK["BackgroundPolicy::tick<br/>跑在唯一 UI 任务里"]
+    Q1 -->|"> 2 ms，或者不确定"| OT["BackgroundPolicy::own_task<br/>独立任务，真机另一核"]
+    Q1 -->|"要碰 LVGL，或者要 publish"| TK
+```
+
+**耗时速查**（400 kHz I2C 下 1 字节 ≈ 22.5 µs；拿不准就在 App 里量一次）：
+
+| 这一拍要做的动作 | 最坏耗时 | 为什么 | 策略 |
+| --- | --- | --- | --- |
+| 累加计数、状态机、拼字符串 | 微秒 | 纯 CPU，不碰外设 | `tick` |
+| 读一个 I2C 寄存器（1 写 + 1 读） | ≈ 50 µs | 两个字节 + 两次 START/STOP | `tick` |
+| 写一个命令字节 | ≈ 25 µs | 一个字节 | `tick` |
+| 读 IMU 六轴（12 字节） | ≈ 0.3 ms | 1 字节地址 + 12 字节数据 | `tick` |
+| 读触摸一整包（27 字节） | ≈ 0.6 ms | 仓库现状就是每帧在 UI 任务里跑（`platform/esp32/src/esp32_input.cpp` 按 10 ms 节流） | `tick` |
+| 大数组运算、图像缩放 | 几十 µs ~ 几 ms | 不阻塞但占 CPU，超过 2 ms 就会拖慢界面 | 超过 `tick` 的账就 `own_task` |
+| 读一小段 Flash / 一个 NVS key | 数十 ms | 同步等 flash 操作 | `own_task` |
+| 写 NVS / 擦一页 Flash | 几十 ~ 几百 ms | `nvs_set_blob` + `nvs_commit` 都要落盘 | `own_task`（或只在 `onPause` / `onExit` 写一次） |
+| 等一句 NMEA（9600 baud 约 70 字节） | ≈ 73 ms | 1 字节 ≈ 1.04 ms | `own_task` |
+| 等一次定位有效（GPS 冷启动） | 几百 ms ~ 秒级 | 不受你控制 | `own_task` |
+| 网络请求 / MQTT 收发 | 几十 ms ~ 秒级，没有硬上限 | 断网时可能一直等 | `own_task` |
+| 音频解码 + 写 I2S | 持续占用 | 要一直跑、不能被打断 | `own_task`，且 `period_ms > 0` |
+| 总线故障路径（触摸 50 ms / `IBus` 100 ms 超时） | 到超时值 | 正常路径很短，但「不确定」本身就该按最坏值算 | 按最坏值判 |
+
+**三个校准锚点**（别把 `tick` 的预算想得太宽）：
+
+- UI 循环节拍 = **5 ms**（`config/embark_limits.h` 的 `ui_loop_period_ms`）：一个 `tick` 回调占掉 2 ms，
+  这一帧就只剩 3 ms 给 LVGL、触摸和所有 App。
+- 框架自己每帧最多花 **≈ 2.6 ms**（一次 flush 40 行 = 25.6 KB，80 MHz SPI，且同步等 DMA 结束，见
+  `platform/esp32/src/esp32_display.cpp`）：框架已经用掉这个量级，App 别再往上叠同等量级。
+- **触摸驱动就是「每帧在 UI 任务里碰 I2C」的活样本**（`platform/esp32/src/esp32_input.cpp`，10 ms 节流，
+  注释写着「给 I2C 让路」）：所以「碰了 I2C 就必须 `own_task`」不成立；它的 50 ms 超时是**故障路径**，
+  不是正常耗时。
+
+**四个常见误判**：
+
+- 「碰了 I2C / SPI 就必须 `own_task`」——不对：读寄存器、读 IMU 都是微秒~亚毫秒级，触摸驱动每帧就在
+  UI 任务里跑。
+- 「周期长 = 轻」——不对：1 分钟采一次 GPS，只要这一拍要等 NMEA，照样 `own_task`。
+- 「`own_task` 里顺手把界面刷了」——不行：跨任务碰 LVGL 未定义，回 UI 只能 `post` 信封；所以「要刷界面」
+  的活默认往 `tick` 靠。
+- 「`own_task` 随便开」——只有 `max_own_tasks`（默认 2）个槽：GPS 收 + 音乐播放就占满了，第三个
+  `own_task` App 会在装配期 `no_space`，让 boot 直接失败。稀缺资源要用在真正会等的地方。
+
+> 一句话：**要刷界面或发广播 → `tick`；会等（毫秒级或不确定）→ `own_task`；只有前台才需要 →
+> 连后台策略都不用声明。**
+
 ## 5. own task：从创建到回收的完整生命周期
 
 own task 是"逃生舱"：tick 策略要求钩子轻量（在 UI 循环里跑），需要独立线程的重活
@@ -344,6 +435,39 @@ flowchart TD
 ④ `ArmPolicy::at_boot` 的 App 开机即武装、不等前台（`:425`）。平台池那一半（定容、
 世代号）由 `tests/kernel/test_pooled_task_spawner.cpp` 六个用例逐格验证。
 
+### 5.8 怎么用：常驻 / 一次性 / 运行期再创建
+
+```cpp
+// 常驻写法：period_ms > 0，框架按周期反复调 onBackgroundTick
+AppSettings settings() const override {
+  return AppSettings{BackgroundPolicy::own_task, 50U, 256U, 4U};
+}
+
+// 一次性写法：period_ms = 0，框架只调一轮 onBackgroundTick，返回后任务就结束
+AppSettings settings() const override {
+  return AppSettings{BackgroundPolicy::own_task, 0U, 256U, 4U};
+}
+
+// 运行期再创建一次：只能在 UI 任务里、boot 之后 shutdown 之前调用
+const embark::Error err = fw.spawn_own_task(fw.id_of(*this));
+// none / not_found / not_ready / unsupported / no_space / busy
+```
+
+三条纪律：
+
+- **回收只能由持有者做**：持有者就是唯一 UI 任务（它也是唯一调 `spawn_task` 的人）。任务自己删
+  自己会走 FreeRTOS 的「删除中」分支（静态 TCB 要等空闲任务才真正释放），此时复用存储会写出
+  致命别名。`ITaskSpawner::release_task` 只给持有者用，任务内部不要碰。
+- **池满就是 `no_space`**，不排队、不降级：同时在跑的 `own_task` 上限 = `max_own_tasks`（静态池的
+  槽数），超了直接拒绝创建。失败点唯一且确定是刻意的，见
+  [adr/0005](../adr/0005-static-task-slots-and-pool.md)。
+- **别在自己的任务里等结果**：要等外部事件（WiFi 连接、超时）就阻塞在自己的任务里，成功或超时后
+  `return`，槽位自然回收 —— UI 全程不被阻塞。这正是「运行期创建、完成即回收」的第一个真实用例。
+
+观测：`fw.own_tasks_spawned()` / `fw.own_tasks_released()` 是累计创建/回收计数；任务池自身的
+`running() / finished() / free_slots()` 在 `platform/common/pooled_task_spawner.h` 上。系统用例见
+`tests/kernel/test_own_task_lifecycle.cpp`。
+
 ## 6. 消息投递：publish 与 post 两条路
 
 | | `publish` | `post` |
@@ -356,7 +480,85 @@ flowchart TD
 收件箱累计溢出次数可在 `framework.inbox_overflows()` 观测（own task 发太快、
 UI 来不及消化的信号）。契约见 framework.h `:31-34`。
 
-## 7. 关键源码索引
+### 6.1 消息类型怎么定义
+
+派生 `embark::MessageT<ID>`，ID 是消息型在进程内的唯一身份：
+
+```cpp
+#include <embark/message.h>
+
+// 有基类就不是聚合了，必须显式构造（这和 struct 直觉不同，见 [pitfalls](../reference/pitfalls.md)）
+struct BrightnessMessage : public embark::MessageT<0x21> {
+  constexpr BrightnessMessage(std::uint8_t level_value = 0) noexcept : level(level_value) {}
+  std::uint8_t level = 0;  // 0..3 四档
+};
+```
+
+ID 分配：`0xFE` 是框架保留的跨任务信封（`CrossTaskMessage`），**不要用**；demo 用 `0x21`；自己的 App
+挑不冲突的值即可，并写进注释。判断消息身份在接收端：`msg.get_message_id() == BrightnessMessage::ID`
+（`MessageT` = `etl::message<Id>`，自带静态 `ID` 与实例 `get_message_id()`）。
+
+### 6.2 怎么收：不用自己订阅，框架已挂好适配器
+
+App 端**不需要显式订阅**：框架装配阶段给每个 App 挂了一个常驻适配器，所有广播都会被投递到每个 App
+的 `onMessage(const Message&)`；收方自己按 ID 挑：
+
+```cpp
+void MyApp::onMessage(const Message& msg) override {
+  if (msg.get_message_id() == BrightnessMessage::ID) {
+    const auto& b = static_cast<const BrightnessMessage&>(msg);  // ID 匹配后安全
+    level_ = b.level;   // 更新自己的副本
+  }
+}
+```
+
+### 6.3 怎么发：同任务 `publish`，跨任务 `post`
+
+```cpp
+// 同任务内：直接广播（无人订阅会计数 + WARN，不会 blocking）
+fw.publish(BrightnessMessage{new_level});
+```
+
+`own_task` App 不能用 `publish`（跨线程！），只能 `post` 信封、回 UI 再进总线：
+
+```cpp
+// MyOwnTaskApp::onBackgroundTick（运行在自己的任务里）
+fw.post(embark::CrossTaskMessage(id_of(*this), ++seq_));
+// 信封回到 UI 任务后按序派发给自己，onMessage 里按 seq 对账
+```
+
+`onCreate(Framework& fw)` 里保存 `fw_ = &fw;` 之后用。
+
+### 6.4 状态机怎么和消息接上
+
+消息只改一个「值」时，直接存成员就够了（`app/clock/` 收 `BrightnessMessage` 就是这样）。要
+「**收消息即切状态**」就用 `etl::fsm`：状态机是 App 的成员，`onMessage` 里转投一行（框架的 `Bus`
+只以 `const&` 暴露，App 不能自己 subscribe）：
+
+```cpp
+class LampApp final : public embark::App {
+  void onCreate(Framework& fw) override { (void)fw; fsm_.start(); }     // 初始状态 = id 0
+  void onMessage(const Message& msg) override { fsm_.receive(msg); }    // 不认识的 id 走 on_event_unknown
+  void onBackgroundTick(std::uint32_t) override { fsm_.receive(TickMessage{}); }
+
+ private:
+  LampFsm fsm_;  // 继承 etl::fsm，同时是 etl::imessage_router
+};
+```
+
+完整例子、运行语义（`start()` 的链式跳转、`on_exit`/`on_enter` 顺序、`Self_Transition`）与常见坑见
+[guides/state-machine-and-messages.md](../guides/state-machine-and-messages.md)。
+
+## 7. 演示对照
+
+`app/launcher/`（主屏 + 导航接线 + 视图留存 + 值重推）、`app/clock/`（前台节拍推进显示 + 月历视图留存 +
+收 `BrightnessMessage`）、`app/settings/`（suspend + `publish` 亮度消息 + 屏内回调 + 设置项落 KV，
+见 [ADR 0018](../adr/0018-settings-truth-and-growth.md)）是最完整的范本；`app/common/app_messages.h`
+定义了 `BrightnessMessage`。**今天这三个 App 都不声明后台策略**（全仓也没有别的 App 声明）：`tick` 的
+历史样板是 clock 的 100 ms，已按 [ADR 0015](../adr/0015-app-retention-and-refresh.md) 退役；`own_task` 的
+完整系统用例在 `tests/kernel/test_own_task_lifecycle.cpp`（宿主演示 `ui_demo` 仍按这 3 个 App 注册）。
+
+## 8. 关键源码索引
 
 | 主题 | 位置 |
 | --- | --- |
@@ -384,9 +586,9 @@ UI 来不及消化的信号）。契约见 framework.h `:31-34`。
 | App 的**视图留存**样板（磁贴页码 / 月历视图月） | `app/launcher/launcher_app.cpp`（`onPause` 记页码）、`app/clock/clock_app.cpp`（`repaint_screen()` 不清 `cal_view_*`） |
 | 前台渲染型刷新的驱动点（`onForegroundTick` → 写控件） | `app/clock/clock_app.cpp`、`app/launcher/launcher_app.cpp` |
 
-## 8. 想再深入
+## 9. 想再深入
 
-- **怎么用**（示例代码 + 三种策略实战）：[messages-and-background.md](messages-and-background.md)
+- **怎么用**（示例代码 + 判据）：本文 §4.4（申请后台）、§5.8（own_task 三写法与三条纪律）、§6（消息）
 - **架构决策**：[adr/0001](../adr/0001-single-ui-task-logic-apps.md)（单一 UI 任务）、
   [0004](../adr/0004-background-tick-and-state-policy.md)（后台节拍与状态范式）、
   [0005](../adr/0005-static-task-slots-and-pool.md)（静态槽位与任务池）、

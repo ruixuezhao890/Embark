@@ -41,7 +41,7 @@
  *                   能力边界：生成的是 C 代码、编进二进制 —— 改 .aid 的**文案/几何**仍要
  *                   重新导出 + 重新构建；本开关当场能看见的是运行期才从 S: 盘读的图片 BIN。
  *   --screenshot FILE 最后一帧把窗口内容存成 BMP（**用相对路径**落到当前目录最稳；写不进去会报完整路径）
- *   --shot-live FILE  每 N 毫秒覆盖写同一张 BMP（开发台预览；写失败只告警，不退出）
+ *   --shot-live FILE  每 N 毫秒覆盖写同一张 BMP（按需抓帧用；写失败只告警，不退出）
  *   --frames N / --scale S / --delay MS / --quit-at N / --help 同旧版。
  *
  * 界面文案：demo App 界面用卡上的 ui_heiti.ttf（ADR 0017 起字号由设计器决定）；
@@ -265,7 +265,7 @@ struct Options {
   const char* screenshot = nullptr;
   int shot_frame = 0;  // --shot-frame N FILE：第 N 帧截图（任意模式）
   const char* shot_path = nullptr;
-  // --shot-live FILE / --shot-live-ms N：循环里反复覆盖写同一张 BMP，给开发台当实时画面
+  // --shot-live FILE / --shot-live-ms N：循环里反复覆盖写同一张 BMP，给外部工具按需抓帧
   // （--screenshot 只在最后一帧写一次、写失败就退出，做不到「一直在看」）。
   const char* shot_live = nullptr;
   int shot_live_ms = 500;
@@ -320,7 +320,7 @@ void print_usage() {
       "                      或几何仍要重新导出 + 重新构建 —— 那些是编进二进制的 C 代码）\n"
       "  --screenshot FILE  最后一帧存 BMP（建议用相对路径；写不进去会报到具体路径）\n"
       "  --shot-frame N FILE 第 N 帧存 BMP（配各故事线抓中途屏）\n"
-      "  --shot-live FILE   每 N 毫秒把当前画面覆盖写进 FILE（开发台预览用；写不进去只告警，\n"
+      "  --shot-live FILE   每 N 毫秒把当前画面覆盖写进 FILE（抓帧用；写不进去只告警，\n"
       "                      不退出 —— 下一张会再试）\n"
       "  --shot-live-ms N   覆盖写间隔（默认 500 ms）\n"
       "  --scale S           窗口放大倍数（默认 1 = 240×320 1:1）\n"
@@ -1991,8 +1991,8 @@ void ui_main(void* argument) noexcept {
     }
 #endif
 
-    // --shot-live：开发台每 400 ms 换一张图，所以这里按固定间隔覆盖写同一张 BMP。
-    // 写失败不退出（--screenshot 会退出）：面板读不到新图就继续显示上一帧。
+    // --shot-live：外部工具每 N 毫秒取一张图，所以这里按固定间隔覆盖写同一张 BMP。
+    // 写失败不退出（--screenshot 会退出）：读的那边读不到新图就继续用上一帧。
     if (options->shot_live != nullptr && options->shot_live_ms > 0) {
       const Uint32 shot_now_ms = SDL_GetTicks();
       if (shot_live_last_ms == 0U ||

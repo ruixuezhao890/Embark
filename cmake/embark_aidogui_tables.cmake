@@ -2,9 +2,15 @@
 #
 # 数据来源：AiDoGUI 的 C 代码导出目录（app/aidogui_ui/export，GUI 导出向导与
 # tools/aidogui/export.ps1 都往这里写）
-#   * export/screens/ui_<屏id>.h：该屏的控件符号 extern lv_obj_t * ui_<屏id>[_<控件名>];
-#     与 ui_<屏id>_screen_init / ui_<屏id>_screen_destroy 两个函数；
-#   * export/ui.c：每个字号的槽定义（lv_font_t * ui_font_ui_heiti_<字号> = NULL;）。ADR 0017
+#   * 控件与屏根，两种导出格式都认（以 .aidogui-export.json 的 version 为界）：
+#       v4+  export/aidogui_objects.h：每屏一个结构体 + 一个总表
+#              typedef struct { lv_obj_t * root; lv_obj_t * Btn_Back; … } aidogui_<屏id>_objects_t;
+#              typedef struct { … } aidogui_ui_t;  extern aidogui_ui_t aidogui_ui;
+#              槽 = &aidogui_ui.<屏id>.<控件名>（头文件由消费者 include，见 CMakeLists 的 include 根）
+#       v3-  export/screens/ui_<屏id>.h：一排 extern lv_obj_t * ui_<屏id>[_<控件名>];，槽 = &符号
+#     两个格式都有 ui_<屏id>_screen_init / ui_<屏id>_screen_destroy；
+#   * export/ui.c 或 export/fonts/ui_fonts.c：每个字号的槽定义
+#     （lv_font_t * ui_font_ui_heiti_<字号> = NULL;）。ADR 0017
 #     之后字体由桥注入（卡上的 TTF 运行期栅格化），这里只抓**槽名里的字号**，不碰文件路径；
 #   * export/components/ui_comp.h：自定义事件号（LV_EVENT_GET_COMP_CHILD 等）。
 #
@@ -29,6 +35,17 @@ function(embark_generate_aidogui_tables EXPORT_DIR OUT_H)
                     "或跑 pwsh -NoProfile -File tools/aidogui/export.ps1。本轮写空表。")
   endif()
 
+  # v4 导出把"每屏对象"从一排 extern 收进了 aidogui_objects.h。有它就走新路，没有退回老 parse。
+  set(_objects_h "${EXPORT_DIR}/aidogui_objects.h")
+  set(_use_objects FALSE)
+  if(EXISTS "${_objects_h}")
+    file(READ "${_objects_h}" _obj_txt)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_objects_h}")
+    if(_obj_txt MATCHES "extern aidogui_ui_t aidogui_ui")
+      set(_use_objects TRUE)
+    endif()
+  endif()
+
   set(_decls_all "")
   set(_widget_arrays "")
   set(_screen_table "")
@@ -47,21 +64,40 @@ function(embark_generate_aidogui_tables EXPORT_DIR OUT_H)
       continue()
     endif()
 
-    # 控件符号：extern lv_obj_t * ui_<sid>[_<控件名>];
-    string(REGEX MATCHALL "extern lv_obj_t [*] *ui_[A-Za-z0-9_]+" _decls "${_txt}")
     set(_widget_rows "")
     set(_widget_count 0)
-    foreach(_d IN LISTS _decls)
-      string(REGEX MATCH "[A-Za-z0-9_]+$" _sym "${_d}")
-      if(_sym STREQUAL "ui_${_sid}")
-        string(APPEND _decls_all "extern lv_obj_t* ${_sym};  // 屏根\n")
-      else()
-        string(REPLACE "ui_${_sid}_" "" _wname "${_sym}")
-        string(APPEND _decls_all "extern lv_obj_t* ${_sym};\n")
-        string(APPEND _widget_rows "  {\"${_wname}\", &${_sym}},\n")
-        math(EXPR _widget_count "${_widget_count} + 1")
+    if(_use_objects)
+      # 控件 = aidogui_<sid>_objects_t 的成员（root 之外的每个 lv_obj_t* 字段）。
+      if(NOT _obj_txt MATCHES "typedef struct *\\{([^}]*)\\} *aidogui_${_sid}_objects_t")
+        message(WARNING "AiDoGUI 表：aidogui_objects.h 里没有 ${_sid} 的对象结构，跳过该屏")
+        continue()
       endif()
-    endforeach()
+      set(_root_slot "&aidogui_ui.${_sid}.root")
+      string(REGEX MATCHALL "lv_obj_t [*] *[A-Za-z0-9_]+" _fields "${CMAKE_MATCH_1}")
+      foreach(_f IN LISTS _fields)
+        string(REGEX MATCH "[A-Za-z0-9_]+$" _wname "${_f}")
+        if(_wname STREQUAL "root")
+          continue()
+        endif()
+        string(APPEND _widget_rows "  {\"${_wname}\", &aidogui_ui.${_sid}.${_wname}},\n")
+        math(EXPR _widget_count "${_widget_count} + 1")
+      endforeach()
+    else()
+      # 控件符号：extern lv_obj_t * ui_<sid>[_<控件名>];
+      string(REGEX MATCHALL "extern lv_obj_t [*] *ui_[A-Za-z0-9_]+" _decls "${_txt}")
+      set(_root_slot "&ui_${_sid}")
+      foreach(_d IN LISTS _decls)
+        string(REGEX MATCH "[A-Za-z0-9_]+$" _sym "${_d}")
+        if(_sym STREQUAL "ui_${_sid}")
+          string(APPEND _decls_all "extern lv_obj_t* ${_sym};  // 屏根\n")
+        else()
+          string(REPLACE "ui_${_sid}_" "" _wname "${_sym}")
+          string(APPEND _decls_all "extern lv_obj_t* ${_sym};\n")
+          string(APPEND _widget_rows "  {\"${_wname}\", &${_sym}},\n")
+          math(EXPR _widget_count "${_widget_count} + 1")
+        endif()
+      endforeach()
+    endif()
     if(_widget_count EQUAL 0)
       set(_widget_rows "  {nullptr, nullptr},  // 空表占位（该屏暂无控件）\n")
     endif()
@@ -73,7 +109,7 @@ function(embark_generate_aidogui_tables EXPORT_DIR OUT_H)
     string(APPEND _widget_arrays
            "inline constexpr aidogui_widget_entry_t kAidoguiWidgets_${_sid}[] = {\n${_widget_rows}};\n\n")
     string(APPEND _screen_table
-           "  {\"${_sid}\", &ui_${_sid}, ui_${_sid}_screen_init, ui_${_sid}_screen_destroy, kAidoguiWidgets_${_sid}, ${_widget_count}},\n")
+           "  {\"${_sid}\", ${_root_slot}, ui_${_sid}_screen_init, ui_${_sid}_screen_destroy, kAidoguiWidgets_${_sid}, ${_widget_count}},\n")
     math(EXPR _screen_count "${_screen_count} + 1")
     list(APPEND _screen_names "${_sid}（${_widget_count} 控件）")
   endforeach()
@@ -84,16 +120,24 @@ function(embark_generate_aidogui_tables EXPORT_DIR OUT_H)
   set(_font_rows "")
   set(_font_count 0)
   set(_font_names "")
-  set(_ui_c "${EXPORT_DIR}/ui.c")
-  if(EXISTS "${_ui_c}")
-    file(READ "${_ui_c}" _ui_c_txt)
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_ui_c}")
-    string(REGEX MATCHALL "lv_font_t[ \t]*\\*[ \t]*ui_font_[A-Za-z0-9_]+[ \t]*=[ \t]*NULL" _fsyms
-           "${_ui_c_txt}")
-    if(_fsyms)
-      list(REMOVE_DUPLICATES _fsyms)
+  # 槽的定义位置随导出格式变：v3 在 ui.c，v4 挪到了 fonts/ui_fonts.c。两处都扫，符号去重。
+  set(_font_sources "${EXPORT_DIR}/ui.c" "${EXPORT_DIR}/fonts/ui_fonts.c")
+  set(_fsyms_all "")
+  set(_font_found FALSE)
+  foreach(_fsrc IN LISTS _font_sources)
+    if(NOT EXISTS "${_fsrc}")
+      continue()
     endif()
-    foreach(_p IN LISTS _fsyms)
+    file(READ "${_fsrc}" _fsrc_txt)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_fsrc}")
+    string(REGEX MATCHALL "lv_font_t[ \t]*\\*[ \t]*ui_font_[A-Za-z0-9_]+[ \t]*=[ \t]*NULL" _fsyms
+           "${_fsrc_txt}")
+    list(APPEND _fsyms_all ${_fsyms})
+    set(_font_found TRUE)
+  endforeach()
+  if(_fsyms_all)
+    list(REMOVE_DUPLICATES _fsyms_all)
+    foreach(_p IN LISTS _fsyms_all)
       string(REGEX MATCH "ui_font_[A-Za-z0-9_]+" _fsym "${_p}")
       if(NOT _fsym MATCHES "_([0-9]+)$")
         message(WARNING "AiDoGUI 表：字体符号 ${_fsym} 认不出字号，跳过")
@@ -105,8 +149,9 @@ function(embark_generate_aidogui_tables EXPORT_DIR OUT_H)
       math(EXPR _font_count "${_font_count} + 1")
       list(APPEND _font_names "${_size} px")
     endforeach()
-  else()
-    message(WARNING "AiDoGUI 表：找不到 ${_ui_c}，字号槽表为空（界面会退回 LVGL 内置字体）")
+  elseif(NOT _font_found)
+    message(WARNING "AiDoGUI 表：导出目录里既没有 ui.c 也没有 fonts/ui_fonts.c，"
+                    "字号槽表为空（界面会退回 LVGL 内置字体）")
   endif()
   if(_font_count EQUAL 0)
     set(_font_rows "  {0, nullptr},  // 空表占位（没解析到字号槽）\n")
@@ -132,13 +177,23 @@ function(embark_generate_aidogui_tables EXPORT_DIR OUT_H)
     set(_screen_table "  {\"\", nullptr, nullptr, nullptr, nullptr, 0},  // 空表占位\n")
   endif()
 
+  if(_use_objects)
+    # v4：屏根与控件槽都长在 aidogui_ui 这个 extern 结构体上，得把它的类型定义带进来
+    # （export 根在 CMakeLists 里是 PUBLIC include 根，消费者能找到 <aidogui_objects.h>）。
+    set(_objects_include "#include <aidogui_objects.h>")
+  else()
+    set(_objects_include "// 老格式（v3）：屏根与控件槽是各自独立的 extern lv_obj_t* 符号")
+  endif()
+
   get_filename_component(_out_dir "${OUT_H}" DIRECTORY)
   file(MAKE_DIRECTORY "${_out_dir}")
   file(WRITE "${OUT_H}"
     "#ifndef EMBARK_AIDOGUI_UI_TABLES_H\n#define EMBARK_AIDOGUI_UI_TABLES_H\n\n"
     "// 自动生成，请勿手改：由 cmake/embark_aidogui_tables.cmake 在配置期解析 AiDoGUI 导出目录。\n"
     "// 屏名约定（ADR 0011）：AiDoGUI 里 screen 的 id == App 名；子页 id = <app名>_<编号>_sub。\n"
-    "// 本次来源：${EXPORT_DIR}\n\n#include <lvgl.h>\n\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n"
+    "// 本次来源：${EXPORT_DIR}\n\n#include <lvgl.h>\n"
+    "${_objects_include}\n"
+    "\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n"
     "${_decls_all}\n"
     "// 生成代码声明的自定义事件号（aidogui_init 本来会注册它，本桥自己注册）。\n"
     "${_comp_event_decls}\n")

@@ -1,7 +1,7 @@
 # 日常循环：改一个 App 的每一天
 
 > 这一篇只回答一件事：**今天要改某处，动哪个文件、敲哪条命令、跑哪几条验收。**
-> 第一次来先走 [quickstart.md](quickstart.md)（跑起来）与 [new-app-guide.md](new-app-guide.md)（加第一个 App）；
+> 第一次来先走 [getting-started.md](getting-started.md)（跑起来）与 [new-app-guide.md](new-app-guide.md)（加第一个 App）；
 > 这一篇是那之后的「每天都用」。
 >
 > 前提是一条分工线：**基建归 agent**（HAL、服务层、脚本、文档），**App 的逻辑与界面归你**。
@@ -22,7 +22,7 @@ pwsh -NoProfile -File tools/aidogui/dev.ps1 -Screen clock
 | `app/` `src/` `platform/` 里的 `.cpp` / `.h` | `dev.ps1` 的源码监视：停窗口 → 构建 → 再起 | 重启 |
 | `export/` 里的**运行期资源**（图片 BIN 这类，从 `S:` 盘读） | `--watch`：进程内卸掉当前屏再装上 | **不重启** |
 
-**不想敲命令？** 双击 `tools/devpanel/start.cmd`，浏览器里点按钮就行（构建 / 重新导出屏 / 运行某块屏 / 看实时画面 / 跑五条验收 / 加 App / 退 App / 换界面工程 / HTML 草稿转屏 / **构建并烧录真机** / **看真机串口**）。它背后跑的就是上面这些命令，见 [tools.md](tools.md) §7。
+**不想敲命令？** 加 App / 退 App 这一件事有网页控制台：双击 `tools/appconsole/start.cmd`（列表 / 看计划 / 建它 / 退掉 / 打开设计器 / 导出屏 / 构建宿主）。它背后跑的就是上面这些命令，见 [tools.md](tools.md) §7。画面与烧录仍在命令行。
 
 只改 C++、不想每次导出：加 `-SkipExport`；只想构建不想起窗口：`-NoRun`。
 这两件事混起来会以为热重载坏了 —— 完整解释在 [tools.md](tools.md) §2。
@@ -34,14 +34,14 @@ pwsh -NoProfile -File tools/aidogui/dev.ps1 -Screen clock
 | 屏上的文案 / 位置 / 多一格 | `app/aidogui_ui/screen.aid`（设计器 GUI，或 §2 的 HTML 草稿） | `--ui --delay 40` + 自己看一眼 | [app/aidogui_ui/README.md](../../app/aidogui_ui/README.md) |
 | 业务逻辑（数据、状态机、定时） | `app/<名>/<名>_app.cpp` | `ctest` + §3 对应的故事 | [reference/hooks-and-api.md](../reference/hooks-and-api.md) |
 | 把数据写到屏上 | 同上：`aidogui_ui_bridge_widget("屏", "控件")` + `ui_backend_bind_repaint` | 屏装载后值不退回设计稿 | [reference/ui-widgets.md](../reference/ui-widgets.md) |
-| 加一个新 App | `node tools/new_app.mjs <名> --apply`（连 5 行登记 + `.aid` 占位屏一起做，之后要重新导出） | §3 全部 | [new-app-guide.md](new-app-guide.md) §2 |
+| 加一个新 App | `node tools/new_app.mjs <名> --apply`（连 7 行登记 + `.aid` 占位屏一起做，之后要重新导出） | §3 全部 | [new-app-guide.md](new-app-guide.md) §2 |
 | 加一个设置项 | `app/settings/` | `--ui-launcher-pages --delay 40` | [settings-and-preferences.md](settings-and-preferences.md) |
 | 用状态机 / 消息 / 后台任务 | `app/<名>/` | `ctest` | [state-machine-and-messages.md](state-machine-and-messages.md) |
 | 屏内按钮就地干点事（不切屏） | `app/<名>/*.cpp` 的 `bind_sinks()` 一类，每次屏装载后重挂 | 点一下 | [ADR 0018](../adr/0018-settings-truth-and-growth.md) |
 | 屏上是方框 = 缺字 | 换文案，或把字加进字符表 | `node tools/font/audit_glyphs.mjs` | [tools.md](tools.md) §4 |
 | 接一块新硬件 | `include/embark/hal/` + 服务层实现 | `--imu-log` / `--audio-test` / `--net-test` | [hal-backend-guide.md](hal-backend-guide.md) |
-| 烧到真机上 / 看板子日志 | 面板「真机」组，或 `tools/esp/idf.ps1 -Task flash -Port COM3` / `tools/esp/serial.ps1 -Port COM3` | 板子自己亮起来 + 串口里有 `Embark 0.1.0` | [tools.md](tools.md) §7.2 |
-| 退掉一个 App | `node tools/new_app.mjs <名> --delete --apply`（连 5 行登记一起撤） | `cmake --build build` 过 + 磁贴少一个 | [new-app-guide.md](new-app-guide.md) §2 |
+| 烧到真机上 / 看板子日志 | `tools/esp/idf.ps1 -Task flash -Port COM3` / `tools/esp/serial.ps1 -Port COM3` | 板子自己亮起来 + 串口里有 `Embark 0.1.0` | [tools.md](tools.md) §7.3 |
+| 退掉一个 App | `node tools/new_app.mjs <名> --delete --apply`（连 7 行登记一起撤） | `cmake --build build` 过 + 磁贴少一个 | [new-app-guide.md](new-app-guide.md) §2 |
 
 ## 2. 改界面：三条路，选一条
 
@@ -96,7 +96,7 @@ node tools/new_app.mjs --self-check             # 加 App 的模板与锚点还�
 ```
 
 四条都 exit 0 才提交。前两条专治「工具改了、文档没跟上」——这个仓库栽过一次
-（工具早就换成本脚本了，`quickstart` 还在教 `cp -r`）。
+（工具早就换成本脚本了，老教程还在教 `cp -r`）。
 
 ## 5. 「我改了，没反应」速查
 
@@ -107,12 +107,12 @@ node tools/new_app.mjs --self-check             # 加 App 的模板与锚点还�
 | 值停在设计稿 | 没有声明重推 | 在 `onCreate` 里 `ui_backend_bind_repaint("屏", 回调)`（[ADR 0015](../adr/0015-app-retention-and-refresh.md)） |
 | 点按钮没反应 | 屏名 ≠ App 名；或控件挂的是 CHANGE_SCREEN 动作（绕过桥的按需 init/destroy） | 改成「调用函数」`embark_ui_open_<App 名>` |
 | 文字是方框 | `ui_heiti.ttf` 缺字 | `node tools/font/audit_glyphs.mjs` 看缺哪个字 |
-| 磁贴少一个 | 新 App 没进注册表 | `new_app.mjs --apply` 会自动做；手加就是 5 行 / 3 个文件 |
+| 磁贴少一个 | 新 App 没进注册表 | `new_app.mjs --apply` 会自动做；手加就是 7 行 / 6 个文件（宿主 4 + 真机 3 行里，`hooks` 那行老 App 可能本来没有） |
 | 真机上没有界面 | 屏名 ≠ App 名（真机早就定义了 `EMBARK_AIDOGUI_UI`，见 `platform/esp32/project/components/embark/CMakeLists.txt`）；或改完屏没重新配置构建（屏表是配置期生成的） | 串口里看 `没有屏 <名>` 那句 warn，再按它给的下一步做 |
 
 ## 6. 相关
 
-- [tools.md](tools.md)：十二个脚本各自干什么、验收开关全表、开发台按钮、给仓库加新脚本的规矩
+- [tools.md](tools.md)：十二个脚本各自干什么、验收开关全表、App 管理台按钮、给仓库加新脚本的规矩
 - [new-app-guide.md](new-app-guide.md)：第一次加 App 的 30 分钟端到端
 - [html-to-screen.md](html-to-screen.md)：HTML 草稿方言与安全网
 - [app/aidogui_ui/README.md](../../app/aidogui_ui/README.md)：设计工程目录、字体、导航与控件表

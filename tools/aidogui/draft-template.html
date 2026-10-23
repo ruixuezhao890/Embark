@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Embark 草稿模板（这份文件本身就能被量）</title>
+<style>
+  /* 画布尺寸由工具强制成 .aid 的 settings.width/height（今天 240x320）并 margin:0；
+     这里再写一遍只是为了让它在编辑器里也长得对。 */
+  html, body { margin: 0; padding: 0; }
+  body { width: 240px; height: 320px; background: #0e1116; color: #e8edf3; font-family: ui_heiti; }
+  .abs { position: absolute; }
+</style>
+</head>
+<body>
+  <!-- 工具只读这 10 个样式：background-color / color / font-size / font-family /
+       text-align / border-radius / border-width / padding / width / height。
+       其余（flex、grid、margin、transform）随便用 —— 量的是最终矩形。 -->
+  <div data-name="root" class="abs"
+       style="left:0;top:0;width:240px;height:320px;background:#0e1116;">
+
+    <!-- 1) 文字：label 类标签 + 直接文本节点 + 显式字号/对齐/宽高。
+            别把字包进 <b>/<span>：父元素量到的是空文本。 -->
+    <span data-name="title" class="abs"
+          style="left:12px;top:10px;width:150px;height:24px;font-size:18px;text-align:left;color:#e8edf3;">我的应用</span>
+
+    <!-- 2) 卡片：容器用 div。div 里不要直接写字（只在 lv_label 上才存文字，div 会丢字）。 -->
+    <div data-name="card" class="abs"
+         style="left:12px;top:44px;width:216px;height:96px;background:#1a2029;
+                border:1px solid #2a323d;border-radius:12px;">
+      <span data-name="card_label" class="abs"
+            style="left:12px;top:10px;width:120px;height:16px;font-size:12px;text-align:left;color:#8a95a5;">当前温度</span>
+      <span data-name="card_value" class="abs"
+            style="left:12px;top:30px;width:160px;height:36px;font-size:28px;text-align:left;color:#e8edf3;">23.4</span>
+    </div>
+
+    <!-- 3) 滚动区：容器写 data-scroll="x|y|both"，行照常绝对定位（超出的部分靠滚动看）。 -->
+    <div data-name="list" class="abs" data-scroll="y"
+         style="left:12px;top:152px;width:216px;height:96px;background:#141920;border-radius:8px;">
+      <span data-name="row_a" class="abs"
+            style="left:10px;top:10px;width:196px;height:20px;font-size:14px;text-align:left;color:#e8edf3;">第一行</span>
+      <span data-name="row_b" class="abs"
+            style="left:10px;top:38px;width:196px;height:20px;font-size:14px;text-align:left;color:#e8edf3;">第二行</span>
+      <span data-name="row_c" class="abs"
+            style="left:10px;top:66px;width:196px;height:20px;font-size:14px;text-align:left;color:#e8edf3;">第三行</span>
+    </div>
+
+    <!-- 4) 进度条：progress 标签 + 显式 data-type（lv_bar 量不出来就得写）。 -->
+    <progress data-name="bar" class="abs" data-type="lv_bar" value="60" max="100"
+              style="left:12px;top:262px;width:140px;height:8px;background:#232b36;border-radius:4px;"></progress>
+
+    <!-- 5) 点了跳 App：data-action 自动补 embark_ui_ 前缀，函数名必须在
+            app/common/aidogui_ui_hooks.h 的 X-macro 表里（今天只有 launcher/clock/weather/settings）。 -->
+    <span data-name="back" class="abs" data-action="open_launcher" data-pressed-bg="#ffffff33"
+          style="left:168px;top:252px;width:60px;height:28px;font-size:14px;text-align:center;color:#e8edf3;
+                 background:#232b36;border-radius:8px;">返回</span>
+  </div>
+</body>
+</html>

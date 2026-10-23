@@ -1,6 +1,6 @@
 # 15 开发台二期：真机页签 + 换界面工程 + 退 App
 
-Status: done（2026-10-18）· Blocked by: —（14 票已落地）
+Status: superseded（2026-10-23，被 [17-app-console.md](17-app-console.md) 取代：真机页签撤销，烧录 / 串口回命令行）· Blocked by: —（14 票已落地）
 
 ## 为什么
 

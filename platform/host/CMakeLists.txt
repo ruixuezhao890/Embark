@@ -118,7 +118,7 @@ if(EMBARK_HOST_SDL2_FOUND)
 
   # 用户示例入口：干净版"模拟单片机常驻运行"（无验收开关、无合成输入）。
   # 照 user_main.cpp 改 EMBARK_APP_TABLE 换成自己的 App 表即可；
-  # main/ui_main 骨架讲解见 docs/index.md 指向的 quickstart 与「写你自己的 main」一节。
+  # 骨架讲解见 docs/guides/getting-started.md「跑起来看」一节与 user_main.cpp 头部注释。
   add_executable(embark_host_user user_main.cpp)
 
   target_link_libraries(embark_host_user PRIVATE embark::platform_host_ui embark::demo_apps)

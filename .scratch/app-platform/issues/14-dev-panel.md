@@ -1,6 +1,6 @@
 # 14 · 开发台：一个键鼠操作的本地网页面板
 
-Status: done（2026-10-18）
+Status: superseded（2026-10-23，被 [17-app-console.md](17-app-console.md) 取代：面板形态保留，范围收窄到「加 / 退 App + 导出 + 构建」，台子重建在 `tools/appconsole/`）
 Blocked by: —
 
 ## 为什么
