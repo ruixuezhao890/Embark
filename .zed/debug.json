@@ -1,0 +1,14 @@
+[
+  {
+    "label": "调试: 宿主 UI (gdb)",
+    "build": {
+      "command": "cmake",
+      "args": ["--build", "build"],
+      "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    "program": "$ZED_WORKTREE_ROOT/build/host/embark_host_ui.exe",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "request": "launch",
+    "adapter": "GDB"
+  }
+]

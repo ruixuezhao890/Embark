@@ -1,0 +1,49 @@
+[
+  {
+    "label": "配置: CMake (Debug / Ninja)",
+    "command": "cmake",
+    "args": ["-G", "Ninja", "-B", "build", "-DCMAKE_BUILD_TYPE=Debug"],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "reveal": "always"
+  },
+  {
+    "label": "构建: 全部",
+    "command": "cmake",
+    "args": ["--build", "build"],
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "测试: ctest",
+    "command": "ctest",
+    "args": ["--test-dir", "build", "--output-on-failure"],
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "运行: 宿主 UI",
+    "command": "build/host/embark_host_ui.exe",
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "运行: 宿主巡演",
+    "command": "build/host/embark_host_tour.exe",
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "启动: App 管理台",
+    "command": "cmd",
+    "args": ["/c", "tools\\appconsole\\start.cmd"],
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "真机: IDF 构建",
+    "command": "pwsh",
+    "args": ["-NoProfile", "-File", "device/tools/idf.ps1", "-Task", "build"],
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "真机: 烧录 (COM3)",
+    "command": "pwsh",
+    "args": ["-NoProfile", "-File", "device/tools/idf.ps1", "-Task", "flash", "-Port", "COM3"],
+    "cwd": "$ZED_WORKTREE_ROOT"
+  }
+]

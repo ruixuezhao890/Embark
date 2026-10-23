@@ -1,0 +1,10 @@
+# clangd 配置（Zed 内置 C++ 支持、VS Code 的 C/C++ 扩展都读这个文件）
+#
+# 编译库由 CMake 导出到 build/（仓库根 CMakeLists.txt 里开了 CMAKE_EXPORT_COMPILE_COMMANDS）。
+# clangd 只从「被打开文件所在目录」逐级向上找 compile_commands.json，而 build/ 不是
+# core/src/ 的祖先目录，所以这里显式指过去。不配的话只剩语法高亮：没有跳转、没有补全、
+# 也没有 "真机/宿主两套头文件" 的正确诊断。
+#
+# 唯一的硬前提：先跑一次 cmake -G Ninja -B build（见 README「快速开始」），否则这个路径是空的。
+CompileFlags:
+  CompilationDatabase: build

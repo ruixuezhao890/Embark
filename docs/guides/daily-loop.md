@@ -110,7 +110,13 @@ node tools/new_app.mjs --self-check             # 加 App 的模板与锚点还�
 | 磁贴少一个 | 新 App 没进注册表 | `new_app.mjs --apply` 会自动做；手加就是 7 行 / 6 个文件（宿主 4 + 真机 3 行里，`hooks` 那行老 App 可能本来没有） |
 | 真机上没有界面 | 屏名 ≠ App 名（真机早就定义了 `EMBARK_AIDOGUI_UI`，见 `device/project/components/embark/CMakeLists.txt`）；或改完屏没重新配置构建（屏表是配置期生成的） | 串口里看 `没有屏 <名>` 那句 warn，再按它给的下一步做 |
 
-## 6. 相关
+## 6. 编辑器（可选，不影响构建）
+
+仓库根有 `.clangd`（把 clangd 指向 `build/` 导出的编译库）和 `.zed/tasks.json`（配置 / 构建 / 测试 / 跑宿主 UI / 起 App 管理台 / 编真机固件），Zed 打开就能跳转补全、一键跑。唯一的硬前提是先配一次 `cmake -G Ninja -B build` —— 编译库在那儿，没有它 clangd 只剩语法高亮。
+
+`.vscode/` 里的 launch / tasks 是本机私有配置（被 `.gitignore` 忽略）；Zed 在没有 `.zed/debug.json` 时也会读它，所以两个编辑器可以共用一个仓库。
+
+## 7. 相关
 
 - [tools.md](tools.md)：十二个脚本各自干什么、验收开关全表、App 管理台按钮、给仓库加新脚本的规矩
 - [new-app-guide.md](new-app-guide.md)：第一次加 App 的 30 分钟端到端

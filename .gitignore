@@ -23,7 +23,8 @@ device/project/managed_components/
 # 有价值的那次报告要留证据，复制到 .scratch/<feature>/evidence/ 里再提交（见 docs/agents/）。
 device/project/autodebug_reports/
 
-# 编辑器 / IDE
+# 编辑器 / IDE：.clangd 与 .zed/ 是共享配置（编译库指向、任务、调试），故意提交；
+# 这几个是本机私有，不入库
 .idea/
 .vscode/
 .vs/
@@ -32,9 +33,9 @@ device/project/autodebug_reports/
 # 本机杂项：SDL/crashpad 之类在仓库根留下的日志
 /debug.log
 
-# 宿主后端测试在「进程当前目录」建的 fixture 根（embark_host_fs_test.cpp / test_font_service.cpp）。
-# ctest 的工作目录在 build/ 里，所以正常跑测试不会露出来；手工直接执行
-# build/tests/embark_host_tests.exe 时会在仓库根留下这一坨。
+# 宿主后端测试在「进程当前目录」建的 fixture 根（core/tests/host/test_host_filesystem.cpp）。
+# ctest 的工作目录在构建目录里，所以正常跑测试不会露出来；手工直接执行
+# build/core/tests/embark_host_tests.exe 时才会在仓库根留下这一坨。
 /embark_host_fs_test/
 
 # 注意：.scratch/ 是 issue 追踪所在地，必须随仓库提交，不要忽略它。
