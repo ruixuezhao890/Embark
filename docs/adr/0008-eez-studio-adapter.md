@@ -37,7 +37,7 @@ App 契约核心不变。
    UI 显示数据的接口——控件在 Studio 里绑定变量，生成代码每帧 tick_screen_*() 把
    变量值刷进控件；App 侧只按名读写：eez_ui_bridge_set_var_int/float/bool/string(name, v)
    与 get_var_int/float/bool(name, out)。**变量索引由构建期变量表解析**
-   （cmake/embark_eez_vars.cmake 从生成 vars.h 的 FlowGlobalVariables 生成
+   （core/cmake/embark_eez_vars.cmake 从生成 vars.h 的 FlowGlobalVariables 生成
    build/include/embark_eez_vars.h），变量命名沿用屏名约定：<app名>_<字段>；
    Studio 加/删变量后重新 cmake 配置即可，**不用改 C++、不用生成 get_var_x 符号**。
    变量名不存在或 UI 未 init 时桥接口返回 false 且无副作用。
@@ -62,7 +62,7 @@ GUI Guider（免费纯 C 但无 Flow 逻辑编排、版本绑 NXP）；自建声
 LvglUiPort 直接调 eez_flow_tick（把第三方耦合进 UI 端口，通用钩子更干净）。
 
 **代价与影响**：新增 submodule（eez-framework）与构建接入（照 spike CMake 集成，
-lvgl examples/demos EXCLUDE_FROM_ALL 等踩坑见 issue 18 Answer）；App 契约增加
+lvgl core/examples/demos EXCLUDE_FROM_ALL 等踩坑见 issue 18 Answer）；App 契约增加
 onForegroundTick（默认空，既有 App 零改动）；App 开发模式分化为「EEZ App（Studio
 工程 + C++ action/变量桥）」与「手写 App」并存，前者为默认推荐；缺字审计扩展扫描
 生成代码；每跳多一次 eez_flow_tick 开销（峰值内存已量化，CPU 占比待真机实测）。

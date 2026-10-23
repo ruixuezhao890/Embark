@@ -6,7 +6,7 @@
 //
 //   ① md 链接            [x](路径.md) 指向的文件/目录已不存在（改名忘更新）
 //   ② 反引号里的仓库路径  `tools/xxx.mjs` / `docs/xxx.md` / `app/...` 已不存在
-//   ③ embark_host_ui 开关 --ui-nav 这类必须真在 platform/host/ui_demo.cpp 里
+//   ③ embark_host_ui 开关 --ui-nav 这类必须真在 host/ui_demo.cpp 里
 //   ④ 脚本参数            `dev.ps1 -SkipExport` / `new_app.mjs --apply` 必须真在那个脚本里
 //   ⑤ 锚注释              反引号里带「锚点」的字符串必须真在源文件里（脚本按字面匹配它）
 //
@@ -28,18 +28,18 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..');
-const UI_DEMO = 'platform/host/ui_demo.cpp';
+const UI_DEMO = 'host/ui_demo.cpp';
 
 // 文档里会写的仓库顶层目录（路径检查只认这些前缀，避免把 URL 片段当路径）
 const ROOTS = [
-  'tools', 'docs', 'app', 'platform', 'cmake', 'config', 'include',
-  'src', 'tests', 'examples', 'assets', '.github', 'third_party',
+  'tools', 'docs', 'app', 'core', 'host', 'device',
+  'assets', '.github', 'third_party',
 ];
 
 // docs/**/*.md 之外还要扫的当前状态文档
 const SCAN_EXTRA = [
   'README.md', 'CONTRIBUTING.md', 'AGENTS.md', 'GLOSSARY.md',
-  'app/aidogui_ui/README.md', 'platform/esp32/README.md',
+  'app/aidogui_ui/README.md', 'device/README.md',
 ];
 
 // 构建期生成、本来就不在仓库里的路径（只放这一类，别拿它当消音器）
@@ -51,7 +51,8 @@ const SKIP_MARK = 'check_docs:skip';
 // 文件名的备选扩展名：文档里常按模块名提到文件（写 host_filesystem 而不是 host_filesystem.h）
 const EXTS = ['.h', '.hpp', '.cpp', '.c', '.md', '.mjs', '.js', '.cjs', '.ps1', '.cmake', '.aid', '.ttf', '.json', '.txt'];
 
-const SCRIPT_TOKEN = /tools\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*\.(?:mjs|js|cjs|ps1)(?![A-Za-z0-9_])/g;
+const SCRIPT_TOKEN =
+  /(?<![A-Za-z0-9_.\/-])(?:[A-Za-z0-9_.-]+\/)?tools\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*\.(?:mjs|js|cjs|ps1)(?![A-Za-z0-9_])/g;
 const CODE_SPAN = /`([^`]+)`/g;
 const MD_LINK = /\]\(([^)]+)\)/g;
 const PATH_TOKEN = new RegExp(
@@ -106,7 +107,7 @@ function anchorsCorpus() {
   if (anchorCorpus) return anchorCorpus;
   const chunks = [];
   const exts = ['.cmake', '.h', '.hpp', '.cpp', '.c', '.mjs', '.ps1', '.js', '.cjs'];
-  const roots = ['cmake', 'app', 'platform', 'tools', 'include', 'src', 'tests'];
+  const roots = ['core', 'host', 'device', 'app', 'tools'];
   const visit = (dir) => {
     for (const name of readdirSync(dir)) {
       if (name === 'third_party' || name.startsWith('.')) continue;
@@ -124,8 +125,8 @@ function anchorsCorpus() {
   return anchorCorpus;
 }
 
-// `src/` 这个根有二义性：文档里既指仓库根的 `src/embark/...`，也常把
-// `platform/esp32/src/` 简写成 `src/`。只对这一个根做「路径后缀」兜底。
+// `src/` 这个根有二义性：文档里既指仓库根的 `core/src/embark/...`，也常把
+// `device/src/` 简写成 `src/`。只对这一个根做「路径后缀」兜底。
 let repoFileIndex = null;
 function repoIndex() {
   if (repoFileIndex) return repoFileIndex;
@@ -314,7 +315,7 @@ function selfTest() {
   const good = [
     checkLinks('docs/guides/daily-loop.md', '见 [tools](tools.md) 与 [index](../index.md)'),
     checkPaths('docs/guides/daily-loop.md', '跑 `node tools/check_docs.mjs`，再 `cmake --build build`'),
-    checkPaths('docs/guides/daily-loop.md', '细节在 `platform/host/host_filesystem` 里'),
+    checkPaths('docs/guides/daily-loop.md', '细节在 `host/host_filesystem` 里'),
     checkHostFlags('docs/guides/daily-loop.md', 'embark_host_ui --ui --delay 40', flags),
     checkHostFlags('docs/guides/daily-loop.md', 'cmake --build build --target embark_host_ui', flags),
     checkScriptFlags('docs/guides/daily-loop.md', 'pwsh -NoProfile -File tools/aidogui/dev.ps1 -SkipExport'),

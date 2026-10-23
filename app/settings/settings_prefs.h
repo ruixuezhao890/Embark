@@ -25,7 +25,7 @@ namespace embark::demo {
 /// 背光百分比的 KV 键：一个字节，0..100。
 inline constexpr const char* kBrightKey = "ui.bright";
 
-/// 没存过时的背光百分比。板级 backlight_default_percent 也是 70（platform/esp32/src/esp32_board.h），
+/// 没存过时的背光百分比。板级 backlight_default_percent 也是 70（device/src/esp32_board.h），
 /// 这里再写一份是因为"App 持有亮度镜像"：KV 空 → 用这个值 → 立刻写进 HAL，
 /// 于是"开机亮度"只有一个可改的地方（这个常量），不会被两处默认值扯成不一致。
 inline constexpr std::uint8_t kBrightDefaultPercent = 70U;

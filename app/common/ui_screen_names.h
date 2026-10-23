@@ -8,7 +8,7 @@
  *   - "ticker_2_3_sub" → App "ticker_2"  （只剥最后一段 _<编号>_sub）
  *   - "clock_1"       → "clock_1"        （不是子页形状，原样）
  *
- * 解析放在这里、不放在桥里，是为了能脱离 LVGL/生成代码单测（tests/kernel/
+ * 解析放在这里、不放在桥里，是为了能脱离 LVGL/生成代码单测（core/tests/kernel/
  * test_ui_screen_names.cpp）；导航层（app/common/aidogui_ui_nav）调它。
  * 约定如有变动，只需改这一处 + 对应测试。
  */

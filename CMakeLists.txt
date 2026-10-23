@@ -18,7 +18,7 @@ project(embark
         DESCRIPTION "Embark —— 单一 UI 任务 + 逻辑 App 的可移植嵌入式框架"
         LANGUAGES C CXX)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/core/cmake")
 # embark_sources：宿主与真机共用的源清单（唯一事实来源，issue 20 的结构性收口）。
 # include 时会跑一次配置期审计：清单里的路径不存在、归口目录里有源文件没登记 → FATAL_ERROR。
 include(embark_sources)
@@ -46,23 +46,23 @@ endif()
 
 # --- 公共编译选项 -----------------------------------------------------------
 # 所有 Embark 目标（内核、后端、app、测试）共用：
-#   * ETL 等编译期宏统一由 config/embark_config.h 强制注入（-include，见 spec §16.2）
+#   * ETL 等编译期宏统一由 core/config/embark_config.h 强制注入（-include，见 spec §16.2）
 #   * middleware/ 视图只在构建目录里生成（spec §11）
 add_library(embark_build_options INTERFACE)
 target_compile_features(embark_build_options INTERFACE cxx_std_17)
 
-# config/ 作为 include 根：容量上限等集中在那里，写 <embark_limits.h> 即可（spec §10）。
-target_include_directories(embark_build_options INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/config")
+# core/config/ 作为 include 根：容量上限等集中在那里，写 <embark_limits.h> 即可（spec §10）。
+target_include_directories(embark_build_options INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/core/config")
 
 embark_create_middleware_view("${CMAKE_BINARY_DIR}/include/middleware")
 target_include_directories(embark_build_options INTERFACE "${CMAKE_BINARY_DIR}/include")
 
-# 平台是否已经提供 FreeRTOS 头文件：决定 config/embark_config.h 是否定义 ETL_TARGET_OS_FREERTOS。
+# 平台是否已经提供 FreeRTOS 头文件：决定 core/config/embark_config.h 是否定义 ETL_TARGET_OS_FREERTOS。
 # 宿主 FreeRTOS Windows port 已在 issues/02、06 落地 —— 默认 ON（etl/atomic.h、etl/callback_timer.h
-# 会去 include FreeRTOS.h，见 config/embark_config.h 里的实测链条）；关掉它 = 退回 ETL 无 OS 模式。
+# 会去 include FreeRTOS.h，见 core/config/embark_config.h 里的实测链条）；关掉它 = 退回 ETL 无 OS 模式。
 # ESP32-S3 后端（issues/11）由 IDF 侧传 ON（语义相同：平台提供 FreeRTOS 头文件）。
 # 用 option() 而不是 CACHE STRING：字符串形式的 ON 进了 #if 会被静默当成 0，
-# 只有 $<BOOL:...> 转出来的 1/0 才是 config/embark_config.h 期望的东西。
+# 只有 $<BOOL:...> 转出来的 1/0 才是 core/config/embark_config.h 期望的东西。
 option(EMBARK_PLATFORM_HAS_FREERTOS "平台是否提供 FreeRTOS 头文件" ON)
 target_compile_definitions(embark_build_options INTERFACE
         EMBARK_PLATFORM_HAS_FREERTOS=$<BOOL:${EMBARK_PLATFORM_HAS_FREERTOS}>)
@@ -72,15 +72,15 @@ include(embark_freertos)
 
 if(MSVC)
   target_compile_options(embark_build_options INTERFACE
-          /W4 /FI"${CMAKE_CURRENT_SOURCE_DIR}/config/embark_config.h")
+          /W4 /FI"${CMAKE_CURRENT_SOURCE_DIR}/core/config/embark_config.h")
 else()
   target_compile_options(embark_build_options INTERFACE -Wall -Wextra -Wpedantic)
   target_compile_options(embark_build_options INTERFACE
-          -include "${CMAKE_CURRENT_SOURCE_DIR}/config/embark_config.h")
+          -include "${CMAKE_CURRENT_SOURCE_DIR}/core/config/embark_config.h")
 endif()
 
 # 内核语言子集：无异常、无 RTTI（spec §10）。
-# 测试可执行文件故意不链它 —— doctest 的 REQUIRE/SUBCASE 需要异常，见 tests/CMakeLists.txt。
+# 测试可执行文件故意不链它 —— doctest 的 REQUIRE/SUBCASE 需要异常，见 core/tests/CMakeLists.txt。
 add_library(embark_kernel_flags INTERFACE)
 add_library(embark::kernel_flags ALIAS embark_kernel_flags)
 if(MSVC)
@@ -89,23 +89,23 @@ else()
   target_compile_options(embark_kernel_flags INTERFACE -fno-exceptions -fno-rtti)
 endif()
 
-# --- 目标（顺序：第三方 → 内核 → 平台 → app → 测试） -----------------------
+# --- 目标（顺序：第三方 → 内核 core/ → 后端 host/ 与 device/ → app → 测试） ---
 add_subdirectory(third_party)
 
 set(EMBARK_PLATFORM_NAME "host")
 
-add_subdirectory(src)
-add_subdirectory(platform/common)   # 宿主与真机共用的胶水（静态池、LVGL 端口、UI 端口）
-add_subdirectory(platform/host)
+add_subdirectory(core/src)
+add_subdirectory(core/common)   # 宿主与真机共用的胶水（静态池、LVGL 端口、UI 端口）
+add_subdirectory(host)
 if(EMBARK_BUILD_ESP32)
-  add_subdirectory(platform/esp32)   # ESP-IDF 工程（platform/esp32/README.md），issues/11
+  add_subdirectory(device)   # ESP-IDF 工程（device/README.md），issues/11
 endif()
 add_subdirectory(app)
-add_subdirectory(examples)   # 自包含示例（不依赖 demo App / AiDoGUI Designer）
+add_subdirectory(core/examples)   # 自包含示例（不依赖 demo App / AiDoGUI Designer）
 
 if(EMBARK_BUILD_TESTS)
   enable_testing()
-  add_subdirectory(tests)
+  add_subdirectory(core/tests)
 endif()
 
 # 字体运行时栅格化 spike（默认关）：只出数据，不进产品路径。

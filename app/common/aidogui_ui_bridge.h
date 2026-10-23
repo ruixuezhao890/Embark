@@ -17,7 +17,7 @@
  *      （ui_font_ui_heiti_<字号>，屏内共 75 处引用）照旧由设计器导出，但本桥不再
  *      lv_font_load 它们 —— 它把卡上的 ui_heiti.ttf 一次读进 PSRAM，用 lv_tiny_ttf 为每个
  *      字号建一个运行期栅格化字体，塞进同一个槽：生成代码与屏内引用一行不改。
- *      'S' 盘由 platform/common/aidogui_res_fs 挂载（宿主 = 仓库 app/aidogui_ui/export；
+ *      'S' 盘由 core/common/aidogui_res_fs 挂载（宿主 = 仓库 app/aidogui_ui/export；
  *      真机 = SD 卡挂载点 /sdcard）。拿不到 TTF 时槽留空，界面退回 flash 里的静态子集
  *      embark_zh_14（无卡兜底）；单字号建不出来只记警告（该字号退回内置字体），
  *      **不让整屏失效**。BIN 字库那条路已在 issue 03 删除。
@@ -33,7 +33,7 @@
  *   - aidogui_ui_bridge_current_screen()：当前装载的屏名（未装载返回 nullptr）。
  *
  * 三、控件表（App 读写界面数据的接口）
- *   构建期由 cmake/embark_aidogui_tables.cmake 在配置期解析 app/aidogui_ui/export 得到
+ *   构建期由 core/cmake/embark_aidogui_tables.cmake 在配置期解析 app/aidogui_ui/export 得到
  *   （构建目录 include/embark_aidogui_ui_tables.h，不手改、不入库）：
  *   - aidogui_ui_bridge_widget_count(screen) / _widget_name(screen, i)：遍历控件表；
  *   - aidogui_ui_bridge_widget(screen, widget_name)：按名拿 lv_obj_t*（屏未装载、
@@ -86,7 +86,7 @@ struct AidoguiBootCheck {
   bool ok;             // false ⇒ 打红 [!!]，不假装绿
 };
 /// 单调毫秒时钟（可选但真机必须给）：读卡那九秒里没有任何帧，LVGL 的 lv_tick 是冻住的
-/// （platform/common/lvgl_port.cpp 的 tick() 只在 UI 循环里推进），一秒一行的节奏与屏上
+/// （core/common/lvgl_port.cpp 的 tick() 只在 UI 循环里推进），一秒一行的节奏与屏上
 /// 毫秒数只能问平台要时间。不给就退回 lv_tick_get()（宿主读数很快，够用）。
 using AidoguiBootClock = std::uint32_t (*)(void* user);
 

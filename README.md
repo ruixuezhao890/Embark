@@ -17,7 +17,7 @@
 
 ```sh
 cmake -G Ninja -B build && cmake --build build --target embark_host_ui   # build/ 还不存在时先配置
-cd build/platform/host
+cd build/host
 ./embark_host_ui.exe --frames 60 --screenshot probe.bmp   # 看（无头也看得见）
 ./embark_host_ui.exe --ui --delay 40 --frames 40          # 验（合成输入必须带 --delay 40）
 ```
@@ -72,7 +72,7 @@ class ClockApp final : public App {
 };
 ```
 
-完整可运行的最小例子在 [`examples/minimal/`](examples/minimal/)（不依赖界面生成器、不依赖 demo App，
+完整可运行的最小例子在 [`core/examples/minimal/`](core/examples/minimal/)（不依赖界面生成器、不依赖 demo App，
 一个 App + 一个 `main.cpp`，约 250 行含注释）：
 
 ```sh
@@ -110,15 +110,15 @@ ctest --test-dir build --output-on-failure
 
 | 路径 | 放什么 |
 | --- | --- |
-| `include/embark/` | 框架公开头文件 —— **上层只依赖这里** |
+| `core/include/embark/` | 框架公开头文件 —— **上层只依赖这里** |
 | `src/` | 内核实现（Framework、Bus、AppRegistry、任务池、日志） |
-| `platform/host/` | 宿主后端：SDL2 显示/输入、LVGL 端口、文件存储、FreeRTOS、UI 任务、四个入口 |
-| `platform/esp32/` | ESP32-S3 后端（ESP-IDF 组件形式接入） |
-| `platform/common/` | 两端共享的端口层（LVGL 端口、静态池、任务池） |
+| `host/` | 宿主后端：SDL2 显示/输入、LVGL 端口、文件存储、FreeRTOS、UI 任务、四个入口 |
+| `device/` | ESP32-S3 后端（ESP-IDF 组件形式接入） |
+| `core/common/` | 两端共享的端口层（LVGL 端口、静态池、任务池） |
 | `app/` | 自带示例 App（launcher / clock / settings / weather / music / album）+ AiDoGUI 生成代码 + 薄桥 |
-| `examples/minimal/` | 不依赖界面生成器的最小可运行 App —— **从这读起** |
-| `tests/` | doctest 用例：`hal/` 按能力分、`kernel/` 是内核契约、`fakes/` 是 HAL 假后端 |
-| `config/` | 编译期宏、`lv_conf.h` 与**全部容量上限**（单一事实来源） |
+| `core/examples/minimal/` | 不依赖界面生成器的最小可运行 App —— **从这读起** |
+| `core/tests/` | doctest 用例：`hal/` 按能力分、`kernel/` 是内核契约、`fakes/` 是 HAL 假后端 |
+| `core/config/` | 编译期宏、`lv_conf.h` 与**全部容量上限**（单一事实来源） |
 | `tools/` | `new_app.mjs`（一条命令加 App）、`aidogui/`（无头重导出、HTML 稿编译成屏、控件对照表、`dev.ps1` 日常循环、`check_docs.mjs` 文档自检）、`font/`（字库生成、缺字审计） |
 | `docs/` | 文档三层：[docs/index.md](docs/index.md)（concepts / guides / reference）+ ADR |
 | `.scratch/` | 规格书与 issue 追踪（随仓库提交，是设计决策的一手记录） |
@@ -149,26 +149,26 @@ ctest --test-dir build --output-on-failure
 | `embark_host` | 无窗口，走一遍 HAL 自检（时间 / 持久化 / 总线 / 系统） |
 | `embark_host_ui` | **演示 + 自动验收**二合一：`--click` / `--launch` / `--drag` / `--ui` / `--ui-nav` / `--ui-weather` / `--ui-launcher-pages` 各是一段脚本化故事；另有 `--screen NAME`（直进某屏）、`--screenshot FILE`（无头看屏）、`--watch`（屏级热重载）、`--delay`（合成输入必带 40） |
 | `embark_host_tour` | 一条用例看完整系统：按 ①→⑨ 走完进程入口到关窗，17 项自检清单全过退出码 0 |
-| `embark_host_user` | **你自己的程序**：干净入口 [platform/host/user_main.cpp](platform/host/user_main.cpp)，改 `EMBARK_APP_TABLE` 即得 |
+| `embark_host_user` | **你自己的程序**：干净入口 [host/user_main.cpp](host/user_main.cpp)，改 `EMBARK_APP_TABLE` 即得 |
 
 ```sh
-./build/platform/host/embark_host_ui --launch      # 完整故事：切前台 ×4 + 跨 App 消息
-./build/platform/host/embark_host_tour             # 17 项系统自检
+./build/host/embark_host_ui --launch      # 完整故事：切前台 ×4 + 跨 App 消息
+./build/host/embark_host_tour             # 17 项系统自检
 ```
 
 ---
 
 ## ESP32-S3 构建
 
-真机后端在 `platform/esp32/`，以 ESP-IDF 5.4 工程接入（同一个仓库、同一份内核与 App 源码）：
+真机后端在 `device/`，以 ESP-IDF 5.4 工程接入（同一个仓库、同一份内核与 App 源码）：
 
 ```sh
-idf.py -C platform/esp32/project -B build-esp32 set-target esp32s3
-idf.py -C platform/esp32/project -B build-esp32 build      # 只编不烧
-idf.py -C platform/esp32/project -B build-esp32 -p COM5 flash monitor
+idf.py -C device/project -B build-esp32 set-target esp32s3
+idf.py -C device/project -B build-esp32 build      # 只编不烧
+idf.py -C device/project -B build-esp32 -p COM5 flash monitor
 ```
 
-板型参数、bring-up 清单与串口日志样例见 [platform/esp32/README.md](platform/esp32/README.md)。
+板型参数、bring-up 清单与串口日志样例见 [device/README.md](device/README.md)。
 
 ---
 

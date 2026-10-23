@@ -20,7 +20,7 @@ AiDoGUI 之后，主屏的 4 个磁贴是**设计稿里手摆的固定控件**�
 2. **分页几何是纯函数**：`app/launcher/launcher_pages.h`（每页 4 个、磁贴 48×48 @ y=202
    x=12/68/124/180、页宽 240、页码点 6×6 间隔 2 居中）不含 LVGL、不含 App，
    doctest 直接测 0/1/2/3/4/5/11/12 个 App 的磁贴数、页数、`page_of`/`slot_of` 双射与几何
-   （`tests/kernel/test_launcher_pages.cpp`）。页面几何与设计稿对得上：`tile_x(3)+48+12=240`、
+   （`core/tests/kernel/test_launcher_pages.cpp`）。页面几何与设计稿对得上：`tile_x(3)+48+12=240`、
    `dots_row_x(3)=109` 就是老设计稿里 `Dot1` 的 x。磁贴绘制层（`launcher_tiles.cpp`）只做
    "读注册表 → 问纯函数 → 建控件"，所以磁贴行为不需要靠截图验证。
 3. **翻页手感 = 吸附式连续滚动**（跟手拖、松手吸附最近页），**不做循环、不做点页码跳页**。
@@ -43,7 +43,7 @@ AiDoGUI 之后，主屏的 4 个磁贴是**设计稿里手摆的固定控件**�
    `act_obj`、连 PRESSING 都不会开始。还有一个反直觉的坑：指针压在任何**可滚动**对象上时
    `indev_gesture()` 直接 return（:1123），所以"主屏不响应上滑"这条断言必须把起点放在磁贴带
    之外，否则会以错误的原因通过。
-5. **容量 8 → 12**：`config/embark_limits.h` 的 `max_apps` 改成 12
+5. **容量 8 → 12**：`core/config/embark_limits.h` 的 `max_apps` 改成 12
    （= 主屏 + 11 个磁贴 = 3 页），同步 `docs/reference/limits.md`。注册表越界本来就是编译期
    `static_assert`，调大只是多几份 `AppAdapter`。
 6. **磁贴样式走新增令牌**：`design_tokens::tile_bg = 0x202B47` / `tile_text = 0xC7D0E6` /

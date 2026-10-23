@@ -17,14 +17,14 @@
 
 ```mermaid
 flowchart TD
-    HW["硬件<br/>屏幕 / 触摸 / 传感器 / RTC / Flash"] --> HAL["HAL 后端<br/>platform/host · platform/esp32 · tests/fakes"]
+    HW["硬件<br/>屏幕 / 触摸 / 传感器 / RTC / Flash"] --> HAL["HAL 后端<br/>host · device · core/tests/fakes"]
     HAL --> CTX["hal::Context<br/>能力 + 服务的引用聚合<br/>（服务槽今天可空）"]
     CTX --> CORE["内核<br/>Framework · Bus · AppRegistry · 任务池"]
     CORE --> APP["App 层<br/>launcher · clock · settings · 你的 App"]
     APP --> BRIDGE["界面薄桥<br/>app/common/ui_backend · aidogui_ui_bridge"]
     BRIDGE --> GEN["AiDoGUI 生成代码<br/>app/aidogui_ui/export"]
     GEN --> LVGL["LVGL"]
-    LVGL --> PORT["LVGL 端口<br/>platform/common/lvgl_port"]
+    LVGL --> PORT["LVGL 端口<br/>core/common/lvgl_port"]
     PORT --> HAL
     CORE --> UITASK["唯一 UI 任务<br/>每 5 ms 一帧 step()"]
     UITASK --> CORE
@@ -34,7 +34,7 @@ flowchart TD
 
 | 边界 | 规则 | 为什么 |
 | --- | --- | --- |
-| **App ↛ platform** | `app/` 下**不 include 任何 `platform/` 头**（spec §14.5 的验收项） | 换后端不动 App 代码，靠链接期选择后端实现 |
+| **App ↛ platform** | `app/` 下**不 include 任何 `host/`、`device/` 头**（spec §14.5 的验收项） | 换后端不动 App 代码，靠链接期选择后端实现 |
 | **内核 ↛ LVGL** | `embark::core` 不依赖 LVGL；界面通过 `IUiPort` 端口注入 | 无屏平台与单元测试都能跑内核（`ui` 可为 `nullptr`） |
 | **App ↛ 生成代码** | App 只调薄桥，不 include 设计器导出的任何头 | 重新导出 UI 不该改 C++ 业务代码 |
 
@@ -101,7 +101,7 @@ flowchart TD
 - **术语表**在仓库根的 [../../GLOSSARY.md](../../GLOSSARY.md)（Arm / Background tick / Own task / 薄壳…），
   每条都带 _Avoid_ 列表——**写代码、写 issue、写文档都用表里的词**。
 - **三层的关系**：concepts 说"为什么"，guides 说"怎么做"，reference 说"具体值"。
-  三者冲突时，**以 `tests/kernel/` 的契约测试为准**（比任何文档都新）。
+  三者冲突时，**以 `core/tests/kernel/` 的契约测试为准**（比任何文档都新）。
 - **决策记录**在 [../adr/](../adr/)：每条都写了当时的取舍与被否决的方案。
   想知道"为什么不是另一种做法"，去那里找。
 

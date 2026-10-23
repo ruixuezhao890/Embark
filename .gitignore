@@ -8,20 +8,20 @@ CMakeCache.txt
 CMakeFiles/
 compile_commands.json
 
-# middleware/ 视图只应出现在构建目录（见 cmake/embark_middleware.cmake）；
+# middleware/ 视图只应出现在构建目录（见 core/cmake/embark_middleware.cmake）；
 # 万一被误生成到源码树，也不要提交
 /middleware/
 
 # ESP-IDF（issues/11）：sdkconfig 是"本机 idf.py 生成"的产物（默认值在 sdkconfig.defaults
 # 里，那个要提交）；组件管理器下载的依赖与锁定文件同理不进仓库
-platform/esp32/project/sdkconfig
-platform/esp32/project/sdkconfig.old
-platform/esp32/project/dependencies.lock
-platform/esp32/project/managed_components/
+device/project/sdkconfig
+device/project/sdkconfig.old
+device/project/dependencies.lock
+device/project/managed_components/
 
 # esp32-autodebug（真机调试闭环）的诊断报告：每次跑都会重写，属本机运行产物。
 # 有价值的那次报告要留证据，复制到 .scratch/<feature>/evidence/ 里再提交（见 docs/agents/）。
-platform/esp32/project/autodebug_reports/
+device/project/autodebug_reports/
 
 # 编辑器 / IDE
 .idea/

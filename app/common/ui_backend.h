@@ -12,7 +12,7 @@
  *   - ui_backend_bind_repaint(s, fn) onCreate：声明"屏 s 装载好后调 fn"，让 App 把自己负责的
  *     控件值重推一遍（屏每次都是新对象、值回到设计稿；ADR 0015）
  * 编译期由宏选后端：定义 EMBARK_AIDOGUI_UI 走 AiDoGUI；没定义 = 全是空实现，
- * App 照常编过、不碰 UI（examples/minimal 这类不链 LVGL 的目标走这条）。
+ * App 照常编过、不碰 UI（core/examples/minimal 这类不链 LVGL 的目标走这条）。
  */
 #ifndef EMBARK_APP_UI_BACKEND_H
 #define EMBARK_APP_UI_BACKEND_H

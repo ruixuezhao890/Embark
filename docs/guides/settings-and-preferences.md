@@ -47,7 +47,7 @@
 `save_bright(IPersistence&, uint8_t)`。**不建 SettingsService**：每个设置项要么落到既有 HAL，要么只存一个标量，
 中间那层今天没有第二个消费者（[ADR 0018](../adr/0018-settings-truth-and-growth.md) 第 2 条）。新增键沿用 `ui.` 前缀。
 
-容量约束在 `config/embark_limits.h`：键 ≤ 16 字节、值 ≤ 64 字节、32 个槽；槽满时写入返回 `no_space`，
+容量约束在 `core/config/embark_limits.h`：键 ≤ 16 字节、值 ≤ 64 字节、32 个槽；槽满时写入返回 `no_space`，
 **不会**静默覆盖旧键（见 [reference/limits.md](../reference/limits.md) §4）。
 
 ## 加一个设置项（三步）
@@ -58,7 +58,7 @@
    `cmake -S . -B build`。
 2. **App**：在 `app/settings/settings_app.cpp` 的 `enum class SinkKind` 加一个值、`kSinks[]` 加一行
    `{控件名, SinkKind::…}`、`on_sink_clicked` 的 `switch` 加一个分支（改值 → 落 KV / 落 HAL → 重写屏上的字）。
-3. **验收**：在 `platform/host/ui_demo.cpp` 的 `aidogui_settings_panel_check()` 里加一条断言（读控件文本，
+3. **验收**：在 `host/ui_demo.cpp` 的 `aidogui_settings_panel_check()` 里加一条断言（读控件文本，
    与 App 的成员比对）。**别写死期望值** —— 见下面第一个坑。
 
 版面不用重排：`Body` 已经开了滚动，内容变长只是能拖得更远。
@@ -67,9 +67,9 @@
 
 ```powershell
 cmake -S . -B build; cmake --build build
-build\platform\host\embark_host_ui.exe --ui --frames 40                 # 〔aidogui 验收通过〕
-build\platform\host\embark_host_ui.exe --ui-launcher-pages --delay 40    # 设置屏 已进 / 正文滚动 146 px / 亮度 50%→60%
-build\platform\host\embark_host_ui.exe --launch --delay 40               # 〔launch 验收通过〕
+build\host\embark_host_ui.exe --ui --frames 40                 # 〔aidogui 验收通过〕
+build\host\embark_host_ui.exe --ui-launcher-pages --delay 40    # 设置屏 已进 / 正文滚动 146 px / 亮度 50%→60%
+build\host\embark_host_ui.exe --launch --delay 40               # 〔launch 验收通过〕
 ctest --test-dir build
 ```
 

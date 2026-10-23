@@ -19,7 +19,7 @@
  * 屏代码仍由设计器导出（tools/aidogui/export.ps1），脚本不生成 C。
  *
  * 加一个 App 要动的面是六处：两个新文件 + 宿主源清单 + 真机源清单 + 宿主 App 表 +
- * 真机 App 表（platform/esp32/project/main/main.cpp）+ 设计器导航入口 + .aid 里一张同名屏。
+ * 真机 App 表（device/project/main/main.cpp）+ 设计器导航入口 + .aid 里一张同名屏。
  * --no-device 表示「只做宿主」，那两处真机登记就不动（真机的磁贴也就不会有它）。
  *
  * 给 tools/appconsole/（App 管理台）用的机器接口是 --json / --status：stdout 只有一段 JSON，
@@ -36,11 +36,11 @@ const REPO_ROOT = resolve(HERE, '..');  // 本脚本在 tools/ 下（tools/font/
 
 const TPL_H = join(REPO_ROOT, 'app', 'music', 'music_app.h');
 const TPL_CPP = join(REPO_ROOT, 'app', 'music', 'music_app.cpp');
-const CMAKE_SOURCES = join(REPO_ROOT, 'cmake', 'embark_sources.cmake');
-const UI_DEMO = join(REPO_ROOT, 'platform', 'host', 'ui_demo.cpp');
+const CMAKE_SOURCES = join(REPO_ROOT, 'core', 'cmake', 'embark_sources.cmake');
+const UI_DEMO = join(REPO_ROOT, 'host', 'ui_demo.cpp');
 const UI_HOOKS = join(REPO_ROOT, 'app', 'common', 'aidogui_ui_hooks.h');
 const AID_DEFAULT = join(REPO_ROOT, 'app', 'aidogui_ui', 'screen.aid');
-const ESP32_MAIN = join(REPO_ROOT, 'platform', 'esp32', 'project', 'main', 'main.cpp');
+const ESP32_MAIN = join(REPO_ROOT, 'device', 'project', 'main', 'main.cpp');
 const DESIGNER_EXE = 'AiDoGUIDesigner.exe';
 
 /* 占位屏抄谁：album 是仓库里那块「界面还没做」的占位屏（背景 + 返回键 + 标题 + 占位卡片）。 */
@@ -54,7 +54,7 @@ const USAGE = [
   '  node tools/new_app.mjs --status                                       每个 App 的登记 / 屏 / 真机状态',
   '  node tools/new_app.mjs --self-check                                   检查模板、锚点、.aid 占位屏还在',
   '',
-  '  --device / --no-device  真机三处（cmake 的 DEVICE 清单 + platform/esp32/project/main/main.cpp 的头与表）：',
+  '  --device / --no-device  真机三处（cmake 的 DEVICE 清单 + device/project/main/main.cpp 的头与表）：',
   '                          默认登记；--no-device 只做宿主（真机上就没有它的磁贴）',
   '  --aid <文件>            目标 .aid（默认 app/aidogui_ui/screen.aid）',
   '  --json                  只往 stdout 打一段 JSON（App 管理台用）：计划 / 状态 / 错误都在里面',
@@ -82,12 +82,12 @@ const TEMPLATE_MARKERS_CPP = [
 ];
 
 const REGISTRATION_ANCHORS = [
-  [CMAKE_SOURCES, '# 新 App 登记锚点（加在这里）', 'cmake/embark_sources.cmake · EMBARK_APP_SOURCES'],
-  [CMAKE_SOURCES, 'set(EMBARK_APP_SOURCES_DEVICE', 'cmake/embark_sources.cmake · EMBARK_APP_SOURCES_DEVICE'],
-  [UI_DEMO, 'EMBARK_APP_TABLE(embark::demo::LauncherApp', 'platform/host/ui_demo.cpp · App 表'],
+  [CMAKE_SOURCES, '# 新 App 登记锚点（加在这里）', 'core/cmake/embark_sources.cmake · EMBARK_APP_SOURCES'],
+  [CMAKE_SOURCES, 'set(EMBARK_APP_SOURCES_DEVICE', 'core/cmake/embark_sources.cmake · EMBARK_APP_SOURCES_DEVICE'],
+  [UI_DEMO, 'EMBARK_APP_TABLE(embark::demo::LauncherApp', 'host/ui_demo.cpp · App 表'],
   [UI_HOOKS, '#define EMBARK_AIDOGUI_HOOK_APPS(X)', 'app/common/aidogui_ui_hooks.h · 打开 App 的 C 入口'],
-  [ESP32_MAIN, 'EMBARK_APP_TABLE(embark::demo::LauncherApp', 'platform/esp32/project/main/main.cpp · App 表'],
-  [ESP32_MAIN, '#include "weather_app.h"', 'platform/esp32/project/main/main.cpp · App 头'],
+  [ESP32_MAIN, 'EMBARK_APP_TABLE(embark::demo::LauncherApp', 'device/project/main/main.cpp · App 表'],
+  [ESP32_MAIN, '#include "weather_app.h"', 'device/project/main/main.cpp · App 头'],
 ];
 
 /* 主屏不能删：启动器是磁贴的来源，删了就回不到桌面。 */
@@ -401,10 +401,10 @@ function removeEntry(rel, label, oldText, index, removedLines) {
 function planFor(app) {
   const srcLine = '        "${EMBARK_ROOT}/app/' + app.name + '/' + app.name + '_app.cpp"';
 
-  /* ① + ② 都在 cmake/embark_sources.cmake 上 */
+  /* ① + ② 都在 core/cmake/embark_sources.cmake 上 */
   const cmakeText = readText(CMAKE_SOURCES);
   const anchor = '        # 新 App 登记锚点（加在这里）';
-  requireIncludes(cmakeText, anchor, 'cmake/embark_sources.cmake');
+  requireIncludes(cmakeText, anchor, 'core/cmake/embark_sources.cmake');
   const anchorAt = cmakeText.indexOf(anchor);
   let cmakeOut = cmakeText.slice(0, anchorAt) + srcLine + '\n' + cmakeText.slice(anchorAt);
 
@@ -412,7 +412,7 @@ function planFor(app) {
   if (app.device) {
     const devMarker = 'set(EMBARK_APP_SOURCES_DEVICE';
     const devAt = cmakeOut.indexOf(devMarker);
-    if (devAt < 0) fail('cmake/embark_sources.cmake 里找不到 ' + devMarker);
+    if (devAt < 0) fail('core/cmake/embark_sources.cmake 里找不到 ' + devMarker);
     const glueNeedle = 'app/common/aidogui_ui_nav.cpp"';
     const glueAt = cmakeOut.indexOf(glueNeedle, devAt);
     if (glueAt < 0) fail('EMBARK_APP_SOURCES_DEVICE 里找不到胶水源 ' + glueNeedle);
@@ -424,15 +424,15 @@ function planFor(app) {
      App 表引用的是类名，头不可见就编不过。 */
   const demoOut = addToAppTable(
     addInclude(readText(UI_DEMO), '#include "music/music_app.h"',
-      '#include "' + app.name + '/' + app.name + '_app.h"', 'platform/host/ui_demo.cpp'),
-    app, 'platform/host/ui_demo.cpp');
+      '#include "' + app.name + '/' + app.name + '_app.h"', 'host/ui_demo.cpp'),
+    app, 'host/ui_demo.cpp');
 
   /* ④ 真机 App 表：与宿主同序（main.cpp 的注释要求两边登记一致）。--no-device 时整段不动。 */
   const mainOut = app.device
     ? addToAppTable(
       addInclude(readText(ESP32_MAIN), '#include "weather_app.h"',
-        '#include "' + app.name + '_app.h"', 'platform/esp32/project/main/main.cpp'),
-      app, 'platform/esp32/project/main/main.cpp')
+        '#include "' + app.name + '_app.h"', 'device/project/main/main.cpp'),
+      app, 'device/project/main/main.cpp')
     : '';
 
   /* ④ 设计器事件能「调用函数」打开它 */
@@ -459,22 +459,22 @@ function planFor(app) {
   const hooksOut = hookLines.join('\n');
 
   const edits = [
-    { rel: 'cmake/embark_sources.cmake', path: CMAKE_SOURCES, updated: cmakeOut },
-    { rel: 'platform/host/ui_demo.cpp', path: UI_DEMO, updated: demoOut },
+    { rel: 'core/cmake/embark_sources.cmake', path: CMAKE_SOURCES, updated: cmakeOut },
+    { rel: 'host/ui_demo.cpp', path: UI_DEMO, updated: demoOut },
     { rel: 'app/common/aidogui_ui_hooks.h', path: UI_HOOKS, updated: hooksOut },
   ];
-  if (app.device) edits.push({ rel: 'platform/esp32/project/main/main.cpp', path: ESP32_MAIN, updated: mainOut });
+  if (app.device) edits.push({ rel: 'device/project/main/main.cpp', path: ESP32_MAIN, updated: mainOut });
 
   /* 计划预览：逐处说清「插进去的是哪一行、前后两行长什么样」。 */
-  const report = [insertEntry('cmake/embark_sources.cmake', 'EMBARK_APP_SOURCES', cmakeOut, srcLine.trim(), 1)];
+  const report = [insertEntry('core/cmake/embark_sources.cmake', 'EMBARK_APP_SOURCES', cmakeOut, srcLine.trim(), 1)];
   if (app.device) {
-    report.push(insertEntry('cmake/embark_sources.cmake', 'EMBARK_APP_SOURCES_DEVICE', cmakeOut, srcLine.trim(), 2));
+    report.push(insertEntry('core/cmake/embark_sources.cmake', 'EMBARK_APP_SOURCES_DEVICE', cmakeOut, srcLine.trim(), 2));
   }
-  report.push(insertEntry('platform/host/ui_demo.cpp', 'include', demoOut, '#include "' + app.name + '/' + app.name + '_app.h"', 1));
-  report.push(insertEntry('platform/host/ui_demo.cpp', 'App 表项 embark::demo::' + app.pascal, demoOut, 'embark::demo::' + app.pascal, 1));
+  report.push(insertEntry('host/ui_demo.cpp', 'include', demoOut, '#include "' + app.name + '/' + app.name + '_app.h"', 1));
+  report.push(insertEntry('host/ui_demo.cpp', 'App 表项 embark::demo::' + app.pascal, demoOut, 'embark::demo::' + app.pascal, 1));
   if (app.device) {
-    report.push(insertEntry('platform/esp32/project/main/main.cpp', 'include', mainOut, '#include "' + app.name + '_app.h"', 1));
-    report.push(insertEntry('platform/esp32/project/main/main.cpp', 'App 表项 embark::demo::' + app.pascal, mainOut, 'embark::demo::' + app.pascal, 1));
+    report.push(insertEntry('device/project/main/main.cpp', 'include', mainOut, '#include "' + app.name + '_app.h"', 1));
+    report.push(insertEntry('device/project/main/main.cpp', 'App 表项 embark::demo::' + app.pascal, mainOut, 'embark::demo::' + app.pascal, 1));
   }
   report.push(insertEntry('app/common/aidogui_ui_hooks.h', 'EMBARK_AIDOGUI_HOOK_APPS(X)', hooksOut, 'X(' + app.name + ')', 1));
 
@@ -573,28 +573,28 @@ function planDelete(app) {
 
   /* ① 宿主源清单（必须有）+ ② 真机源清单（老 App 可能本来没有，容忍） */
   const cmakeText = readText(CMAKE_SOURCES);
-  const cmakeHost = removeRequiredLine(cmakeText, srcLine, 'cmake/embark_sources.cmake · EMBARK_APP_SOURCES');
-  report.push(removeEntry('cmake/embark_sources.cmake', 'EMBARK_APP_SOURCES', cmakeText, cmakeHost.index));
+  const cmakeHost = removeRequiredLine(cmakeText, srcLine, 'core/cmake/embark_sources.cmake · EMBARK_APP_SOURCES');
+  report.push(removeEntry('core/cmake/embark_sources.cmake', 'EMBARK_APP_SOURCES', cmakeText, cmakeHost.index));
   const cmakeDev = removeExactLine(cmakeHost.text, srcLine);
   if (cmakeDev === null) {
-    absent.push('cmake/embark_sources.cmake · EMBARK_APP_SOURCES_DEVICE');
+    absent.push('core/cmake/embark_sources.cmake · EMBARK_APP_SOURCES_DEVICE');
   } else {
-    report.push(removeEntry('cmake/embark_sources.cmake', 'EMBARK_APP_SOURCES_DEVICE', cmakeHost.text, cmakeDev.index));
+    report.push(removeEntry('core/cmake/embark_sources.cmake', 'EMBARK_APP_SOURCES_DEVICE', cmakeHost.text, cmakeDev.index));
   }
   edits.push({
-    rel: 'cmake/embark_sources.cmake',
+    rel: 'core/cmake/embark_sources.cmake',
     path: CMAKE_SOURCES,
     updated: cmakeDev === null ? cmakeHost.text : cmakeDev.text,
   });
 
   /* ③ 宿主 include + App 表项（必须有） */
   const demoText = readText(UI_DEMO);
-  const demoInc = removeRequiredLine(demoText, '#include "' + app.name + '/' + app.name + '_app.h"', 'platform/host/ui_demo.cpp · include');
-  report.push(removeEntry('platform/host/ui_demo.cpp', 'include', demoText, demoInc.index));
-  const demoItem = removeTableItem(demoInc.text, app, 'platform/host/ui_demo.cpp', true);
-  report.push(removeEntry('platform/host/ui_demo.cpp', 'App 表项 embark::demo::' + app.pascal,
+  const demoInc = removeRequiredLine(demoText, '#include "' + app.name + '/' + app.name + '_app.h"', 'host/ui_demo.cpp · include');
+  report.push(removeEntry('host/ui_demo.cpp', 'include', demoText, demoInc.index));
+  const demoItem = removeTableItem(demoInc.text, app, 'host/ui_demo.cpp', true);
+  report.push(removeEntry('host/ui_demo.cpp', 'App 表项 embark::demo::' + app.pascal,
     demoInc.text, demoItem.index, [demoItem.removed]));
-  edits.push({ rel: 'platform/host/ui_demo.cpp', path: UI_DEMO, updated: demoItem.text });
+  edits.push({ rel: 'host/ui_demo.cpp', path: UI_DEMO, updated: demoItem.text });
 
   /* ④ 真机 include + App 表项（老 App 多半没有：容忍） */
   if (existsSync(ESP32_MAIN)) {
@@ -602,20 +602,20 @@ function planDelete(app) {
     let mainOut = mainText;
     const mainInc = removeExactLine(mainOut, '#include "' + app.name + '_app.h"');
     if (mainInc === null) {
-      absent.push('platform/esp32/project/main/main.cpp · include');
+      absent.push('device/project/main/main.cpp · include');
     } else {
-      report.push(removeEntry('platform/esp32/project/main/main.cpp', 'include', mainOut, mainInc.index));
+      report.push(removeEntry('device/project/main/main.cpp', 'include', mainOut, mainInc.index));
       mainOut = mainInc.text;
     }
-    const mainItem = removeTableItem(mainOut, app, 'platform/esp32/project/main/main.cpp', false);
+    const mainItem = removeTableItem(mainOut, app, 'device/project/main/main.cpp', false);
     if (mainItem === null) {
-      absent.push('platform/esp32/project/main/main.cpp · App 表项');
+      absent.push('device/project/main/main.cpp · App 表项');
     } else {
-      report.push(removeEntry('platform/esp32/project/main/main.cpp', 'App 表项 embark::demo::' + app.pascal,
+      report.push(removeEntry('device/project/main/main.cpp', 'App 表项 embark::demo::' + app.pascal,
         mainOut, mainItem.index, [mainItem.removed]));
       mainOut = mainItem.text;
     }
-    if (mainOut !== mainText) edits.push({ rel: 'platform/esp32/project/main/main.cpp', path: ESP32_MAIN, updated: mainOut });
+    if (mainOut !== mainText) edits.push({ rel: 'device/project/main/main.cpp', path: ESP32_MAIN, updated: mainOut });
   }
 
   /* ⑤ hooks 宏体那行 X(名)（有的 App 从没登记过，容忍）；撤完把末行多余的续行反斜杠去掉 */

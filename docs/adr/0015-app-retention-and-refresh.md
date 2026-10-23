@@ -28,7 +28,7 @@
 
 ## Considered Options
 
-- **每个 App 一个 FreeRTOS 任务做 App 主体**：否决。① LVGL 非线程安全，[ADR 0001](0001-single-ui-task-logic-apps.md) 定的是唯一 UI 任务 + 逻辑模块，任务化会把「谁能碰控件」从架构保证降级成纪律；② `max_own_tasks = 2`（[config/embark_limits.h](../../config/embark_limits.h) `:67`）、每槽 512 字栈，装不下 App 数量；③ `ITaskSpawner` 只有 `spawn_task` / `release_task`，**没有 suspend/resume 原语**（[include/embark/task_spawner.h](../../include/embark/task_spawner.h) `:56-66`，ADR 0009 弃选 D 就是被这条挡住）；④ 用户要的 UX（回来还在原页面）不需要它。
+- **每个 App 一个 FreeRTOS 任务做 App 主体**：否决。① LVGL 非线程安全，[ADR 0001](0001-single-ui-task-logic-apps.md) 定的是唯一 UI 任务 + 逻辑模块，任务化会把「谁能碰控件」从架构保证降级成纪律；② `max_own_tasks = 2`（[core/config/embark_limits.h](../../core/config/embark_limits.h) `:67`）、每槽 512 字栈，装不下 App 数量；③ `ITaskSpawner` 只有 `spawn_task` / `release_task`，**没有 suspend/resume 原语**（[core/include/embark/task_spawner.h](../../core/include/embark/task_spawner.h) `:56-66`，ADR 0009 弃选 D 就是被这条挡住）；④ 用户要的 UX（回来还在原页面）不需要它。
 - **屏常驻（十二张屏全留着）**：能消灭「重建导致缓存失配」整类 bug（`11:31` 就是这类），但与「屏 = 一次性资源」的既有纪律冲突、内存账要重算。留一道门：真做了 `lvgl_alloc_budget_bytes` 的实测再回头议。
 - **为冻结型（红白机）也申请后台**：会让「申请」失去意义（人人都要），且冻结型不需要在离开后推进。
 - **给天气加一条新消息类型**：不需要。回主屏 `onResume` 重读 KV 就够；今天 launcher 每秒轮询一次存储，只是把刷新放错了位置。
@@ -38,6 +38,6 @@
 - 值重推：`app/common/ui_backend.h:61`（`ui_backend_bind_repaint`，没有导航桥的构建下退化为空实现）、[app/common/aidogui_ui_nav.h](../../app/common/aidogui_ui_nav.h) `:77`（`aidogui_ui_nav_bind_repaint`，观测 `..._bindings()` / `..._calls()`；观察者里在点击绑定之后调用）。声明方：launcher / clock / weather 三个 App 各一行。
 - 退役后台体：`app/clock/clock_app.h` 与 `app/launcher/launcher_app.h` 的 `settings()` 覆盖已删（回到默认 suspend），刷新改走 `onForegroundTick`；weather 只在屏装载后与切城市时写控件。
 - 视图留存样板：launcher 磁贴页码（[app/launcher/launcher_app.cpp](../../app/launcher/launcher_app.cpp) `onPause` 记 `launcher_tiles_current_page()`、重推时跳回）、clock 月历月（`cal_view_y_` / `cal_view_m_` 在 `repaint_screen()` 里**不**清）。
-- 宿主验收（[platform/host/ui_demo.cpp](../../platform/host/ui_demo.cpp) `--ui-launcher-pages`）：新增两条全局不变量——「没有任何 App 申请后台体」「声明重推的屏数 == 3 且屏装载后被调过」，以及端到端断言「翻到第 2 页 → 进 clock → 回主屏 → 仍在第 2 页」。
+- 宿主验收（[host/ui_demo.cpp](../../host/ui_demo.cpp) `--ui-launcher-pages`）：新增两条全局不变量——「没有任何 App 申请后台体」「声明重推的屏数 == 3 且屏装载后被调过」，以及端到端断言「翻到第 2 页 → 进 clock → 回主屏 → 仍在第 2 页」。
 - 内核用例不变（框架侧执行模型未动）。
 - 交叉阅读：[ADR 0004](0004-background-tick-and-state-policy.md)（节拍实现）、[ADR 0009](0009-background-arm-on-first-enter.md)（武装时机，被本 ADR 修订默认假设）、[ADR 0010](0010-arm-at-boot.md)（`at_boot`）、[ADR 0013](0013-launcher-paged-tiles.md) / [ADR 0014](0014-in-screen-back.md)（主屏与回程）、`docs/concepts/app-lifecycle.md` §4.3、`docs/concepts/app-lifecycle.md`、[app/aidogui_ui/README.md](../../app/aidogui_ui/README.md)、`GLOSSARY.md`（Retention / View state / Frozen / Value repaint）。

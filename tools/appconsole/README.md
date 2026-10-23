@@ -13,8 +13,8 @@
 | 不做 | 去哪做 |
 | --- | --- |
 | 实时画面 / 在浏览器里点界面 | 跑 `tools/aidogui/dev.ps1`，直接在 SDL 窗口里点 |
-| 串口 / 烧真机 | `tools/esp/idf.ps1 -Task flash -Port COM3`、`tools/esp/serial.ps1 -Port COM3` |
-| 跑那五条验收故事 | `platform/host/embark_host_ui.exe --ui-nav` 等，见 [tools.md](../../docs/guides/tools.md) |
+| 串口 / 烧真机 | `device/tools/idf.ps1 -Task flash -Port COM3`、`device/tools/serial.ps1 -Port COM3` |
+| 跑那五条验收故事 | `host/embark_host_ui.exe --ui-nav` 等，见 [tools.md](../../docs/guides/tools.md) |
 | 画界面 | 「打开设计器」按钮，或 `tools/aidogui/html_to_aid.mjs` 走 HTML 草稿 |
 
 ## 它不存第二份知识

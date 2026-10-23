@@ -22,7 +22,7 @@ AiDoGUI 的产物同样是 **LVGL C 代码**，所以 App 契约、屏名约定�
    字体源 `assets/font/`、预览图 `previews/`、AiDoGUI 原生导出目录
    `app/aidogui_ui/export/`（`ui.c`/`ui.h`/`screens/`/`components/`/`font/`/`image/`）
    **全部随仓库入库**——CI 与协作者不需要装 AiDoGUI（和 0008 决策 1 同一条理由，只是
-   工具换了）。**屏表/控件表/字体表不入库**：`cmake/embark_aidogui_tables.cmake` 在
+   工具换了）。**屏表/控件表/字体表不入库**：`core/cmake/embark_aidogui_tables.cmake` 在
    CMake 配置期解析 `export/` 生成到构建目录（生成代码一变自动重跑配置），所以
    **「GUI 导出 → 直接编译」不需要任何额外脚本**。
    日常路径 = 设计器「打开工程」`screen.aid` → 编辑 → 导出向导（输出目录选
@@ -48,7 +48,7 @@ AiDoGUI 的产物同样是 **LVGL C 代码**，所以 App 契约、屏名约定�
 4. **资源格式 = BIN，路径写死 `S:/fonts` 与 `S:/images`**：生成代码不管
    `exportSettings.*BinRootPath` 填什么，一律加载 `S:/fonts/<name>.bin`、
    `S:/images/<name>.bin`（实测）——于是**宿主与真机各挂一个 S 盘，两端零差异**：
-   宿主由 `platform/common/aidogui_res_fs` 把 `S:` 指到 `app/aidogui_ui/export`（生成
+   宿主由 `core/common/aidogui_res_fs` 把 `S:` 指到 `app/aidogui_ui/export`（生成
    代码写复数目录 `fonts/`/`images/`，AiDoGUI 磁盘上是单数 `font/`/`image/`，桥做目录名
    兜底 ⇒ 导出完不用改名），真机是 SD 卡挂载点（第 3 步）。**为什么不是 C 数组**：同工程实测 C 模式
    46.16 MB / BIN 10.94 MB，其中单张图 3081 KB vs 616 KB ≈ 5.0 倍，这只是「文本 vs
@@ -91,11 +91,11 @@ AiDoGUI 的产物同样是 **LVGL C 代码**，所以 App 契约、屏名约定�
    `lv_event_send(tile, LV_EVENT_CLICKED, nullptr)` 也是 0 命中——「回调根本没挂上」和
    「事件没送到」这两件事必须靠这个实验区分。改成 `notify=true` 后双向导航全绿。通知
    桥自己发起的装载**不会成环**：观察者顺手请求切到同名 App 时，框架对「已是当前前台」
-   的请求直接 return（`src/embark/framework.cpp` 的 `apply_pending_switch` 第一句就是
+   的请求直接 return（`core/src/embark/framework.cpp` 的 `apply_pending_switch` 第一句就是
    `if (pending_ == foreground_) return;`），所以不会重复 onEnter。跨 App 切换只有框架
    一个出口（与 0006/0008 决策 3 一致）。
 8. **内存**：字体与控件全走 LVGL 堆（宿主 = 256 KB 记账预算；真机 =
-   `platform/esp32/src/esp32_board.h` 的 `lvgl_pool_bytes` 48 KB 静态池）。本轮
+   `device/src/esp32_board.h` 的 `lvgl_pool_bytes` 48 KB 静态池）。本轮
    **不动内存模型**：两块屏 7 个字体 BIN 合计约 24.6 KB（桌面屏 6 个字号 4.7 KB；clock
    屏加了 48px 大字号 + 显式字符表，见决策 11），装得下。真机把资源放进 PSRAM 是
    第 3 步的方向——若 PSRAM 也要给 LVGL 用，正解是让 `g_lvgl_pool_arena` 从 PSRAM

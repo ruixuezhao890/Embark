@@ -13,7 +13,7 @@ ADR 0016 已经证明运行期栅格化可行且比 BIN 快（真机一屏 120 �
 两个新事实决定了走向：
 
 1. **字体今天就已经在 SD 卡上**。`'S'` 盘的真机根是 `/sdcard`
-   （`platform/esp32/project/components/embark/CMakeLists.txt:87`），7 个 BIN（合计 68,700 B）从第一天起
+   （`device/project/components/embark/CMakeLists.txt:87`），7 个 BIN（合计 68,700 B）从第一天起
    就是从卡里读的；flash 里真正只有 76 KB 的 `assets/fonts/embark_zh_14.c`。改 TTF **不是引入新的分发路径**，
    是把新机制接到既有路径上。
 2. **SD 上没有 mmap**。FATFS 没法映射成可随机访问的 RAM 窗口，而 `lv_tiny_ttf` 要求 data 常驻
@@ -23,8 +23,8 @@ ADR 0016 已经证明运行期栅格化可行且比 BIN 快（真机一屏 120 �
 ## 决策
 
 1. **字体只从 SD 卡读，不进 flash 分区**（用户理由：flash 更珍贵，另有他用）。⇒
-   `platform/esp32/project/partitions.csv` 里那行 `fonts, data, 0x40, 0x310000, 4M` 删除，
-   `platform/esp32/src/esp32_font_probe.cpp` 的 mmap 段改走 SD。（已落地，issue 05：分区表只剩
+   `device/project/partitions.csv` 里那行 `fonts, data, 0x40, 0x310000, 4M` 删除，
+   `device/src/esp32_font_probe.cpp` 的 mmap 段改走 SD。（已落地，issue 05：分区表只剩
    nvs / phy_init / factory，探针改成量产品路径、不再自己建字体。）
 2. **现在就做，先通后删**：先让 TTF 通道顶替全部字号、6 张屏零视觉回归；再删 BIN 生成链与拷卡流程。
    理由：阅读器与 BIN 链并行改最贵，且"忘了拷卡 → 静默方框"这条坑在整本书的字符量下放大 100 倍。
@@ -48,9 +48,9 @@ ADR 0016 已经证明运行期栅格化可行且比 BIN 快（真机一屏 120 �
      `lv_lru_hash` 取 `h % 桶数`（`:301`）⇒ 配额 ≤ px² 是整数除零 panic，不是变慢。`8×` 恒 ≥ `2×px²`。
    - 配额是**上限不是目标**：`lv_lru_create` 只按 `cache_size/px²` 立刻分配哈希桶数组，位图在绘制期
      才逐个 `lv_mem_alloc`。给大了几乎不花钱，给少了才会每帧重栅格化（ADR 0016 那次 64 KB 翻车）。
-   - 实现：`app/common/font_quota.h`（纯整数算术、不 include LVGL，单测 `tests/kernel/test_font_quota.cpp`）
+   - 实现：`app/common/font_quota.h`（纯整数算术、不 include LVGL，单测 `core/tests/kernel/test_font_quota.cpp`）
      + `app/common/aidogui_ui_bridge.cpp` 的 `fit_cache_quotas()`。init 时读
-     `font_alloc_pool_budget_bytes()`（池的计划容量，见 `platform/common/font_alloc_scope.h`）按池的 3/4
+     `font_alloc_pool_budget_bytes()`（池的计划容量，见 `core/common/font_alloc_scope.h`）按池的 3/4
      收一次配额 —— 池里字形实占"16 字节对齐位图 + 48 字节块头"≈ 记账值的 1.3 倍。超了按**字号从大到小**
      砍半、下限 4 KB；砍到底仍超只 `ELOG_ERROR`，绝不 assert。
    - 与 grilling 里"砍掉 48/56 两档"的建议不一致，这里说明为什么改：屏幕上 48/56 px 的字形总数是个位数
@@ -69,16 +69,16 @@ ADR 0016 已经证明运行期栅格化可行且比 BIN 快（真机一屏 120 �
    回落到 `LV_FONT_DEFAULT`。所以兜底要把 7 个槽全指到 `LV_FONT_DEFAULT`（`= &embark_zh_14`），
    destroy 时按"等于内置字体就不归桥释放"跳过。BIN 时代没插卡同样会崩，只是没人踩到。
 9. **`font_service` / `font_ledger` / `embark_limits.h` 三个常量整体退役**。它们唯一的消费者是
-   `platform/esp32/src/esp32_bringup.cpp:130` 的探针，桥从来没走过；"路径 + 文件字节"的账在 TTF 时代没有
+   `device/src/esp32_bringup.cpp:130` 的探针，桥从来没走过；"路径 + 文件字节"的账在 TTF 时代没有
    对应物（记账对象变成字形缓存字节 + 字号）。容量控制挪到新的字体管理器，两套测试跟着重写。
    已落地（issue 04）：四个文件与三个常量删除，启动期自检从"自己 `lv_font_load` 一份探针字库"改成
    直接读桥的字体报告（`aidogui_ui_bridge_font_report()` 的 `loaded == total`，令牌仍是 `SD_FONT_OK`）；
-   测试换成 `tests/host/test_ttf_font.cpp`（真 TTF 建实例 + 极小缓存仍出位图）。理由：桥已经在
+   测试换成 `core/tests/host/test_ttf_font.cpp`（真 TTF 建实例 + 极小缓存仍出位图）。理由：桥已经在
    `framework.boot()` 里把 3.85 MB 读进 PSRAM，探针再读一份会在 8 MB 上顶到 7.7 MB。
 10. **断行沿用 LVGL 现状，缺口记账**。8.3.11 的 CJK 逐字断行只认 U+4E00–U+9FA5
     （`third_party/lvgl/src/misc/lv_txt.h:165-184`），且全仓无行首禁则 ⇒ 标点可以起行，假名/谚文/CJK 扩展区
     不算断点。先让阅读器跑起来，把"标点起行"当已知缺陷；真需要时由 reader 自算断行，不升 LVGL 9。
-    **2026-10-17 已实测钉住**（issue 07）：`tests/host/test_text_wrap.cpp` 覆盖三种文本 —— 中文逐字断且
+    **2026-10-17 已实测钉住**（issue 07）：`core/tests/host/test_text_wrap.cpp` 覆盖三种文本 —— 中文逐字断且
     不丢字、全角标点起行、假名/拉丁长串按宽度硬切不溢出；LVGL 哪天改了断行，这三条会先红。
 
 ## 内存账（本 ADR 最容易被忘的一段）
@@ -125,10 +125,10 @@ PSRAM 分账（8 MB）：整份 TTF 3.85 MB + 字形缓存池 192 KB（实占 �
   只在 UI 循环里推进），节奏必须用平台时钟 `esp_timer_get_time()` 由 `set_boot_checks()` 的时钟回调注入。
   证据见 `.scratch/font-ttf/issues/08-hardware-acceptance.md` 的「启动占位屏」一节。
   没采纳的替代：提 SPI 频率、TTF 回 flash 分区、首次启动「装机」到 flash —— 见「否决过的方案」。
-- **断行缺口**：见第 10 条，阅读器排版仍需一次自己的活（行为已由 `tests/host/test_text_wrap.cpp` 钉住）。
+- **断行缺口**：见第 10 条，阅读器排版仍需一次自己的活（行为已由 `core/tests/host/test_text_wrap.cpp` 钉住）。
 - **授权**：字体不再随固件分发，暴露面比"整份 TTF 烧 flash"小得多；但产品出货若预置字体仍然要授权。
   `ui_heiti.ttf`（时尚中黑简体 TRENDS）授权待确认，开源替代是 Noto Sans SC / 思源黑体。
-- **文档债**：`docs/reference/limits.md:100-102`、`GLOSSARY.md` 相关条目、`platform/esp32/README.md:141-147`
+- **文档债**：`docs/reference/limits.md:100-102`、`GLOSSARY.md` 相关条目、`device/README.md:141-147`
   与 `app/aidogui_ui/README.md:141,166` 全在描述 BIN 链。
 
 ## 否决过的方案

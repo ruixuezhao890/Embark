@@ -14,7 +14,7 @@ ETL 依赖版本是"先锁后升"：立项定稿时锁 **20.40.0**（spec §16.3
 
 ## 落地与验证
 
-- issue 07：节拍机制 + 总线 + 收件箱 + own_task 装配（`src/embark/framework.cpp`、`tests/kernel/test_framework_messaging.cpp`）。
+- issue 07：节拍机制 + 总线 + 收件箱 + own_task 装配（`core/src/embark/framework.cpp`、`core/tests/kernel/test_framework_messaging.cpp`）。
 - issue 08：三个 demo App（clock=tick + state_chart、launcher/settings=suspend），宿主验收 EXIT=0；
   `own_task` 策略当时已装配但没有 demo App 用它（第一个真实用例是 issue 15 的 WiFi 非阻塞连接）。
 - 交叉阅读：spec §6（执行模型）、§16.3/§16.4（ETL 决策）、`docs/concepts/app-lifecycle.md`（用法）、`GLOSSARY.md`（Background tick / Own task 词条）。

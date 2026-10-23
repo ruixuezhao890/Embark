@@ -9,7 +9,7 @@
  * 按 App 注册表运行时生成 —— 见 rebuild_tiles() 与 app/launcher/launcher_tiles.cpp。
  *
  * 除导航外，启动器还负责刷屏上那两个时间控件（L_Time / L_Clock0）：宿主上墙钟就是 PC
- * 时间（platform/host/host_time.cpp 直接读 system_clock），所以这里看到的 HH:MM 与电脑
+ * 时间（host/host_time.cpp 直接读 system_clock），所以这里看到的 HH:MM 与电脑
  * 一致。刷新挂在**屏装载后**（bind_repaint → repaint_screen()）：屏每次都是新对象、
  * label 已被打回设计稿初值，必须重推一遍；这也是"回主屏时间停在设计稿 11:31"那个 bug
  * 的根治办法 —— 以前靠每个 App 自己记得清缓存（ADR 0015）。

@@ -17,7 +17,7 @@
     * 生成的是 C 代码、编进二进制 —— 所以**文案与几何**改了必须重新导出 + 重新构建，
       那是本脚本第 1、2 步的活。
 
-  改 .cpp/.h 也归本脚本管：它盯着 src/ app/ include/ platform/ cmake/ 的源文件，一发现变了
+  改 .cpp/.h 也归本脚本管：它盯着 core/src/ app/ core/include/ host/ device/ core/cmake/ 的源文件，一发现变了
   就停掉窗口、重新构建、再起一个（进程级重启，不是 C++ 热重载 —— 那是 Q3 明确排除的方案）。
 
 .PARAMETER Screen
@@ -56,11 +56,11 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $buildDir = Join-Path $repoRoot 'build'
-$exe = Join-Path $buildDir 'platform\host\embark_host_ui.exe'
+$exe = Join-Path $buildDir 'host\embark_host_ui.exe'
 
 # 盯哪些目录（源文件）。export/ 与 assets/ 不在里面：它们的变化由 --watch 在进程内消化，
 # 不该触发重新构建（否则每导一次就重启一次窗口，白丢上下文）。
-$watchRoots = @('src', 'app', 'include', 'platform', 'cmake', 'config') |
+$watchRoots = @('core\src', 'app', 'core\include', 'core\common', 'host', 'device', 'core\cmake', 'core\config') |
   ForEach-Object { Join-Path $repoRoot $_ } |
   Where-Object { Test-Path $_ }
 $skipDirs = @(

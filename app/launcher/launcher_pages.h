@@ -6,7 +6,7 @@
  * 磁贴按 4 个一页铺开，横向分页滑动（吸附式连续滚动，见 launcher_tiles.cpp）。
  *
  * 这里【只有算术】：不 include LVGL、不认识 App、不碰全局状态 —— 页面数与几何坐标
- * 都能在宿主单测里直接算（tests/kernel/test_launcher_pages.cpp）。谁负责建控件、
+ * 都能在宿主单测里直接算（core/tests/kernel/test_launcher_pages.cpp）。谁负责建控件、
  * 谁负责布局，是 launcher_tiles.cpp 的事。
  *
  * 坐标口径：页内局部坐标（页容器左上角为原点），横向分页的页宽 = 面板宽。
@@ -44,7 +44,7 @@ inline constexpr std::size_t dot_size = 6U;
 inline constexpr std::size_t dot_gap = 2U;
 
 /// 磁贴容量：注册表容量减一（第 0 项是主屏自己，不给自己磁贴）。取值来自
-/// config/embark_limits.h 的 max_apps —— 改容量只改那一处，这里跟着走。
+/// core/config/embark_limits.h 的 max_apps —— 改容量只改那一处，这里跟着走。
 inline constexpr std::size_t max_tiles = embark::max_apps - 1U;
 
 /// 页容量 = 磁贴满编时的页数（运行时对象数组按它定长）。

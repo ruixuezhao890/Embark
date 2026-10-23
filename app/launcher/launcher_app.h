@@ -17,7 +17,7 @@
  * 墙钟/城市走，离开主屏后没什么可推进的（ADR 0015 退役了这里的 tick 1 s）。
  *
  * 历史：issue 16 的扇形槽位架（弧轨 + 拖动 + 弹簧 + 手算命中）已随
- * include/embark/launcher_geometry.h 与 tests/kernel/test_launcher_geometry.cpp 一起
+ * core/include/embark/launcher_geometry.h 与 core/tests/kernel/test_launcher_geometry.cpp 一起
  * 下线；启动能力改由界面屏上的控件经「调用函数」事件驱动。启动器仍是 App 0。
  *
  * 零堆纪律：类内没有堆分配；界面对象都由生成代码持有（见 aidogui_ui_bridge.cpp）。

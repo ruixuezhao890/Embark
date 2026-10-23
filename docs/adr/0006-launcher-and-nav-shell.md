@@ -27,14 +27,14 @@ screen 容器、App 挂进去（破坏既有 `lv_scr_load` 契约，`lv_layer_to
 启动器界面改由设计器工程提供：屏名 == App 名，`launcher` 屏上的时钟卡经「调用函数」事件
 `embark_ui_open_clock` 切到 clock App，导航桥把这次意图翻成 `request_switch("clock")`（见 aidogui_ui_nav.h）。
 于是本文档第 2/3 条的扇形几何、拖动/滚轮/弹簧与手绘视觉全部删除
-（`include/embark/launcher_geometry.h` 与 `tests/kernel/test_launcher_geometry.cpp` 一并移除），
+（`core/include/embark/launcher_geometry.h` 与 `core/tests/kernel/test_launcher_geometry.cpp` 一并移除），
 LauncherApp 退化成与其它屏宿主同形的薄壳。第 4/5 条（导航壳属于框架、
 状态行只报状态）不变。宿主验收随之改写：`--launch` 改为程序化 `request_switch` 启动，
 `--click` 改为点屏上的时钟卡驱动切 App。
 
 ## 后记（2026-10-06）：导航壳退役
 
-框架导航壳（`platform/common/nav_shell.{h,cpp}`：lv_layer_top 状态行 + 统一返回键）已整体退役：
+框架导航壳（`core/common/nav_shell.{h,cpp}`：lv_layer_top 状态行 + 统一返回键）已整体退役：
 源文件删除，`framework` 不再持壳、`notify_foreground()` 移除。返回键与状态行的职责移交界面屏：
 回主屏由屏内按钮（Flow SetPage 回 launcher 屏 → 屏观察者 `request_switch`）承担，状态信息由屏上
 控件呈现。App 侧 `request_home()` 公共 API 保留（App 或屏上事件显式调用 = 回注册表首位）。

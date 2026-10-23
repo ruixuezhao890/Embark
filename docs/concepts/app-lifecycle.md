@@ -6,8 +6,8 @@
 > 能不能 publish」上犯迷糊。
 >
 > 「怎么用」（示例代码与判据）也收在本文：§4.4 申请后台、§5.8 own_task 写法、§6 消息；
-> 契约原文见 [app.h](../../include/embark/app.h)、[framework.h](../../include/embark/framework.h)、
-> [task_spawner.h](../../include/embark/task_spawner.h)；
+> 契约原文见 [app.h](../../core/include/embark/app.h)、[framework.h](../../core/include/embark/framework.h)、
+> [task_spawner.h](../../core/include/embark/task_spawner.h)；
 > 决策背景见 [adr/0001](../adr/0001-single-ui-task-logic-apps.md)、[0004](../adr/0004-background-tick-and-state-policy.md)、[0005](../adr/0005-static-task-slots-and-pool.md)。
 
 ---
@@ -49,7 +49,7 @@ flowchart TD
 
 ## 2. boot()：装配顺序（进入循环之前，一次做完）
 
-`framework.boot()`（[framework.cpp](../../src/embark/framework.cpp) `:16-129`）按固定顺序
+`framework.boot()`（[framework.cpp](../../core/src/embark/framework.cpp) `:16-129`）按固定顺序
 把三样东西装好：钩子（生命周期）、总线（消息）、后台（tick 定时器 + own task）。
 注意后台是**两段式**：boot 只做「注册 / 校验」，真正**开跑在武装**（4.1）——例外是显式声明 `ArmPolicy::at_boot` 的 App：boot 第 9 步当场武装（4.2）。
 **顺序本身就是契约**，每步之间谁先谁后都有原因：
@@ -105,7 +105,7 @@ sequenceDiagram
     UI->>LAU: onResume()（onEnter 一生只发一次）
 ```
 
-钩子全集（[app.h](../../include/embark/app.h) `:95-119`）：
+钩子全集（[app.h](../../core/include/embark/app.h) `:95-119`）：
 
 | 钩子 | 何时触发 | 次数 |
 | --- | --- | --- |
@@ -120,7 +120,7 @@ sequenceDiagram
 
 ## 4. 后台运行：三种策略，各挂一处
 
-`BackgroundPolicy` 是每 App 一个的声明、`ArmPolicy` 是武装时机的声明（[app.h](../../include/embark/app.h) `:37-52`），
+`BackgroundPolicy` 是每 App 一个的声明、`ArmPolicy` 是武装时机的声明（[app.h](../../core/include/embark/app.h) `:37-52`），
 App 在 `settings()` 里自报家门；框架在 boot 第 7 步注册定时器、第 8 步校验 own_task 容量，
 然后在这个 App **第一次进前台**时武装它（4.1）——除非它声明了 `ArmPolicy::at_boot`，那样
 boot 第 9 步就武装（4.2）。**今天全仓没有一个 App 声明后台体**（clock 与 launcher 的 `tick` 已按 §4.3 退役），所以下面这张表读法上更像「将来想申请后台时怎么做」。
@@ -231,7 +231,7 @@ AppSettings settings() const override {
 }
 ```
 
-占用的容量是编译期定死的（改在 `config/embark_limits.h`）：`max_apps`、`max_bus_subscribers`、
+占用的容量是编译期定死的（改在 `core/config/embark_limits.h`）：`max_apps`、`max_bus_subscribers`、
 `max_background_timers`、`message_queue_depth`、`max_own_tasks`（同时在跑的 `own_task` 上限，
 也是静态任务池的槽数）。
 
@@ -270,7 +270,7 @@ flowchart TD
 | 读一个 I2C 寄存器（1 写 + 1 读） | ≈ 50 µs | 两个字节 + 两次 START/STOP | `tick` |
 | 写一个命令字节 | ≈ 25 µs | 一个字节 | `tick` |
 | 读 IMU 六轴（12 字节） | ≈ 0.3 ms | 1 字节地址 + 12 字节数据 | `tick` |
-| 读触摸一整包（27 字节） | ≈ 0.6 ms | 仓库现状就是每帧在 UI 任务里跑（`platform/esp32/src/esp32_input.cpp` 按 10 ms 节流） | `tick` |
+| 读触摸一整包（27 字节） | ≈ 0.6 ms | 仓库现状就是每帧在 UI 任务里跑（`device/src/esp32_input.cpp` 按 10 ms 节流） | `tick` |
 | 大数组运算、图像缩放 | 几十 µs ~ 几 ms | 不阻塞但占 CPU，超过 2 ms 就会拖慢界面 | 超过 `tick` 的账就 `own_task` |
 | 读一小段 Flash / 一个 NVS key | 数十 ms | 同步等 flash 操作 | `own_task` |
 | 写 NVS / 擦一页 Flash | 几十 ~ 几百 ms | `nvs_set_blob` + `nvs_commit` 都要落盘 | `own_task`（或只在 `onPause` / `onExit` 写一次） |
@@ -282,11 +282,11 @@ flowchart TD
 
 **三个校准锚点**（别把 `tick` 的预算想得太宽）：
 
-- UI 循环节拍 = **5 ms**（`config/embark_limits.h` 的 `ui_loop_period_ms`）：一个 `tick` 回调占掉 2 ms，
+- UI 循环节拍 = **5 ms**（`core/config/embark_limits.h` 的 `ui_loop_period_ms`）：一个 `tick` 回调占掉 2 ms，
   这一帧就只剩 3 ms 给 LVGL、触摸和所有 App。
 - 框架自己每帧最多花 **≈ 2.6 ms**（一次 flush 40 行 = 25.6 KB，80 MHz SPI，且同步等 DMA 结束，见
-  `platform/esp32/src/esp32_display.cpp`）：框架已经用掉这个量级，App 别再往上叠同等量级。
-- **触摸驱动就是「每帧在 UI 任务里碰 I2C」的活样本**（`platform/esp32/src/esp32_input.cpp`，10 ms 节流，
+  `device/src/esp32_display.cpp`）：框架已经用掉这个量级，App 别再往上叠同等量级。
+- **触摸驱动就是「每帧在 UI 任务里碰 I2C」的活样本**（`device/src/esp32_input.cpp`，10 ms 节流，
   注释写着「给 I2C 让路」）：所以「碰了 I2C 就必须 `own_task`」不成立；它的 50 ms 超时是**故障路径**，
   不是正常耗时。
 
@@ -307,7 +307,7 @@ flowchart TD
 
 own task 是"逃生舱"：tick 策略要求钩子轻量（在 UI 循环里跑），需要独立线程的重活
 （阻塞 IO、长计算）就声明 `own_task`。它的生命周期跨框架（framework.cpp）与平台
-（ITaskSpawner，真机 = platform/common/pooled_task_spawner.h）两站：
+（ITaskSpawner，真机 = core/common/pooled_task_spawner.h）两站：
 
 ```mermaid
 flowchart TD
@@ -330,7 +330,7 @@ flowchart TD
 ### 5.1 存储底座：own task 住进静态定容池（借一块 → 还回去）
 
 own task 的内存**不是运行时堆**（仓库纪律：静态分配）。它由
-`PooledTaskSpawner`（platform/common/pooled_task_spawner.h）管着一块
+`PooledTaskSpawner`（core/common/pooled_task_spawner.h）管着一块
 **编译期定容的静态池**：
 
 - 池的 arena 是 `.bss` 里一块 `alignas(16) std::uint8_t[]`（:248），大小由
@@ -371,7 +371,7 @@ flowchart TD
 
 - **容量是编译期常量**：`max_own_tasks = 2`（同时最多 2 个 own task），每任务
   栈 `own_task_stack_words = 512`（约 4 KB）；池满 / 栈深超限 → `Error::no_space`
-  （config/embark_limits.h `:65-72`）。
+  （core/config/embark_limits.h `:65-72`）。
 - **「还」有责任方**：任务入口返回 ≠ 槽位可复用——park 之后要等持有者
   （唯一 UI 任务）在 step 第 7 段 `release_task` 才真正还池；`finished()` 观测
   不为 0 就说明有槽占着没还。
@@ -429,11 +429,11 @@ flowchart TD
 
 ### 5.7 契约测试（比文档更权威）
 
-`tests/kernel/test_own_task_lifecycle.cpp` 四个用例：① 创建 → 跑完 → 回收 →
+`core/tests/kernel/test_own_task_lifecycle.cpp` 四个用例：① 创建 → 跑完 → 回收 →
 再创建（跟着日志读，`:252`）；② 两个 App 各自在**武装时**创建、池满 `no_space`、
 失败不留记录（`:338`）；③ 常驻任务永远不被回收（回收只认「入口已返回」，`:397`）；
 ④ `ArmPolicy::at_boot` 的 App 开机即武装、不等前台（`:425`）。平台池那一半（定容、
-世代号）由 `tests/kernel/test_pooled_task_spawner.cpp` 六个用例逐格验证。
+世代号）由 `core/tests/kernel/test_pooled_task_spawner.cpp` 六个用例逐格验证。
 
 ### 5.8 怎么用：常驻 / 一次性 / 运行期再创建
 
@@ -465,8 +465,8 @@ const embark::Error err = fw.spawn_own_task(fw.id_of(*this));
   `return`，槽位自然回收 —— UI 全程不被阻塞。这正是「运行期创建、完成即回收」的第一个真实用例。
 
 观测：`fw.own_tasks_spawned()` / `fw.own_tasks_released()` 是累计创建/回收计数；任务池自身的
-`running() / finished() / free_slots()` 在 `platform/common/pooled_task_spawner.h` 上。系统用例见
-`tests/kernel/test_own_task_lifecycle.cpp`。
+`running() / finished() / free_slots()` 在 `core/common/pooled_task_spawner.h` 上。系统用例见
+`core/tests/kernel/test_own_task_lifecycle.cpp`。
 
 ## 6. 消息投递：publish 与 post 两条路
 
@@ -556,32 +556,32 @@ class LampApp final : public embark::App {
 见 [ADR 0018](../adr/0018-settings-truth-and-growth.md)）是最完整的范本；`app/common/app_messages.h`
 定义了 `BrightnessMessage`。**今天这三个 App 都不声明后台策略**（全仓也没有别的 App 声明）：`tick` 的
 历史样板是 clock 的 100 ms，已按 [ADR 0015](../adr/0015-app-retention-and-refresh.md) 退役；`own_task` 的
-完整系统用例在 `tests/kernel/test_own_task_lifecycle.cpp`（宿主演示 `ui_demo` 仍按这 3 个 App 注册）。
+完整系统用例在 `core/tests/kernel/test_own_task_lifecycle.cpp`（宿主演示 `ui_demo` 仍按这 3 个 App 注册）。
 
 ## 8. 关键源码索引
 
 | 主题 | 位置 |
 | --- | --- |
-| 一帧 7 段 | `src/embark/framework.cpp:131-166` |
-| boot 装配顺序（onCreate → onEnter → 总线 → 注册 tick 定时器 → own_task 数量校验 → 先武装 at_boot、再武装默认前台） | `src/embark/framework.cpp:16-129` |
-| 边界切换（onPause → onEnter/onResume → 武装） | `src/embark/framework.cpp:352-380` |
-| 切换请求只登记 pending | `src/embark/framework.cpp:168-182` |
-| **后台武装**（幂等；tick → start 定时器，own_task → spawn） | `src/embark/framework.cpp:200-239` |
-| 运行期创建 own task（spawn_own_task） | `src/embark/framework.cpp:268-273` |
-| own task 创建细节与失败口径（spawn_own_task_internal） | `src/embark/framework.cpp:275-311` |
-| own task 入口与常驻/一次性循环 | `src/embark/framework.cpp:241-266` |
-| own task 槽位回收 | `src/embark/framework.cpp:313-332` |
-| 关机路径（前台 onPause + 各 App onExit，own task 不终止） | `src/embark/framework.cpp:382-404` |
-| 后台策略 / 武装时机枚举 + AppSettings | `include/embark/app.h:37-61` |
-| App 钩子契约 | `include/embark/app.h:95-119` |
-| step/own task/publish/post 纪律 + 武装时机语义（文件头注释） | `include/embark/framework.h:1-66` |
-| 后台武装的观测接口（`background_armed` / `arm_failures`） | `include/embark/framework.h:156-167` |
-| 后台记账位（`entered_` / `armed_` / `bg_timer_ids_`） | `include/embark/framework.h:298-305` |
-| 运行期武装失败计数 `arm_failures_` | `include/embark/framework.h:326-327` |
-| 任务句柄（slot + 世代号）与 spawn/release 语义 | `include/embark/task_spawner.h:29-67` |
-| 任务池：借（allocate）与还（deallocate）+ 槽位状态机 | `platform/common/pooled_task_spawner.h:97-155` |
-| own task 容量常量（max_own_tasks=2、栈 512 字） | `config/embark_limits.h:65-72` |
-| UI 端口契约（tick/pump_input/process） | `include/embark/ui_port.h` |
+| 一帧 7 段 | `core/src/embark/framework.cpp:131-166` |
+| boot 装配顺序（onCreate → onEnter → 总线 → 注册 tick 定时器 → own_task 数量校验 → 先武装 at_boot、再武装默认前台） | `core/src/embark/framework.cpp:16-129` |
+| 边界切换（onPause → onEnter/onResume → 武装） | `core/src/embark/framework.cpp:352-380` |
+| 切换请求只登记 pending | `core/src/embark/framework.cpp:168-182` |
+| **后台武装**（幂等；tick → start 定时器，own_task → spawn） | `core/src/embark/framework.cpp:200-239` |
+| 运行期创建 own task（spawn_own_task） | `core/src/embark/framework.cpp:268-273` |
+| own task 创建细节与失败口径（spawn_own_task_internal） | `core/src/embark/framework.cpp:275-311` |
+| own task 入口与常驻/一次性循环 | `core/src/embark/framework.cpp:241-266` |
+| own task 槽位回收 | `core/src/embark/framework.cpp:313-332` |
+| 关机路径（前台 onPause + 各 App onExit，own task 不终止） | `core/src/embark/framework.cpp:382-404` |
+| 后台策略 / 武装时机枚举 + AppSettings | `core/include/embark/app.h:37-61` |
+| App 钩子契约 | `core/include/embark/app.h:95-119` |
+| step/own task/publish/post 纪律 + 武装时机语义（文件头注释） | `core/include/embark/framework.h:1-66` |
+| 后台武装的观测接口（`background_armed` / `arm_failures`） | `core/include/embark/framework.h:156-167` |
+| 后台记账位（`entered_` / `armed_` / `bg_timer_ids_`） | `core/include/embark/framework.h:298-305` |
+| 运行期武装失败计数 `arm_failures_` | `core/include/embark/framework.h:326-327` |
+| 任务句柄（slot + 世代号）与 spawn/release 语义 | `core/include/embark/task_spawner.h:29-67` |
+| 任务池：借（allocate）与还（deallocate）+ 槽位状态机 | `core/common/pooled_task_spawner.h:97-155` |
+| own task 容量常量（max_own_tasks=2、栈 512 字） | `core/config/embark_limits.h:65-72` |
+| UI 端口契约（tick/pump_input/process） | `core/include/embark/ui_port.h` |
 | **控件值重推**（屏装载后 → App 的 repaint；容量 8 条） | `app/common/aidogui_ui_nav.cpp:77-110`（观察者里调）、声明入口 `app/common/ui_backend.h:61` |
 | App 的**视图留存**样板（磁贴页码 / 月历视图月） | `app/launcher/launcher_app.cpp`（`onPause` 记页码）、`app/clock/clock_app.cpp`（`repaint_screen()` 不清 `cal_view_*`） |
 | 前台渲染型刷新的驱动点（`onForegroundTick` → 写控件） | `app/clock/clock_app.cpp`、`app/launcher/launcher_app.cpp` |
@@ -595,6 +595,6 @@ class LampApp final : public embark::App {
   [0009](../adr/0009-background-arm-on-first-enter.md)（后台武装时机：第一次进前台才开跑）、
   [0010](../adr/0010-arm-at-boot.md)（显式武装时机：`at_boot` 开机即武装）、
   [0015](../adr/0015-app-retention-and-refresh.md)（留存与刷新：三条轴、五类 App、值重推挂到屏装载后）
-- **比文档更权威的契约测试**：`tests/kernel/test_own_task_lifecycle.cpp` 与
-  `tests/kernel/test_pooled_task_spawner.cpp`（own task 全链路）、`tests/kernel/test_framework.cpp`
+- **比文档更权威的契约测试**：`core/tests/kernel/test_own_task_lifecycle.cpp` 与
+  `core/tests/kernel/test_pooled_task_spawner.cpp`（own task 全链路）、`core/tests/kernel/test_framework.cpp`
   （切换/节拍/消息的正确用法）。

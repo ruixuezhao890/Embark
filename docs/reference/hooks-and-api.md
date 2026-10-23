@@ -29,22 +29,22 @@
 ### 三个"最常见写错"（都有源码证据）
 
 1. **`onCreate` 里 publish 会丢。**
-   总线在 `onCreate` 之后才装配（`src/embark/framework.cpp:44-54`），
-   早于它的广播被计为 unknown 并 WARN（`src/embark/bus.cpp:66-71`）。
+   总线在 `onCreate` 之后才装配（`core/src/embark/framework.cpp:44-54`），
+   早于它的广播被计为 unknown 并 WARN（`core/src/embark/bus.cpp:66-71`）。
    装配消息请放 `onEnter` 之后。
 
 2. **`onMessage` 会收到自己发的消息。**
-   `publish` 遍历所有订阅者，**发送方的 adapter 也在订阅表里**（`src/embark/bus.cpp:55-75`）。
+   `publish` 遍历所有订阅者，**发送方的 adapter 也在订阅表里**（`core/src/embark/bus.cpp:55-75`）。
    要防自回环就带个 `from` 字段自己过滤。
 
 3. **同一个 `onBackgroundTick`，线程语义完全不同。**
-   `tick` 策略在唯一 UI 任务里被调（`src/embark/framework.cpp:152` → `:196`），
+   `tick` 策略在唯一 UI 任务里被调（`core/src/embark/framework.cpp:152` → `:196`），
    `own_task` 策略在自己的任务里被调（`:259` 一次性 / `:264` 常驻循环）。
    跨策略复制粘贴代码前先确认这条。
 
 ### 后台周期是帧粒度
 
-`ceil(period_ms / ui_loop_period_ms)` 个帧——宿主 5 ms 一拍（`ui_loop_period_ms`，`config/embark_limits.h:91`）。
+`ceil(period_ms / ui_loop_period_ms)` 个帧——宿主 5 ms 一拍（`ui_loop_period_ms`，`core/config/embark_limits.h:91`）。
 所以 `period_ms = 100` 实际是 20 帧；宿主墙钟因 Windows 定时器粒度约 2×（见 spec §3）。
 
 ### 武装时机：为什么"声明了策略却一次都没跑"
@@ -61,7 +61,7 @@
 
 ## 2. App 基类：4 个元数据 + 8 个钩子
 
-声明在 [`include/embark/app.h`](../../include/embark/app.h)。
+声明在 [`core/include/embark/app.h`](../../core/include/embark/app.h)。
 
 ### 元数据（都有默认实现，只有 `name()` 必须写）
 
@@ -110,7 +110,7 @@ E_FMT_DERIVE(struct AppSettings {
 
 ## 3. Framework：一个 App 能用的全部
 
-声明在 [`include/embark/framework.h`](../../include/embark/framework.h)。
+声明在 [`core/include/embark/framework.h`](../../core/include/embark/framework.h)。
 文件头 `:8-65` 是权威契约描述（boot 九步、step 七段、各条纪律）。
 
 ### 生命周期（平台入口调，App 一般不调）
@@ -177,7 +177,7 @@ Framework(hal::Context& hal, AppRegistry apps,
 
 ## 4. 消息 API
 
-声明在 [`include/embark/message.h`](../../include/embark/message.h) 与 [`include/embark/bus.h`](../../include/embark/bus.h)。
+声明在 [`core/include/embark/message.h`](../../core/include/embark/message.h) 与 [`core/include/embark/bus.h`](../../core/include/embark/bus.h)。
 
 | 名字 | 定义 | 说明 |
 | --- | --- | --- |
@@ -191,7 +191,7 @@ Framework(hal::Context& hal, AppRegistry apps,
 | `Bus::subscribe` / `unsubscribe` | 见头文件 | 每个 App 在 boot 时自动订阅一次 |
 | `Bus::published` / `unknown` / `subscriber_count` / `reset_counters` | 计数观测 | 与 ETL 裸 bus 的区别就在 `unknown` 这个计数 |
 
-> **v1 是全收广播**：`AppAdapter::accepts` 恒返回 true（`include/embark/framework.h:264`），
+> **v1 是全收广播**：`AppAdapter::accepts` 恒返回 true（`core/include/embark/framework.h:264`），
 > 所以每条消息会进**每个** App 的 `onMessage`，包括发送者自己。按 `get_message_id()` 过滤。
 
 ---
@@ -213,7 +213,7 @@ Framework(hal::Context& hal, AppRegistry apps,
 | `ui_backend_bind_action(屏, 控件, fn)` | `onCreate` | 备用路径：点控件 → 就地调 `fn`（不切 App） |
 | `ui_backend_bind_repaint(屏, fn)` | `onCreate` | 屏装载好后调 `fn` 重推控件值（屏每次都是新对象，ADR 0015） |
 
-没定义 `EMBARK_AIDOGUI_UI` 时全部编译成空操作（`examples/minimal` 这类不链 LVGL 的目标走这条）。
+没定义 `EMBARK_AIDOGUI_UI` 时全部编译成空操作（`core/examples/minimal` 这类不链 LVGL 的目标走这条）。
 
 ### 5.2 `aidogui_ui_bridge.h` —— 生成代码侧
 
@@ -240,7 +240,7 @@ Framework(hal::Context& hal, AppRegistry apps,
 
 ## 6. HAL API（App 与平台侧）
 
-接口声明在 [`include/embark/hal/`](../../include/embark/hal/)。**App 通过 `fw.hal()` 拿到的就是它。**
+接口声明在 [`core/include/embark/hal/`](../../core/include/embark/hal/)。**App 通过 `fw.hal()` 拿到的就是它。**
 
 | 接口 | 关键方法 | 说明 |
 | --- | --- | --- |
@@ -276,7 +276,7 @@ Framework(hal::Context& hal, AppRegistry apps,
 
 ## 7. 错误码
 
-`include/embark/error.h` 的 `enum class Error : std::uint8_t`：
+`core/include/embark/error.h` 的 `enum class Error : std::uint8_t`：
 
 | 值 | 含义（框架里的典型场景） |
 | --- | --- |
@@ -300,14 +300,14 @@ Framework(hal::Context& hal, AppRegistry apps,
 
 | 位置 | 名字 | 说明 |
 | --- | --- | --- |
-| `platform/host/ui_task.h` | `start_ui_task(UiTaskEntry, void*, UiTaskConfig)` | 建唯一 UI 任务（静态分配）。`busy` = 已建过 |
+| `host/ui_task.h` | `start_ui_task(UiTaskEntry, void*, UiTaskConfig)` | 建唯一 UI 任务（静态分配）。`busy` = 已建过 |
 | | `start_scheduler()` | 启动调度器，**永不返回** |
 | | `ui_loop_delay(period_ms)` | 每拍让出（默认 `ui_loop_period_ms`） |
 | | `exit_process(int)` | `_Exit`——主线程卡在调度器的模拟中断循环里，`exit()` 会挂死 |
-| `platform/host/host_context.h` | `HostHal::instance()` / `init()` / `attach_display` / `attach_input` | 宿主 HAL 聚合。`attach_*` 必须在 `init()` **之前** |
-| `platform/common/lvgl_ui_port.h` | `LvglUiPort(context, exit_query, exit_context)` | LVGL 的 `IUiPort` 实现。`exit_query` 为空 = 本平台没有退出信号（真机 v1 就是这样：一直跑） |
-| `platform/common/pooled_task_spawner.h` | `PooledTaskSpawner<Kernel>` | own task 的静态定容池。**借一块 → 跑完 → 还回去**；跨任务只允许 `mark_finished` 这一处写 |
-| `include/embark/task_spawner.h` | `ITaskSpawner` / `TaskToken{slot, generation}` | 平台实现接口；`TaskToken` 的世代号防"过期句柄误释放" |
+| `host/host_context.h` | `HostHal::instance()` / `init()` / `attach_display` / `attach_input` | 宿主 HAL 聚合。`attach_*` 必须在 `init()` **之前** |
+| `core/common/lvgl_ui_port.h` | `LvglUiPort(context, exit_query, exit_context)` | LVGL 的 `IUiPort` 实现。`exit_query` 为空 = 本平台没有退出信号（真机 v1 就是这样：一直跑） |
+| `core/common/pooled_task_spawner.h` | `PooledTaskSpawner<Kernel>` | own task 的静态定容池。**借一块 → 跑完 → 还回去**；跨任务只允许 `mark_finished` 这一处写 |
+| `core/include/embark/task_spawner.h` | `ITaskSpawner` / `TaskToken{slot, generation}` | 平台实现接口；`TaskToken` 的世代号防"过期句柄误释放" |
 
 > 一帧的九段顺序、boot 的九步，见 [concepts/app-lifecycle.md](../concepts/app-lifecycle.md) §1–§2。
 
@@ -317,4 +317,4 @@ Framework(hal::Context& hal, AppRegistry apps,
 
 - 容量数字（`max_apps` / 栈深 / 队列深度…）：[limits.md](limits.md)
 - 常见坑（定容行为、消息非聚合、保留 id、无异常无堆、日志上限、派生打印…）：[pitfalls.md](pitfalls.md)
-- 内核契约测试（**比任何文档都新，冲突以它为准**）：[`tests/kernel/`](../../tests/kernel/)
+- 内核契约测试（**比任何文档都新，冲突以它为准**）：[`core/tests/kernel/`](../../core/tests/kernel/)

@@ -16,7 +16,7 @@
  *
  * 时间来源：hal::ITime::epoch_ms()。宿主用 system_clock（能跑）；真机板载 RTC
  * （PCF85063）v1 还没接，esp32 后端返回 Error::unsupported —— 那时本 App 显示
- * “等待对时”占位，而不是把 0 当成 1970 年（契约见 include/embark/hal/time.h）。
+ * “等待对时”占位，而不是把 0 当成 1970 年（契约见 core/include/embark/hal/time.h）。
  *
  * 刷新纪律：前台逐帧调用，但同一秒内不重算；算出的文案与上一帧相同也不写控件 ——
  * 每次 lv_label_set_text 都是 LVGL 堆上 1 次 alloc + 1 次 free，所以只有值真变了
@@ -38,11 +38,11 @@
  *   - App 之间只走消息（SettingsApp publish → 本 App onMessage）。
  *
  * 编译开关 EMBARK_AIDOGUI_UI：宿主与真机构建都定义它（app/CMakeLists.txt 与
- * platform/esp32/project/components/embark），接界面生成代码；未定义的目标把桥调用编译成
+ * device/project/components/embark），接界面生成代码；未定义的目标把桥调用编译成
  * no-op —— App 逻辑（节拍/日历/消息）照常可跑。
  *
  * 换后端不动本目录：这里只依赖 embark 公开头、LVGL（头符号 + lv_calendar）与界面薄桥，
- * 没有任何 platform/ 后端头（spec §14.5 验收项）。
+ * 没有任何 host/、device/ 后端头（spec §14.5 验收项）。
  */
 #ifndef EMBARK_APP_CLOCK_APP_H
 #define EMBARK_APP_CLOCK_APP_H

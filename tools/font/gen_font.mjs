@@ -37,9 +37,9 @@
  *     生成的 .c 里 include 是双分支：
  *       #ifdef LV_LVGL_H_INCLUDE_SIMPLE  ->  #include "lvgl.h"
  *       #else                            ->  #include "<--lv-include 的值>"
- *     本工程打开 LV_LVGL_H_INCLUDE_SIMPLE=ON（见 cmake/embark_middleware.cmake:23
+ *     本工程打开 LV_LVGL_H_INCLUDE_SIMPLE=ON（见 core/cmake/embark_middleware.cmake:23
  *     与 build/CMakeCache.txt:353），include 根就是 third_party/lvgl 仓库根，
- *     应用侧一律 #include <lvgl.h>（app/<app名>/ 各 App 头、platform/common/lvgl_port.h:32）。
+ *     应用侧一律 #include <lvgl.h>（app/<app名>/ 各 App 头、core/common/lvgl_port.h:32）。
  *     所以这里传 lvgl.h（不是 lvgl/lvgl.h），保证两条分支都对。
  *
  * --lv-font-name embark_zh_14
@@ -143,7 +143,7 @@ const ASCII_RANGE = '0x20-0x7F';
  * 界面文案（CJK + 标点，与审计输出逐一对应）。
  *
  * 这份清单不是手写的，来源是缺字审计：node tools/font/audit_glyphs.mjs --print-required
- * 会扫 app/ src/ platform/ 下所有会上屏的字符串，吐出「应该进清单的字符集」。
+ * 会扫 app/ core/src/ host/ device/ 下所有会上屏的字符串，吐出「应该进清单的字符集」。
  * 加了新界面文案 → 跑审计 → 把新字符补到这里 → 重跑本脚本生成字库，审计才会重新变绿。
  */
 const UI_TEXT =
@@ -435,7 +435,7 @@ function verify(cRel) {
       [
         '-fsyntax-only', '-std=c99',
         '-I', path.join(REPO_ROOT, 'third_party', 'lvgl'),
-        '-I', path.join(REPO_ROOT, 'config'),
+        '-I', path.join(REPO_ROOT, 'core', 'config'),
         '-DLV_LVGL_H_INCLUDE_SIMPLE', '-DLV_CONF_INCLUDE_SIMPLE',
         cPath,
       ],

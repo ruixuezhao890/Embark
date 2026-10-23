@@ -24,7 +24,7 @@ CMake 找不到 SDL2 时会**跳过**带窗口的目标，内核与单测照常�
 ```sh
 cmake --build build
 ctest --test-dir build --output-on-failure
-./build/platform/host/embark_host_tour        # 17 项系统自检（带窗口）
+./build/host/embark_host_tour        # 17 项系统自检（带窗口）
 ```
 
 > CI 的三个 job 是：宿主构建 + ctest、ESP32-S3 固件构建（只编不烧）、clang-format 检查。
@@ -40,7 +40,7 @@ ctest --test-dir build --output-on-failure
 | --- | --- | --- |
 | **零堆分配** | 内核与 App 不用 `new` / `malloc`，容器只用 ETL 定容版 | 宿主 FreeRTOS 干脆不编译 `heap_4.c`，`pvPortMalloc` 在符号层面不存在；「内存够不够」是链接期问题 |
 | **无异常、无 RTTI** | 内核目标带 `-fno-exceptions -fno-rtti` | 嵌入式工具链常关掉它们；错误用 `Error` 枚举 + `etl::expected` 表达 |
-| **App 不碰平台头** | `app/` 与 `examples/` 下**不 include 任何 `platform/` 头** | 换后端不动 App 代码（spec §14.5 的验收项） |
+| **App 不碰平台头** | `app/` 与 `core/examples/` 下**不 include 任何 `host/`、`device/` 头** | 换后端不动 App 代码（spec §14.5 的验收项） |
 | **App 不碰生成代码** | App 只调薄桥（`app/common/ui_backend.h`），不 include 设计器导出的任何头 | 重新导出 UI 不该改业务代码 |
 
 配套的还有两条操作层面的：
@@ -63,7 +63,7 @@ ctest --test-dir build --output-on-failure
   ```
 
   不参与格式检查的文件：`third_party/**`、`.scratch/embark-v1/spikes/**`、
-  `config/lv_conf.h`、`platform/host/freertos/FreeRTOSConfig.h`、`app/aidogui_ui/**`（AiDoGUI 生成，重导出即覆盖）。
+  `core/config/lv_conf.h`、`host/freertos/FreeRTOSConfig.h`、`app/aidogui_ui/**`（AiDoGUI 生成，重导出即覆盖）。
 
 - 命名：类型 `UpperCamelCase`、函数与变量 `snake_case`、成员变量带尾部下划线（`foreground_`）。
 - 注释写**为什么**，不写**是什么** —— 代码已经说了是什么。复杂取舍在注释里带 issue/ADR 编号
@@ -97,7 +97,7 @@ ctest --test-dir build --output-on-failure
 
 | 你想要 | 怎么做 |
 | --- | --- |
-| 一个**最小 App**（纯 LVGL 手写界面，不接界面工程） | 照 [examples/minimal/](examples/minimal/) 抄 —— 一个 `*_app.h/cpp` + 一个 `main.cpp`，约 250 行含注释 |
+| 一个**最小 App**（纯 LVGL 手写界面，不接界面工程） | 照 [core/examples/minimal/](core/examples/minimal/) 抄 —— 一个 `*_app.h/cpp` + 一个 `main.cpp`，约 250 行含注释 |
 | 一个**带设计器界面**的 App（推荐路径） | `node tools/new_app.mjs my_app --title 我的应用 --apply` —— 它读 [app/music/](app/music/) 当模板生成薄壳、自动登记 5 行；再去 AiDoGUI Designer 里画同名屏（[new-app-guide.md](docs/guides/new-app-guide.md) §2） |
 
 加完 App 要动的地方、屏名/变量名约定、八个钩子各写什么，都在
@@ -110,7 +110,7 @@ ctest --test-dir build --output-on-failure
 
 - **先看 ADR**：`docs/adr/` 里每条决策都写了当时的取舍与被否决的方案。
   如果你的改法推翻了某条 ADR，**在 PR 描述里显式说明并给出理由**，不要默默改掉。
-- **契约测试是唯一真相**：`tests/kernel/` 里的用例定义了"正确用法"。
+- **契约测试是唯一真相**：`core/tests/kernel/` 里的用例定义了"正确用法"。
   改内核行为时，先改测试再改实现，或在同一个提交里一起改 —— 文档与测试冲突时以测试为准。
 - **新增/修改公开 API** 要同步 [docs/reference/hooks-and-api.md](docs/reference/hooks-and-api.md)；
   **新增容量常量**要同步 [docs/reference/limits.md](docs/reference/limits.md)；
@@ -118,7 +118,7 @@ ctest --test-dir build --output-on-failure
 - **新类型进日志前先包 E_FMT_DERIVE**：任何要打进 ELOG 的 Embark 类型先包宏 ——
   聚合体用 `E_FMT_DERIVE(...)`、枚举用 `E_FMT_DERIVE_ENUM(...)`；
   有基类/构造函数推不出字段的（如 `CrossTaskMessage`）用类型内一行
-  `E_FMT_FIELDS(字段, ...)`（见 [include/embark/message.h](include/embark/message.h) 文件头注释）。
+  `E_FMT_FIELDS(字段, ...)`（见 [core/include/embark/message.h](core/include/embark/message.h) 文件头注释）。
   `EFMT_DERIVE_STRICT` 默认开（=1）：漏包的聚合体会**编译期报错**；但**未包裹的
   枚举不报错、只打数字**（`{:#}` 才展开枚举名），所以要打名字就必须包。
   ETL 类型（`etl::string` / `etl::optional` / 容器等）由 elog 自带 formatter，

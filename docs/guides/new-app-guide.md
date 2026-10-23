@@ -13,7 +13,7 @@
 
 **读完你会**：一条命令建出 App；知道 13 个可覆写点各自该写什么、绝对不能写什么；
 用状态机和消息把逻辑理顺；判断自己的 App 要不要后台 —— 以及为什么**通常答案是"不要"**。
-**不会讲的**：烧真机、改 HAL、动 `platform/`（那是另一条线，见 `platform/esp32/README.md`）。
+**不会讲的**：烧真机、改 HAL、动 `host/`、`device/`（那是另一条线，见 `device/README.md`）。
 全程宿主模拟器：一个窗口，改代码 → 编译 → 看窗口。
 
 **先决条件**：你已按 [getting-started.md](getting-started.md) 跑起 launcher、能点进 clock。
@@ -24,7 +24,7 @@
 | **App** | 一个类（`class`），一个 `.h` + 一个 `.cpp` | `app/<名字>/` |
 | **屏** | 设计器里画的一张界面 | `app/aidogui_ui/screen.aid`；**屏名必须等于 App 名** |
 | **钩子** | 框架在特定时刻调你的成员函数 | 你的 `.cpp` 里 |
-| **可覆写点** | 框架留给你的插槽 ＝ 基类里那些 `virtual` 函数。一共 **13 个**（6 必写 + 7 有默认），**集合是冻结的**（§3）。<br>别的文档里说的「**8 个钩子**」= 这里的 8 个行为钩子（5 个生命周期 + 前台节拍 + 后台节拍 + 消息）；它和「4 个元数据 + `settings()`」加起来正好是这 13 个 —— 两种数法不冲突 | `include/embark/app.h` |
+| **可覆写点** | 框架留给你的插槽 ＝ 基类里那些 `virtual` 函数。一共 **13 个**（6 必写 + 7 有默认），**集合是冻结的**（§3）。<br>别的文档里说的「**8 个钩子**」= 这里的 8 个行为钩子（5 个生命周期 + 前台节拍 + 后台节拍 + 消息）；它和「4 个元数据 + `settings()`」加起来正好是这 13 个 —— 两种数法不冲突 | `core/include/embark/app.h` |
 
 > **一句话世界观**：Arduino 把所有事塞进一个 `loop()`；Embark 把 `loop()` 拆成
 > 「什么时候该干这件事」的几个钩子 —— 前台每帧一次的是 `onForegroundTick`，
@@ -135,8 +135,8 @@ node tools/new_app.mjs stopwatch --title 秒表 --apply
 | 它改的 | 为什么 |
 | --- | --- |
 | 新建 `app/stopwatch/stopwatch_app.h` 和 `.cpp` | 你的代码，**从这一刻起归你**，脚本不会再回来改 |
-| `cmake/embark_sources.cmake` 加 2 行 | 让编译器知道有这个文件 |
-| `platform/host/ui_demo.cpp` 加 2 行（include + App 表里加一项） | **App 表 = 注册表**：写进这张表的顺序就是默认前台顺序 |
+| `core/cmake/embark_sources.cmake` 加 2 行 | 让编译器知道有这个文件 |
+| `host/ui_demo.cpp` 加 2 行（include + App 表里加一项） | **App 表 = 注册表**：写进这张表的顺序就是默认前台顺序 |
 | `app/common/aidogui_ui_hooks.h` 加 1 行 | 让界面上的按钮能「打开这个 App」 |
 | `app/aidogui_ui/screen.aid` 里加一张同名占位屏 | **屏名必须等于 App 名**（`stopwatch`），否则点进去是一屏黑 |
 
@@ -155,7 +155,7 @@ pwsh -NoProfile -File tools/aidogui/export.ps1
 ```bash
 cmake -G Ninja -B build                              # 第一次要配置（约 30 秒）
 cmake --build build --target embark_host_ui          # 之后只跑这句
-./build/platform/host/embark_host_ui.exe --delay 40
+./build/host/embark_host_ui.exe --delay 40
 ```
 
 窗口出来是 launcher。**磁贴排在最末，翻到那一页多了一块写着「秒表」的磁贴，点进去** ——
@@ -214,7 +214,7 @@ class StopwatchApp final : public App {
 
 ## 3. 13 个可覆写点：每一个该放什么 · 必读 · 这节是全篇的骨架
 
-App 基类在 `include/embark/app.h`。它有 **13 个你能覆写的东西：6 个必须写，7 个有默认实现**。
+App 基类在 `core/include/embark/app.h`。它有 **13 个你能覆写的东西：6 个必须写，7 个有默认实现**。
 "可覆写点"就是框架给你留的插槽，它的集合是冻结的（`app.h:14-15` 明写「除此之外不再增加」）——
 所以你只要把这 13 个认全，就不会遇到"还有什么我没实现"的意外。
 
@@ -277,7 +277,7 @@ App 基类在 `include/embark/app.h`。它有 **13 个你能覆写的东西：6 
 - **该放**：`fw_ = &fw;`（全仓一律这么存）；从 `fw.hal()` 取你要的能力（时钟、存储、日志）；
   建**静态**资源；登记界面回调（`ui_backend_bind_repaint` / `ui_backend_bind_click`）。
 - **别放**：`publish()` —— 总线这时**还没装配**，发出去没人收，只会打一条 WARN + 计一次 unknown
-  （`src/embark/framework.cpp:48-54`，注释原文「装配消息请放到 onEnter 之后」）。
+  （`core/src/embark/framework.cpp:48-54`，注释原文「装配消息请放到 onEnter 之后」）。
   别碰控件（屏还没加载，取控件返回 `nullptr`）。别做耗时活（这是 boot 期，卡住就是开机慢）。
 - **判据**："只做一次、跟你在不在前台无关" → 放这里。
 
@@ -388,7 +388,7 @@ void StopwatchApp::onForegroundTick(std::uint32_t now_ms) {
 **三条硬边界**（违反不会报错，只会掉帧或整机卡住）：
 
 1. **不许阻塞**：没有 `delay()`，没有 `while` 等条件，没有同步等 I/O。
-   这里是 ui 循环，5 ms 一跳（`config/embark_limits.h:91` 的 `ui_loop_period_ms`），
+   这里是 ui 循环，5 ms 一跳（`core/config/embark_limits.h:91` 的 `ui_loop_period_ms`），
    你卡 100 ms 就是全局掉 20 帧。
 2. **不许乱要内存**：没有 `new`/`malloc`，不在栈上放大数组（ui 任务栈 8 KB）。
    顺带一条：**改控件文字也会分配**（LVGL 自己 malloc），所以"读数没变就别重写"不是洁癖（§4 会看到 `last_cs_`）。
@@ -765,7 +765,7 @@ void StopwatchApp::on_reset_clicked(lv_event_t* event) {
 ### 4.5 验收：点三下，看四个读数
 
 ```bash
-./build/platform/host/embark_host_ui.exe --delay 40
+./build/host/embark_host_ui.exe --delay 40
 ```
 
 launcher → 翻到最后一页 → 点「秒表」→ 依次点 **开始**（等 2 秒）→ **暂停** →
@@ -795,7 +795,7 @@ launcher → 翻到最后一页 → 点「秒表」→ 依次点 **开始**（�
 
 ### 5.1 后台策略是什么
 
-`settings()` 返回一个 `AppSettings`（`include/embark/app.h:55-61`），三个字段：
+`settings()` 返回一个 `AppSettings`（`core/include/embark/app.h:55-61`），三个字段：
 
 ```cpp
 struct AppSettings {
@@ -860,7 +860,7 @@ void MyApp::onResume() {
 void onBackgroundTick(std::uint32_t now_ms) override;   // 实现里干活
 ```
 
-**最关键的一句：`tick` 跑在唯一那条 ui 任务循环里**（`src/embark/framework.cpp:193-198`，
+**最关键的一句：`tick` 跑在唯一那条 ui 任务循环里**（`core/src/embark/framework.cpp:193-198`，
 每 5 ms 的循环里顺带调你）。所以：
 
 - 你在这里卡 100 ms，**整机界面就卡 100 ms**。它不是"后台线程"，只是"后台时段的回调"。
@@ -871,13 +871,13 @@ void onBackgroundTick(std::uint32_t now_ms) override;   // 实现里干活
 `at_boot` = boot 时就武装，哪怕用户从没打开过这个 App —— 闹钟类才需要，
 代价是开机就多一份周期负载。
 
-容量上限：`max_background_timers = 8`（`config/embark_limits.h:21`）。超了就是"武装失败"，
+容量上限：`max_background_timers = 8`（`core/config/embark_limits.h:21`）。超了就是"武装失败"，
 框架会计一次数（`Framework::arm_failures()`），日志里能看到。
 
 ### 5.4 `own_task`：真的要一条自己的任务时
 
 先在平台层看两个上限：`max_own_tasks = 2`（同时最多 2 条）、默认栈 `own_task_stack_words = 512`
-（字 × 4 字节 = **4 KB**，`config/embark_limits.h:71/79`）。**只有 2 个槽**，这是稀缺资源。
+（字 × 4 字节 = **4 KB**，`core/config/embark_limits.h:71/79`）。**只有 2 个槽**，这是稀缺资源。
 
 起始方式只有一句：
 
@@ -900,10 +900,10 @@ void MyApp::onEnter() {
 }
 ```
 
-`AppId` / `invalid_app_id` 在 `include/embark/message.h:44-47`，`Error` 在 `include/embark/error.h`
+`AppId` / `invalid_app_id` 在 `core/include/embark/message.h:44-47`，`Error` 在 `core/include/embark/error.h`
 （枚举值直接能用 `{}` 打印，这是 efmt 的枚举推导能力，见 §7）。
 
-错误码（`include/embark/framework.h:141-143`）：`not_found`（编号无效）/ `not_ready`（还没 boot 或已 shutdown）/
+错误码（`core/include/embark/framework.h:141-143`）：`not_found`（编号无效）/ `not_ready`（还没 boot 或已 shutdown）/
 `unsupported`（平台没给 spawner，或这个 App 不是 `own_task` 策略）/ `no_space`（2 个槽都占着，**不排队**）/
 `busy`（这个 App 已经有一条了）。
 
@@ -919,7 +919,7 @@ void MyApp::onEnter() {
   `fw_->post(SomeMessage{...})`（跨任务发消息**只能**用 `post`，不能用 `publish`）。
 - **别在自己的任务里读 `lv_obj_t*`，也别假设 App 还在前台** —— 任务比"前台/后台"活得久。
 
-> **别自己算 id**：`AppRegistry::id_of(const App&)`（`include/embark/app_registry.h:65-72`）
+> **别自己算 id**：`AppRegistry::id_of(const App&)`（`core/include/embark/app_registry.h:65-72`）
 > 是唯一的反查入口，它按指针比对，返回 `invalid_app_id` 表示不在表里。
 
 **最后一劝**：先按 5.2 的三个问题走一遍。需要 `own_task` 的场景在这个演示工程里**一个都没有**；
@@ -938,7 +938,7 @@ void MyApp::onEnter() {
 | 状态 ≥3 个，但每个状态只影响一小段 if | `enum` + `switch` 就够，别上 fsm |
 | 别人的改动要影响我（亮度变了、音量变了） | 消息（本节 6.2） |
 
-**一条实测结论**：全仓（`app/`、`src/`、`platform/`、`examples/`）**没有一个 App 用 `etl::fsm`**。
+**一条实测结论**：全仓（`app/`、`core/src/`、`host/`、`device/`、`core/examples/`）**没有一个 App 用 `etl::fsm`**。
 所以"用 fsm"是可选能力，不是必修课。看不懂 6.3 可以先跳过，等你真有三态以上再回来。
 
 ### 6.2 消息：从发到收，四步
@@ -967,7 +967,7 @@ fw_->publish(BrightnessMessage{70});
 ```
 
 - `publish` **只能在框架线程**（也就是你的钩子里）调。
-- **没人订阅时会打一条 WARN 并计数**（`src/embark/bus.cpp:66-70`）—— 不是崩溃，但看到这条 WARN
+- **没人订阅时会打一条 WARN 并计数**（`core/src/embark/bus.cpp:66-70`）—— 不是崩溃，但看到这条 WARN
   说明"你发了，但这个构建里没人听"。
 - 广播是**全局**的：所有 App 都会收到，不是点对点。
 
@@ -986,10 +986,10 @@ void ClockApp::onMessage(const Message& msg) {
 
 三条容易意外的规则，写之前先看：
 
-1. **你会收到自己发的消息**（发送方也在订阅表里，`src/embark/bus.cpp:74`）。
+1. **你会收到自己发的消息**（发送方也在订阅表里，`core/src/embark/bus.cpp:74`）。
    所以别写"收到 X 就再发 X"，那会无限循环。
 2. **`onCreate` 里发消息没人收** —— 总线在 boot 第 3 步才装配，而 `onCreate` 是第 1 步
-   （`src/embark/framework.cpp:46-54`，注释原文「装配消息请放到 onEnter 之后」）。
+   （`core/src/embark/framework.cpp:46-54`，注释原文「装配消息请放到 onEnter 之后」）。
 3. **App 不能自己 subscribe** —— `fw_->bus()` 返回的是 `const Bus&`，只读。
    订阅是框架在 boot 时替你做的，你只管实现 `onMessage`。
 
@@ -1187,7 +1187,7 @@ const std::size_t needed = e_fmt::format_to(buf, sizeof buf, "{:02}:{:02}.{:02}"
 // 如果 needed >= sizeof buf，说明被截断了 —— 这是你能检测到的截断，snprintf 也行但要自己判
 ```
 
-仓库里 `embark::error_text()`（`include/embark/error.h:56-60`）就是这个套路：
+仓库里 `embark::error_text()`（`core/include/embark/error.h:56-60`）就是这个套路：
 
 ```cpp
 char text[24];
@@ -1251,7 +1251,7 @@ E_FMT_DERIVE(struct Reading {
 ## 8. elog：日志 · 需要时读（但强烈建议读完，它只占 1 分钟）
 
 日志是你唯一能在真机上看清"刚才发生了什么"的手段。仓库已经替你把 logger 装好了
-（`platform/host/host_context.cpp:22-25`、`platform/esp32/src/esp32_hal.cpp:25-28`），
+（`host/host_context.cpp:22-25`、`device/src/esp32_hal.cpp:25-28`），
 你的 App 里**只要 include 一个头就能打**：
 
 ```cpp
@@ -1302,7 +1302,7 @@ elog 单条记录的缓冲是 384 字节（`ELOG_MAX_RECORD_SIZE`，`third_party
 2. **日志里带上文**：`ELOG_WARN("缺屏 {}（下一步：在设计器建同名屏并导出）", name())`
    比 `ELOG_WARN("error")` 有用一百倍。这个仓库的日志风格就是"给人看的"，跟着写。
 3. **级别可以在安装 logger 时调**（`embark::install_logger(name, binder, e_log::level::warn)`，
-   `include/embark/log.h:78-79`），真机上嫌吵就调到 `warn` —— 这是改平台层的事，App 不用管。
+   `core/include/embark/log.h:78-79`），真机上嫌吵就调到 `warn` —— 这是改平台层的事，App 不用管。
 
 ### 8.5 日志里最值得你盯的三条
 
@@ -1367,7 +1367,7 @@ if (!result) {
 const std::uint32_t value = *result;             // 或 result.value()
 ```
 
-- 造失败值统一用 `embark::unexpected(Error::xxx)`（`include/embark/error.h:45-47`），
+- 造失败值统一用 `embark::unexpected(Error::xxx)`（`core/include/embark/error.h:45-47`），
   别手写 `etl::unexpected<Error>(...)`。
 - 函数标记 `[[nodiscard]]`，忘了判返回值会有编译警告 —— 这是好事。
 - 错误的**名字**能直接打出来（`Error::no_space`），因为 `Error` 用了 `E_FMT_DERIVE_ENUM`（§7.6）。
@@ -1425,7 +1425,7 @@ show_city("北京");                       // 从字符串字面量构造，不�
 | 8 | **每帧无条件重写控件文字** | 每次 `lv_label_set_text` 都会分配内存，一秒几百次 → 掉帧、碎片。**变了才写**（§4 的 `last_cs_`） |
 | 9 | **`name()` 与屏名不一致** | 不报错，只是点进去黑屏 + 一条 WARN。这是新手 bug 的第一名 |
 
-> 顺带说一条不属于 App 的红线但你会看到：`include/embark/hal/*.h` 里**不许出现芯片型号名**
+> 顺带说一条不属于 App 的红线但你会看到：`core/include/embark/hal/*.h` 里**不许出现芯片型号名**
 > （`AGENTS.md`）。那是开发基建的人要守的，你写 App 不用管。
 
 ---
@@ -1438,9 +1438,9 @@ show_city("北京");                       // 从字符串字面量构造，不�
 | --- | --- | --- |
 | 点磁贴进去**黑屏**，日志有 `没有屏 xxx` 的 WARN | `name()` 和屏名不一致，或改完设计器忘了导出 | `export.ps1` 再跑一次；核对 `name()` 返回的字符串 |
 | 编译：`undefined reference to 'XxxApp::onCreate(...)'` | 头文件里声明了，`.cpp` 里没实现 | 补实现；或者忘了把新 `.cpp` 加进 `EMBARK_APP_SOURCES` |
-| 编译：`'xxx' marked 'override', but does not override` | 签名对不上（`const` 漏了、参数类型不同、`noexcept` 不匹配） | 跟 `include/embark/app.h` 里的声明逐字对照 |
+| 编译：`'xxx' marked 'override', but does not override` | 签名对不上（`const` 漏了、参数类型不同、`noexcept` 不匹配） | 跟 `core/include/embark/app.h` 里的声明逐字对照 |
 | 编译：`use of deleted function` / `cannot allocate` | 你碰了被禁的东西（拷 `App`、`std::string`、异常） | 换成 `etl::array` / `string_view`，别抛异常 |
-| 跑起来**磁贴上没有我的 App** | 没进 `EMBARK_APP_TABLE`（表在 `platform/host/ui_demo.cpp`） | 把 `XxxApp` 加到表里（**整个程序只能有一张表**） |
+| 跑起来**磁贴上没有我的 App** | 没进 `EMBARK_APP_TABLE`（表在 `host/ui_demo.cpp`） | 把 `XxxApp` 加到表里（**整个程序只能有一张表**） |
 | `--screen stopwatch` 报"没有名叫 stopwatch 的 App" | 同上，App 没进表 | 同上。报错里会列出所有可用的名字，很有用 |
 | **按钮点了没反应** | ① 事件只在 `onCreate` 挂过（第二次进来失灵）② 改文字改错了控件 ③ 忘了 `ui_backend_tick()` | 事件挂到 `ui_backend_bind_repaint` 的回调里；文字改 `Xxx_L`；`tick` 放函数第一句 |
 | 界面**一片空白**但没 WARN | 控件名取不到（`aidogui_ui_bridge_widget` 返回 `nullptr`，你的代码静默跳过） | 用 `if (auto* obj = ...; obj == nullptr) ELOG_WARN("没有控件 {}", "L_Time");` 定位 |
@@ -1457,12 +1457,12 @@ show_city("北京");                       // 从字符串字面量构造，不�
    没有这行 = 你的 App 没进表。
 2. **拿截图**（宿主，无头也能截）：
    ```bash
-   ./build/platform/host/embark_host_ui.exe --frames 60 --screenshot probe.bmp --delay 40
+   ./build/host/embark_host_ui.exe --frames 60 --screenshot probe.bmp --delay 40
    ```
    出来的 `probe.bmp` 打开看 —— 界面到底长什么样，比猜快。
 3. **合成点击**（宿主）：`--click` 是内置的两步故事线 —— 在 launcher 屏点时钟卡切到 clock，
    再在 clock 屏点你给的坐标（`--click 120,220`）。它只对 launcher/clock 有意义；
-   想给自己的 App 做自动点击，要在 `platform/host/ui_demo.cpp` 里加桩（进阶，见那段文件头的说明）。
+   想给自己的 App 做自动点击，要在 `host/ui_demo.cpp` 里加桩（进阶，见那段文件头的说明）。
    注意：**只要用了合成输入就必须 `--delay 40`**，否则 LVGL 还没到读输入的时刻，点击不会生效。
 
 ### 11.3 还是不行
@@ -1471,8 +1471,8 @@ show_city("北京");                       // 从字符串字面量构造，不�
   **"不知道走到哪"**才可怕。
 - 读一遍 `docs/reference/pitfalls.md`（实测踩过的坑清单）和
   `docs/concepts/app-lifecycle.md`（生命周期与后台的完整说明）。
-- 真机（烧 ESP32）不在这篇范围里：那是 `platform/esp32/README.md` 和
-  `tools/esp/idf.ps1` 的世界，宿主上先跑通再上板。
+- 真机（烧 ESP32）不在这篇范围里：那是 `device/README.md` 和
+  `device/tools/idf.ps1` 的世界，宿主上先跑通再上板。
 
 ---
 

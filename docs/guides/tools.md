@@ -16,9 +16,9 @@
 | `tools/aidogui/gen_ui.cjs` | 上面那个的**内核**：借 AiDoGUI 自己的 Node 跑它自己的生成器 | 一般不直接调 | 同上 |
 | `tools/aidogui/html_to_aid.mjs` | **HTML 草稿 → 屏**：无头浏览器量真坐标，合并进 `screen.aid` 的指定屏（详见 [html-to-screen.md](html-to-screen.md)） | 想不打开设计器改屏 / 只想写语义不写坐标 | 默认不写盘；`--apply` 只写 `screens[<屏>].widgets`，没变的控件原样保留 |
 | `tools/aidogui/aid_probe.js` | 上面那个注入浏览器的**量测探针**（在页面里收集 rect + 计算样式） | 不直接调 | 无（拷进临时目录跑） |
-| `tools/aidogui/gen_widget_doc.mjs` | **控件对照表**：把 `screen.aid` 的控件与 `app/`、`platform/host/` 里的调用点 join 起来 → `docs/reference/ui-widgets.md`（详见 [reference/ui-widgets.md](../reference/ui-widgets.md)） | 改完屏（尤其控件改名 / 删控件）后 | 只写 `docs/reference/ui-widgets.md`；`--check` 只比对不写 |
-| `tools/esp/idf.ps1` | **真机构建 / 烧录的壳**：注入 ESP-IDF 环境（`IDF_PATH`、Python venv、工具的 PATH）后转调 `idf.py`（见 §7.3） | 命令行烧板子（App 管理台不管烧录） | 只写 `build-esp32/` 与板子 |
-| `tools/esp/serial.ps1` | **纯文本串口监视**：把板子的串口日志按行打到 stdout（`idf.py monitor` 会喷 ANSI 又等键盘） | 命令行看真机日志 | 无 |
+| `tools/aidogui/gen_widget_doc.mjs` | **控件对照表**：把 `screen.aid` 的控件与 `app/`、`host/` 里的调用点 join 起来 → `docs/reference/ui-widgets.md`（详见 [reference/ui-widgets.md](../reference/ui-widgets.md)） | 改完屏（尤其控件改名 / 删控件）后 | 只写 `docs/reference/ui-widgets.md`；`--check` 只比对不写 |
+| `device/tools/idf.ps1` | **真机构建 / 烧录的壳**：注入 ESP-IDF 环境（`IDF_PATH`、Python venv、工具的 PATH）后转调 `idf.py`（见 §7.3） | 命令行烧板子（App 管理台不管烧录） | 只写 `build-esp32/` 与板子 |
+| `device/tools/serial.ps1` | **纯文本串口监视**：把板子的串口日志按行打到 stdout（`idf.py monitor` 会喷 ANSI 又等键盘） | 命令行看真机日志 | 无 |
 | `tools/font/gen_font.mjs` | 生成 **LVGL 静态子集字库** `embark_zh_14`（内置默认字体） | 内置字库要加字时 | `assets/fonts/embark_zh_14.c` + `tools/font/embark_zh_14.json` |
 | `tools/font/audit_glyphs.mjs` | **缺字审计**（CI 门禁） | 加/改界面文案后 | 只读；缺字打印码点 + `文件:行号` 并 `exit 1` |
 | `tools/check_docs.mjs` | **文档过期自检**：文档里的路径 / `embark_host_ui` 开关 / 脚本参数 / 锚注释还对不对得上（见 §6） | 改了工具、开关或文档之后（[AGENTS.md](../../AGENTS.md) 也这么要求） | 只读；有过期就打印 `文件:行号` 并 `exit 1` |
@@ -76,7 +76,7 @@ pwsh -NoProfile -File tools/aidogui/dev.ps1 -NoRun          # 只导出 + 构建
 ```
 
 它按顺序做三件事：`export.ps1` → `cmake -S . -B build` + `cmake --build build --target embark_host_ui`
-→ 起 `embark_host_ui --screen <屏> --watch`。跑起来之后它还在盯着 `src/ app/ include/ platform/ cmake/`
+→ 起 `embark_host_ui --screen <屏> --watch`。跑起来之后它还在盯着 `core/src/ app/ core/include/ host/ device/ core/cmake/`
 的源文件：一发现变了就**停窗口 → 重新构建 → 再起一个**（进程级重启；Q3 已明确排除 C++ 热重载）。
 
 **两件事别混，否则会以为热重载坏了**：
@@ -111,7 +111,7 @@ pwsh -NoProfile -File tools/aidogui/export.ps1 -Project app/aidogui_ui/screen.ai
 
 - **安装目录三级查找**：参数 `-AiDoGuiHome` → 环境变量 `AIDOGUI_HOME` → 仓库根 `.aidogui-home` → `tools/aidogui/home.txt`（本机私有，已 gitignore）。换机器改最后一处。
 - **字体不在产物里**（[ADR 0017](../adr/0017-font-ttf-from-sd.md)）：字体是卡上的整份 TTF、运行期栅格化。设计器只会出 BIN|C 两种字体产物，两种都不是我们要的 —— 脚本导完就删 `font/` 并把生成代码里的字体初始化打桩。
-- **屏表/控件表/字体表不在这里生成**：`cmake/embark_aidogui_tables.cmake` 在 **CMake 配置期**解析 `export/screens/ui_*.h` 与 `export/ui.c`，写到构建目录的 `include/embark_aidogui_ui_tables.h`。
+- **屏表/控件表/字体表不在这里生成**：`core/cmake/embark_aidogui_tables.cmake` 在 **CMake 配置期**解析 `export/screens/ui_*.h` 与 `export/ui.c`，写到构建目录的 `include/embark_aidogui_ui_tables.h`。
 
 > 改了界面并重导出后，**构建会自动重跑配置**（`CONFIGURE_DEPENDS`）；但如果是手工改了导出文件又只 `cmake --build`，保险起见跑一次 `cmake -S . -B build`。
 
@@ -137,11 +137,11 @@ node tools/font/gen_font.mjs      # 在仓库根执行
 产物两个，都在仓库内、可重复生成、幂等覆盖：`assets/fonts/embark_zh_14.c`（lv_font_conv 生成的 LVGL C 字体）
 与 `tools/font/embark_zh_14.json`（覆盖清单，**存档**：缺字审计已改为对照 TTF 的 cmap，不再读它）。
 
-**它怎么被用上**：`config/lv_conf.h` 里 `LV_FONT_CUSTOM_DECLARE LV_FONT_DECLARE(embark_zh_14)` +
+**它怎么被用上**：`core/config/lv_conf.h` 里 `LV_FONT_CUSTOM_DECLARE LV_FONT_DECLARE(embark_zh_14)` +
 `LV_FONT_DEFAULT &embark_zh_14` 把它接成 LVGL 的默认字体。因为默认字体被 `liblvgl.a` 里的
 `lv_theme.c.obj` / `lv_draw_label.c.obj` 引用，而 GNU ld 只在「扫到某个归档时该符号仍未定义」才把成员拉进来、
 库顺序不由我们决定，所以字库归档必须**整体收进链接**：宿主 `-Wl,--whole-archive embark_zh_font -Wl,--no-whole-archive`
-（`platform/common/CMakeLists.txt`），真机 `idf_component_register(... WHOLE_ARCHIVE)`。少了这一步的现象是
+（`core/common/CMakeLists.txt`），真机 `idf_component_register(... WHOLE_ARCHIVE)`。少了这一步的现象是
 **编译全过、字库根本没进镜像**（map 里搜不到 `embark_zh_14`），不是报错。
 
 参数口径（为什么是这些值，脚本头部注释里有完整推导）：
@@ -171,7 +171,7 @@ node tools/font/gen_font.mjs      # 在仓库根执行
 ### 4.2 缺字审计（CI 门禁）
 
 ```sh
-node tools/font/audit_glyphs.mjs                    # 审计 app/ src/ platform/，字体 cmap 里没有的字符就 exit 1
+node tools/font/audit_glyphs.mjs                    # 审计 app/ core/src/ core/common/ host/ device/，字体 cmap 里没有的字符就 exit 1
 node tools/font/audit_glyphs.mjs --print-required   # 打印当前界面文案用到的全部字符（换字体时核对面）
 node tools/font/audit_glyphs.mjs --selftest         # 临时目录里自造缺字夹具，验证报错路径与行号
 node tools/font/audit_glyphs.mjs --ttf 别的字体.ttf --include-symbols --roots=app,src
@@ -264,9 +264,9 @@ node tools/check_docs.mjs --self-test # 用内存假样本验证五类检查真�
 App 管理台不管烧录。真机构建 / 烧录 / 看日志是三条命令：
 
 ```sh
-pwsh -NoProfile -File tools/esp/idf.ps1 -Task build                 # 增量编真机固件（1~3 分钟）
-pwsh -NoProfile -File tools/esp/idf.ps1 -Task flash -Port COM3      # 编完烧，烧完自动 reset
-pwsh -NoProfile -File tools/esp/serial.ps1 -Port COM3               # 纯文本串口日志（Ctrl+C 退出）
+pwsh -NoProfile -File device/tools/idf.ps1 -Task build                 # 增量编真机固件（1~3 分钟）
+pwsh -NoProfile -File device/tools/idf.ps1 -Task flash -Port COM3      # 编完烧，烧完自动 reset
+pwsh -NoProfile -File device/tools/serial.ps1 -Port COM3               # 纯文本串口日志（Ctrl+C 退出）
 ```
 
 四条坑（**真机没有画面回传** / **串口是独占的** / **串口里的中文显示成 `???`** /

@@ -6,7 +6,7 @@
 #             images/），以及描述"每屏有哪些控件"的 aidogui_objects.h。导出产物勿手改，
 #             重新生成见 README.md。
 #
-# 屏表/控件表/字体表不在这里手写：cmake/embark_aidogui_tables.cmake 在配置期解析导出产物，
+# 屏表/控件表/字体表不在这里手写：core/cmake/embark_aidogui_tables.cmake 在配置期解析导出产物，
 # 生成 ${CMAKE_CURRENT_BINARY_DIR}/include/embark_aidogui_ui_tables.h（不手改、不入库）。
 #
 # 生成代码是第三方产物：压掉告警（-w），不让它进本仓库的告警门禁。

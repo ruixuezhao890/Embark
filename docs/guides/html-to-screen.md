@@ -23,7 +23,7 @@ node tools/aidogui/html_to_aid.mjs --html .scratch/draft/weather.html --screen w
 # ④ 重生成 C 代码 → 构建 → 跑验收故事
 pwsh -NoProfile -File tools/aidogui/export.ps1
 cmake -S . -B build && cmake --build build
-./build/platform/host/embark_host_ui --ui-weather --delay 40
+./build/host/embark_host_ui --ui-weather --delay 40
 ```
 
 **`.aid` 仍然是唯一真相**：草稿是草稿，随时可以丢；设计器照样能打开 `screen.aid` 手改。

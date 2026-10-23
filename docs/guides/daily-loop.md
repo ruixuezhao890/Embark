@@ -19,7 +19,7 @@ pwsh -NoProfile -File tools/aidogui/dev.ps1 -Screen clock
 | 你改了什么 | 谁让它生效 | 窗口 |
 | --- | --- | --- |
 | `.aid` 的**文案与几何**（导出成 C 代码、编进二进制） | `dev.ps1` 的第 1、2 步：重新导出 + 重新构建 | 重启 |
-| `app/` `src/` `platform/` 里的 `.cpp` / `.h` | `dev.ps1` 的源码监视：停窗口 → 构建 → 再起 | 重启 |
+| `app/` `core/src/` `host/` `device/` 里的 `.cpp` / `.h` | `dev.ps1` 的源码监视：停窗口 → 构建 → 再起 | 重启 |
 | `export/` 里的**运行期资源**（图片 BIN 这类，从 `S:` 盘读） | `--watch`：进程内卸掉当前屏再装上 | **不重启** |
 
 **不想敲命令？** 加 App / 退 App 这一件事有网页控制台：双击 `tools/appconsole/start.cmd`（列表 / 看计划 / 建它 / 退掉 / 打开设计器 / 导出屏 / 构建宿主）。它背后跑的就是上面这些命令，见 [tools.md](tools.md) §7。画面与烧录仍在命令行。
@@ -39,8 +39,8 @@ pwsh -NoProfile -File tools/aidogui/dev.ps1 -Screen clock
 | 用状态机 / 消息 / 后台任务 | `app/<名>/` | `ctest` | [state-machine-and-messages.md](state-machine-and-messages.md) |
 | 屏内按钮就地干点事（不切屏） | `app/<名>/*.cpp` 的 `bind_sinks()` 一类，每次屏装载后重挂 | 点一下 | [ADR 0018](../adr/0018-settings-truth-and-growth.md) |
 | 屏上是方框 = 缺字 | 换文案，或把字加进字符表 | `node tools/font/audit_glyphs.mjs` | [tools.md](tools.md) §4 |
-| 接一块新硬件 | `include/embark/hal/` + 服务层实现 | `--imu-log` / `--audio-test` / `--net-test` | [hal-backend-guide.md](hal-backend-guide.md) |
-| 烧到真机上 / 看板子日志 | `tools/esp/idf.ps1 -Task flash -Port COM3` / `tools/esp/serial.ps1 -Port COM3` | 板子自己亮起来 + 串口里有 `Embark 0.1.0` | [tools.md](tools.md) §7.3 |
+| 接一块新硬件 | `core/include/embark/hal/` + 服务层实现 | `--imu-log` / `--audio-test` / `--net-test` | [hal-backend-guide.md](hal-backend-guide.md) |
+| 烧到真机上 / 看板子日志 | `device/tools/idf.ps1 -Task flash -Port COM3` / `device/tools/serial.ps1 -Port COM3` | 板子自己亮起来 + 串口里有 `Embark 0.1.0` | [tools.md](tools.md) §7.3 |
 | 退掉一个 App | `node tools/new_app.mjs <名> --delete --apply`（连 7 行登记一起撤） | `cmake --build build` 过 + 磁贴少一个 | [new-app-guide.md](new-app-guide.md) §2 |
 
 ## 2. 改界面：三条路，选一条
@@ -74,10 +74,10 @@ node tools/aidogui/gen_widget_doc.mjs --check  # 只比对，不写
 
 ```sh
 ctest --test-dir build --output-on-failure
-./build/platform/host/embark_host_ui --ui --frames 40 --delay 40
-./build/platform/host/embark_host_ui --ui-nav --delay 40
-./build/platform/host/embark_host_ui --ui-launcher-pages --delay 40
-./build/platform/host/embark_host_tour --delay 40
+./build/host/embark_host_ui --ui --frames 40 --delay 40
+./build/host/embark_host_ui --ui-nav --delay 40
+./build/host/embark_host_ui --ui-launcher-pages --delay 40
+./build/host/embark_host_tour --delay 40
 ```
 
 退出码：`0` 正常 / `1` 后端起不来或用法错 / `2` **验收失败**（日志写明哪一步）。
@@ -108,7 +108,7 @@ node tools/new_app.mjs --self-check             # 加 App 的模板与锚点还�
 | 点按钮没反应 | 屏名 ≠ App 名；或控件挂的是 CHANGE_SCREEN 动作（绕过桥的按需 init/destroy） | 改成「调用函数」`embark_ui_open_<App 名>` |
 | 文字是方框 | `ui_heiti.ttf` 缺字 | `node tools/font/audit_glyphs.mjs` 看缺哪个字 |
 | 磁贴少一个 | 新 App 没进注册表 | `new_app.mjs --apply` 会自动做；手加就是 7 行 / 6 个文件（宿主 4 + 真机 3 行里，`hooks` 那行老 App 可能本来没有） |
-| 真机上没有界面 | 屏名 ≠ App 名（真机早就定义了 `EMBARK_AIDOGUI_UI`，见 `platform/esp32/project/components/embark/CMakeLists.txt`）；或改完屏没重新配置构建（屏表是配置期生成的） | 串口里看 `没有屏 <名>` 那句 warn，再按它给的下一步做 |
+| 真机上没有界面 | 屏名 ≠ App 名（真机早就定义了 `EMBARK_AIDOGUI_UI`，见 `device/project/components/embark/CMakeLists.txt`）；或改完屏没重新配置构建（屏表是配置期生成的） | 串口里看 `没有屏 <名>` 那句 warn，再按它给的下一步做 |
 
 ## 6. 相关
 

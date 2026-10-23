@@ -13,8 +13,8 @@
 # 排除不参与格式检查的文件（与本地 dry-run 口径一致）：
 #   - third_party/**           第三方源码不动
 #   - .scratch/embark-v1/spikes/**  实验存档不格式化
-#   - config/lv_conf.h         LVGL 官方配置模板
-#   - platform/host/freertos/FreeRTOSConfig.h  FreeRTOS 官方配置模板
+#   - core/config/lv_conf.h         LVGL 官方配置模板
+#   - host/freertos/FreeRTOSConfig.h  FreeRTOS 官方配置模板
 #   - app/aidogui_ui/**         AiDoGUI Designer 生成代码（ADR 0011），重导出即覆盖
 name: CI
 
@@ -71,11 +71,11 @@ jobs:
           submodules: recursive
       - name: Build
         # 构建目录放仓库根的 build-esp32/（.gitignore 的 build-*/ 已覆盖）；
-        # sdkconfig 由 idf.py 生成在 platform/esp32/project/ 下，同样不进仓库。
+        # sdkconfig 由 idf.py 生成在 device/project/ 下，同样不进仓库。
         run: |
           idf.py --version
-          idf.py -C platform/esp32/project -B build-esp32 set-target esp32s3
-          idf.py -C platform/esp32/project -B build-esp32 build
+          idf.py -C device/project -B build-esp32 set-target esp32s3
+          idf.py -C device/project -B build-esp32 build
 
   font-audit:
     name: Font glyph audit
@@ -99,5 +99,5 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y clang-format
       - name: Dry-run
         run: |
-          FILES=$(git ls-files '*.cpp' '*.h' '*.hpp' '*.cc' | grep -v -E '^(third_party/|\.scratch/embark-v1/spikes/|config/lv_conf\.h$|platform/host/freertos/FreeRTOSConfig\.h$|app/aidogui_ui/)')
+          FILES=$(git ls-files '*.cpp' '*.h' '*.hpp' '*.cc' | grep -v -E '^(third_party/|\.scratch/embark-v1/spikes/|core/config/lv_conf\.h$|host/freertos/FreeRTOSConfig\.h$|app/aidogui_ui/)')
           clang-format --dry-run --Werror $FILES

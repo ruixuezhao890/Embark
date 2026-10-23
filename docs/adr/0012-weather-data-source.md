@@ -13,8 +13,8 @@ system / bus / display / input —— **没有 WiFi、没有 HTTP client、没�
 全仓 `wifi|http|network|sntp|ntp` 只有 5 处命中，且全是注释：
 [0004](0004-background-tick-and-state-policy.md) 与 [0005](0005-static-task-slots-and-pool.md)
 把「WiFi 非阻塞连接」写成 own_task 策略的**将来**第一个真实用例；
-`platform/esp32/project/partitions.csv` 写着 "phy_init is not needed today (no WiFi enabled)"
-但已预留；`platform/esp32/README.md` 把 WiFi/BLE 列为未实现。也就是说：**5 天天气没有
+`device/project/partitions.csv` 写着 "phy_init is not needed today (no WiFi enabled)"
+但已预留；`device/README.md` 把 WiFi/BLE 列为未实现。也就是说：**5 天天气没有
 任何现成来源**，这是本任务最大的设计缺口，而不是实现细节。
 
 所以本 ADR 决定：

@@ -2,27 +2,27 @@
 
 HAL 是"芯片能力"的抽象（spec §8）：七个纯虚接口 + 一个引用聚合体
 `hal::Context`，不暴露寄存器与引脚。**同一份 App 代码不 include 任何
-`platform/` 头**（spec §14.5 验收项）——后端在链接期被选进来就行。
+`host/`、`device/` 头**（spec §14.5 验收项）——后端在链接期被选进来就行。
 
-接口清单（`include/embark/hal/`）：
+接口清单（`core/include/embark/hal/`）：
 
 | 头文件 | 能力 | 宿主实现 | 真机实现（ESP32-S3） | 测试假实现 |
 | --- | --- | --- | --- | --- |
-| `display.h` | 显示（区域刷新、表面捕获） | `platform/host/host_display.{h,cpp}` | `platform/esp32/src/esp32_display.{h,cpp}`（ST7789 + `esp_lcd`） | `tests/fakes/fake_display.h` |
-| `input.h` | 输入（指针/按键事件） | `platform/host/host_input.{h,cpp}` | `platform/esp32/src/esp32_input.{h,cpp}`（CST328 直连 I2C） | `tests/fakes/fake_input.h` |
-| `time.h` | 时间（now_ms、delay_ms） | `platform/host/host_time.{h,cpp}` | `platform/esp32/src/esp32_time.{h,cpp}`（`esp_timer` + `vTaskDelay`） | `tests/fakes/fake_time.h` |
-| `persistence.h` | 持久化（KV 槽） | `platform/host/host_persistence.{h,cpp}` | `platform/esp32/src/esp32_persistence.{h,cpp}`（NVS） | `tests/fakes/fake_persistence.h` |
-| `log_sink.h` | 日志后端（线级输出） | `platform/host/host_log_sink.{h,cpp}` | `platform/esp32/src/esp32_log_sink.{h,cpp}`（UART0 = stdout） | `tests/fakes/fake_log_sink.h` |
-| `system.h` | 系统控制（重启、fatal） | `platform/host/host_system.{h,cpp}` | `platform/esp32/src/esp32_system.{h,cpp}`（`heap_caps` / WDT / `abort`） | `tests/fakes/fake_system.h`（fatal 桩在 fakes.cpp） |
-| `bus.h` | 系统总线（外设/模块间，与消息总线不同） | `platform/host/host_bus.{h,cpp}` | `platform/esp32/src/esp32_bus.{h,cpp}`（`i2c_master`；`spi_transfer` 仍 `unsupported`） | `tests/fakes/fake_bus.h` |
+| `display.h` | 显示（区域刷新、表面捕获） | `host/host_display.{h,cpp}` | `device/src/esp32_display.{h,cpp}`（ST7789 + `esp_lcd`） | `core/tests/fakes/fake_display.h` |
+| `input.h` | 输入（指针/按键事件） | `host/host_input.{h,cpp}` | `device/src/esp32_input.{h,cpp}`（CST328 直连 I2C） | `core/tests/fakes/fake_input.h` |
+| `time.h` | 时间（now_ms、delay_ms） | `host/host_time.{h,cpp}` | `device/src/esp32_time.{h,cpp}`（`esp_timer` + `vTaskDelay`） | `core/tests/fakes/fake_time.h` |
+| `persistence.h` | 持久化（KV 槽） | `host/host_persistence.{h,cpp}` | `device/src/esp32_persistence.{h,cpp}`（NVS） | `core/tests/fakes/fake_persistence.h` |
+| `log_sink.h` | 日志后端（线级输出） | `host/host_log_sink.{h,cpp}` | `device/src/esp32_log_sink.{h,cpp}`（UART0 = stdout） | `core/tests/fakes/fake_log_sink.h` |
+| `system.h` | 系统控制（重启、fatal） | `host/host_system.{h,cpp}` | `device/src/esp32_system.{h,cpp}`（`heap_caps` / WDT / `abort`） | `core/tests/fakes/fake_system.h`（fatal 桩在 fakes.cpp） |
+| `bus.h` | 系统总线（外设/模块间，与消息总线不同） | `host/host_bus.{h,cpp}` | `device/src/esp32_bus.{h,cpp}`（`i2c_master`；`spi_transfer` 仍 `unsupported`） | `core/tests/fakes/fake_bus.h` |
 | `types.h` | 共享类型（坐标、尺寸、颜色等） | — | — | — |
-| `context.h` | `hal::Context` 引用聚合体（能力 + 可空服务槽） | `platform/host/host_context.{h,cpp}` | `platform/esp32/src/esp32_hal.{h,cpp}`（11 个成员 + 装配） | `tests/fakes/fakes.h`（服务槽全 nullptr；要测服务契约用 `tests/fakes/fake_imu.h`） |
+| `context.h` | `hal::Context` 引用聚合体（能力 + 可空服务槽） | `host/host_context.{h,cpp}` | `device/src/esp32_hal.{h,cpp}`（11 个成员 + 装配） | `core/tests/fakes/fakes.h`（服务槽全 nullptr；要测服务契约用 `core/tests/fakes/fake_imu.h`） |
 
 > 注：测试的假后端都是独立文件（fake_*.h，fatal/assert 桩在 fakes.cpp）；
-> 最完整的"一个类一个文件"对照看 `tests/fakes/fake_display.h` 与
-> `platform/host/host_display.{h,cpp}`。
+> 最完整的"一个类一个文件"对照看 `core/tests/fakes/fake_display.h` 与
+> `host/host_display.{h,cpp}`。
 
-## 宿主后端骨架（照着 platform/host/ 抄）
+## 宿主后端骨架（照着 host/ 抄）
 
 一个后端 = 一对 `host_<cap>.{h,cpp}`：
 
@@ -37,7 +37,7 @@ HAL 是"芯片能力"的抽象（spec §8）：七个纯虚接口 + 一个引用
 3. **装配**：`host_context.{h,cpp}` 聚合出 `embark::hal::Context` 实例
    （`Context{time, storage, log, system, bus, display*, input*, filesystem*, imu*, audio*, network*}`
    引用聚合：前五个是必有的能力引用，后六个是可空指针），
-   见 `include/embark/hal/context.h`，入口 `main.cpp` 持有它并传给 Framework。
+   见 `core/include/embark/hal/context.h`，入口 `main.cpp` 持有它并传给 Framework。
    三个服务槽都已接上：`imu`（issue 08，宿主 `HostImu` / 真机 `Esp32Imu`）、`audio`
    （issue 09，宿主 `HostAudio` / 真机 `Esp32Audio`）、`network`（issue 10，宿主
    `HostNetwork` / 真机 `Esp32Network`）。语义与 display/input 一致：没有这块硬件才留
@@ -45,7 +45,7 @@ HAL 是"芯片能力"的抽象（spec §8）：七个纯虚接口 + 一个引用
    **加成员不会让编译器报错**（C++17 聚合初始化允许项数少于成员数）—— 装配点要手工补齐，
    三处清单见 `.scratch/app-platform/issues/07-service-layer.md`。
 
-宿主与真机共用的层（`platform/common/`，issue 11 从 `platform/host/` 提上来的）：
+宿主与真机共用的层（`core/common/`，issue 11 从 `host/` 提上来的）：
 
 - `lvgl_port.{h,cpp}`：把 `IDisplay`/`IInput` 接到 LVGL 驱动（时基、刷新回调、
   输入读取回调、LVGL 日志回调）；不持有任何界面对象，也不认识任何平台类型。
@@ -64,7 +64,7 @@ HAL 是"芯片能力"的抽象（spec §8）：七个纯虚接口 + 一个引用
   `make_task()`（`xTaskCreate*Static`）、`is_parked()`（任务真的停稳了吗）、`delete_task()`、
   `suspend_self()`（入口返回后永久挂起）。宿主侧另加 `Kernel::KernelEntry`（`void (*)(void*)`，
   注意 FreeRTOS 的 `TaskFunction_t` 不带 `noexcept`）。
-- 平台相关的两块在 `platform/host/` 与 `platform/esp32/` 各写一份：
+- 平台相关的两块在 `host/` 与 `device/` 各写一份：
   `ui_task.{h,cpp}` + `freertos/`（唯一 UI 任务的静态创建——TCB/栈在 BSS、
   `configSUPPORT_STATIC_ALLOCATION`、FreeRTOSConfig 与钩子）、
   `own_task_spawner.h` / `esp32_task_spawner.h`（只写上面那份 Kernel 契约 + 各自的任务类型定义，
@@ -72,10 +72,10 @@ HAL 是"芯片能力"的抽象（spec §8）：七个纯虚接口 + 一个引用
 
 ## 真机后端骨架（ESP32-S3，issue 11 已落地）
 
-八个能力的实现都在 `platform/esp32/src/esp32_*.{h,cpp}`，板级常量（引脚、时序、
+八个能力的实现都在 `device/src/esp32_*.{h,cpp}`，板级常量（引脚、时序、
 方向开关）集中在 `src/esp32_board.h`，装配与 `hal::Context` 在 `src/esp32_hal.{h,cpp}`，
-入口是 IDF 工程的 `platform/esp32/project/main/main.cpp`（`app_main` → 建唯一 UI 任务）。
-**上板前要动的开关、bring-up 清单、串口日志样例都写在 [platform/esp32/README.md](../../platform/esp32/README.md)。**
+入口是 IDF 工程的 `device/project/main/main.cpp`（`app_main` → 建唯一 UI 任务）。
+**上板前要动的开关、bring-up 清单、串口日志样例都写在 [device/README.md](../../device/README.md)。**
 
 落地时踩到的坑（同类后端都会遇到，照抄结论即可）：
 
@@ -95,12 +95,12 @@ HAL 是"芯片能力"的抽象（spec §8）：七个纯虚接口 + 一个引用
    `sizeof(StackType_t)`（口径与现场见 `docs/reference/pitfalls.md`）。
 4. **中间件视图要在 `project()` 之前建**：`project/CMakeLists.txt` 先
    `embark_create_middleware_view(<build>/include/middleware <仓库根>)`（第二个参数
-   必须显式传仓库根：IDF 工程的 `PROJECT_SOURCE_DIR` 是 `platform/esp32/project`），
+   必须显式传仓库根：IDF 工程的 `PROJECT_SOURCE_DIR` 是 `device/project`），
    否则组件的 `<middleware/elog/elog.hpp>` 找不到。
 5. **`esp_lcd` 的颜色发送是异步的**：`esp_lcd_panel_draw_bitmap` 只是入队，
    `on_color_trans_done` 只在最后一块 chunk 上回调一次 —— 所以 `flush()` 的同步语义
    就是"等一个二值信号量"，不必自己拆包计数。
-6. 组件需要自己补宿主由 CMake 提供的东西：`-include config/embark_config.h`、
+6. 组件需要自己补宿主由 CMake 提供的东西：`-include core/config/embark_config.h`、
    `third_party/etl/include`（ETL 是 header-only，真机没有 `etl::etl` target）、
    `EMBARK_PLATFORM_NAME` / `EMBARK_VERSION_STRING` 宏。
 7. **那条 `-include` 必须留在组件 `PRIVATE`**：组件的 `PUBLIC` 编译选项会传播到最终
@@ -112,15 +112,15 @@ HAL 是"芯片能力"的抽象（spec §8）：七个纯虚接口 + 一个引用
 构建命令（本机 IDF 5.4，`build-esp32/` 已被 `.gitignore` 的 `build-*/` 覆盖）：
 
 ```powershell
-idf.py -C platform/esp32/project -B build-esp32 set-target esp32s3
-idf.py -C platform/esp32/project -B build-esp32 build
-idf.py -C platform/esp32/project -B build-esp32 -p COM5 flash monitor
+idf.py -C device/project -B build-esp32 set-target esp32s3
+idf.py -C device/project -B build-esp32 build
+idf.py -C device/project -B build-esp32 -p COM5 flash monitor
 ```
 
 上板之后"真机侧"还有两件只能人工确认的事（spec §14 的验收项 ③⑤）：屏幕方向/颜色
 与触摸方向/触点位置 —— 开关就在 `src/esp32_board.h`，改完重编即可。
 
-**省力顺序建议**：先写假后端（tests/fakes）把 App 测起来，再写宿主后端跑
+**省力顺序建议**：先写假后端（core/tests/fakes）把 App 测起来，再写宿主后端跑
 demo，最后落真机——三个阶段共用同一套 App 代码，任何一步改的都是后端，
 不需要碰 `app/`。
 

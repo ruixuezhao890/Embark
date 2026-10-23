@@ -23,12 +23,12 @@ font/*.bin                 已废弃（issue 03 删除）—— 字体走卡上�
 CMakeLists.txt  手写的构建胶水（GLOB export/**.c + 配置期建表）
 ```
 
-- `S:` 盘由 `platform/common/aidogui_res_fs` 指向本目录的 `export/`（宿主）。
+- `S:` 盘由 `core/common/aidogui_res_fs` 指向本目录的 `export/`（宿主）。
   生成代码写的是 `S:/fonts/`（复数），磁盘上是 `font/`（单数）——桥做了目录名兜底，
   **GUI 导出完不用改名**。
 - 导航事件是生成代码里的裸调用（`embark_ui_open_*();`），原型在
   `app/common/aidogui_ui_hooks.h`（被 `-include` 注入，见「五块屏与导航」）。
-- 屏表/控件表/字体表**不入库**：`cmake/embark_aidogui_tables.cmake` 在 CMake 配置期
+- 屏表/控件表/字体表**不入库**：`core/cmake/embark_aidogui_tables.cmake` 在 CMake 配置期
   解析 `export/screens/ui_*.h` 与 `export/ui.c`，写到构建目录的
   `include/embark_aidogui_ui_tables.h`。改了界面并重导出后，构建会自动重跑配置。
 
@@ -45,11 +45,11 @@ CMakeLists.txt  手写的构建胶水（GLOB export/**.c + 配置期建表）
 
 ```powershell
 cmake --build build --target embark_host_ui
-build\platform\host\embark_host_ui.exe --ui --frames 40                  # 期待〔aidogui 验收通过〕
-build\platform\host\embark_host_ui.exe --ui-nav --delay 40              # 期待〔aidogui 导航验收通过〕
-build\platform\host\embark_host_ui.exe --ui-weather --delay 40          # 期待〔aidogui 天气验收通过〕
-build\platform\host\embark_host_ui.exe --ui-launcher-pages --delay 40   # 期待〔主屏分页验收通过〕
-build\platform\host\embark_host_ui.exe --ui-nav --delay 40 `
+build\host\embark_host_ui.exe --ui --frames 40                  # 期待〔aidogui 验收通过〕
+build\host\embark_host_ui.exe --ui-nav --delay 40              # 期待〔aidogui 导航验收通过〕
+build\host\embark_host_ui.exe --ui-weather --delay 40          # 期待〔aidogui 天气验收通过〕
+build\host\embark_host_ui.exe --ui-launcher-pages --delay 40   # 期待〔主屏分页验收通过〕
+build\host\embark_host_ui.exe --ui-nav --delay 40 `
   --shot-frame 24 .scratch\ui_nav_clock.bmp                            # 抓 clock 屏那一帧
 ```
 
@@ -126,7 +126,7 @@ node tools/aidogui/gen_widget_doc.mjs --check   # 只比对，过期 exit 1（CI
   点按走 `aidogui_ui_nav_request_app()`。所以**新加一个 App 就自动多一个磁贴、自动能进**，
   不用动设计稿（超过 4 个自动多一页 + 多一个页码点）。分页几何是纯函数
   `app/launcher/launcher_pages.h`（每页 4 个 / 页数 / 页容器 x / 页码点 x），有 doctest 单测
-  `tests/kernel/test_launcher_pages.cpp`。
+  `core/tests/kernel/test_launcher_pages.cpp`。
 - **屏内交互归 App**：屏上按钮要**就地干点事**（不切屏，如设置屏的「亮度 −/＋」）时，用
   `lv_obj_add_event_cb` + `lv_event_get_user_data(this)` 挂回调，并在**每次屏装载后的重推里重挂**
   （控件随屏 destroy 消失）。样板：`app/settings/settings_app.cpp` 的 `bind_sinks()`、
@@ -185,7 +185,7 @@ node tools/aidogui/gen_widget_doc.mjs --check   # 只比对，过期 exit 1（CI
 
 - **不再有子集化、也没有字符表**。工程里的 `i18n.customCharsetEnabled` + `customCharsetRows`
   已经不起作用，也不会因为"漏字符"画方框 —— TTF 的 cmap 里有的字全能画。`tools/font/audit_glyphs.mjs`
-  那道审计查的就是**这份 TTF 的 cmap**（ADR 0017）：它扫 `app/` `src/` `platform/` 里会上屏的字符串，
+  那道审计查的就是**这份 TTF 的 cmap**（ADR 0017）：它扫 `app/` `core/src/` `host/` `device/` 里会上屏的字符串，
   字体里没有的字符打印码点 + `文件:行号` 并 exit 1（CI 里是 `font-audit` job）。
 - **换字体** = 换 `assets/font/ui_heiti.ttf`（卡上 `fonts/` 那份同步换）+ 重跑导出。
   只有**字号**会进生成代码（槽名里带 px），所以改字号才需要重导出。
@@ -200,7 +200,7 @@ node tools/aidogui/gen_widget_doc.mjs --check   # 只比对，过期 exit 1（CI
 
 ## 与真机的关系
 
-真机的 'S' 盘根就是 SD 卡挂载点 `/sdcard`（`platform/esp32/project/components/embark/CMakeLists.txt` 的
+真机的 'S' 盘根就是 SD 卡挂载点 `/sdcard`（`device/project/components/embark/CMakeLists.txt` 的
 `EMBARK_AIDOGUI_RES_ROOT`），所以卡上放两份东西：
 
 - `images/*.bin`：图片（`export/image/` 原样拷到 `/sdcard/images/`）；

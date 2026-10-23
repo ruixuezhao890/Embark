@@ -19,7 +19,7 @@
  *      lv_lru_set 返回非 OK 时直接 return NULL，那个字静默变成空白，不是"慢一点"。
  *
  * 头文件刻意不 include LVGL / Embark：这是纯整数算术，能脱离 LVGL 单测
- * （tests/kernel/test_font_quota.cpp），也是桥与宿主共用同一套算法的唯一办法。
+ * （core/tests/kernel/test_font_quota.cpp），也是桥与宿主共用同一套算法的唯一办法。
  */
 #ifndef EMBARK_APP_FONT_QUOTA_H
 #define EMBARK_APP_FONT_QUOTA_H

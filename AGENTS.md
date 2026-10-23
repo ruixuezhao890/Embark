@@ -2,16 +2,16 @@
 
 ## 本仓硬规则（读代码前先看这一条）
 
-**HAL / 服务接口头里不许出现芯片型号名。** `include/embark/hal/*.h` 里写 `IImu` 可以、
+**HAL / 服务接口头里不许出现芯片型号名。** `core/include/embark/hal/*.h` 里写 `IImu` 可以、
 `IQmi8658` 不行；`IAudio` 可以、`IPcm5101` 不行。型号名放实现文件、板级头
-（`platform/esp32/src/esp32_board.h`）、注释、文档都行。理由与三层边界见
+（`device/src/esp32_board.h`）、注释、文档都行。理由与三层边界见
 [docs/adr/0019-service-layer-and-public-hardware.md](docs/adr/0019-service-layer-and-public-hardware.md)。
 
 另：`docs/adr/0002-hal-capability-granularity.md` 已被 0019 取代 —— 它里面「不做设备驱动 /
 网络不在 v1 范围」两句**不是现行规则**，别照着写。
 
 **分工：基建归 agent，App 归用户。** 本仓有两条赛道（[docs/index.md](docs/index.md)「两条赛道」）：
-`include/embark/hal/`、服务层、`platform/`、`cmake/`、`tools/`、`docs/` 是**基建**；
+`core/include/embark/hal/`、服务层、`host/`、`device/`、`core/cmake/`、`tools/`、`docs/` 是**基建**；
 `app/<名>/` 里的业务逻辑与 `app/aidogui_ui/screen.aid` 里的界面是**用户自己写**的。
 **默认不要替用户写 App 的逻辑与界面** —— 只有用户明确点名某个 App 时才动它。
 用户的诉求原话是「AI 帮我把硬件基础设施做好，然后我自己编写 App 的逻辑与界面」，

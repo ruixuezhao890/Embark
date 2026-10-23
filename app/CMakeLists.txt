@@ -6,9 +6,9 @@
 #   2. embark::demo_apps（STATIC）—— 启动器 + clock + settings 共三个 App 的编译单元；
 #      LauncherApp（issue 16 主屏）与 demo apps 共用同一份编译规则；画 UI 需要
 #      LVGL，所以只在宿主 SDL2/LVGL 可用时构建（LVGL 由宿主分支带进来）。
-#      App 之间有"换后端不动 app/ 与 include/embark/"的验收（spec §14.5）：
+#      App 之间有"换后端不动 app/ 与 core/include/embark/"的验收（spec §14.5）：
 #      本目录只 include <embark/*>、<lvgl.h> 与 <middleware/etl/*>，
-#      不碰任何 platform/ 后端头；真机（issues/11）按 cmake/embark_sources.cmake 的
+#      不碰任何 host/、device/ 后端头；真机（issues/11）按 core/cmake/embark_sources.cmake 的
 #      EMBARK_APP_SOURCES_DEVICE 子集把各 App 的 .cpp 编进 IDF 组件（issue 20 起
 #      两边共用同一份清单，不再手抄）。
 #
@@ -31,7 +31,7 @@ target_include_directories(embark_apps INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}" "
 # AiDoGUI Designer 生成代码（ADR 0011）：app/aidogui_ui/，编译口径见该目录 CMakeLists.txt。
 add_subdirectory(aidogui_ui)
 
-# 源清单来自 cmake/embark_sources.cmake（宿主与真机共用，issue 20）：这里以前是手写的一份，
+# 源清单来自 core/cmake/embark_sources.cmake（宿主与真机共用，issue 20）：这里以前是手写的一份，
 # 真机组件另有一份，两边漂移的代价全落在真机链接期。加/删 App 改那份清单，
 # 漏了会被它的配置期审计拦住。
 

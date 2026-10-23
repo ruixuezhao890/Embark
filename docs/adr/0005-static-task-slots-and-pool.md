@@ -1,18 +1,18 @@
 # 任务创建：静态槽位为默认，运行期增删走固定块池
 
 本仓库所有任务都用 `xTaskCreateStatic*` 创建，栈与 TCB 来自编译期定死的存储：内置的 UI 任务用
-`platform/host/ui_task.cpp` / `platform/esp32/src/esp32_ui_task.cpp` 里的静态数组，App 申请的后台任务
-走注入接口 `ITaskSpawner`，实现（宿主 `platform/host/own_task_spawner.h`、真机
-`platform/esp32/src/esp32_task_spawner.h`）各自定义一个 Kernel，套在平台无关的
-`platform/common/pooled_task_spawner.h` 上：`.bss` 里一块 `alignas(16)` 的 arena，按
+`host/ui_task.cpp` / `device/src/esp32_ui_task.cpp` 里的静态数组，App 申请的后台任务
+走注入接口 `ITaskSpawner`，实现（宿主 `host/own_task_spawner.h`、真机
+`device/src/esp32_task_spawner.h`）各自定义一个 Kernel，套在平台无关的
+`core/common/pooled_task_spawner.h` 上：`.bss` 里一块 `alignas(16)` 的 arena，按
 `max_own_tasks` 个槽切给 Kernel（每槽 = 登记项 + `StaticTask_t` + `own_task_stack_words` 字栈）。
 宿主 FreeRTOS 配 `configSUPPORT_STATIC_ALLOCATION 1` + `configSUPPORT_DYNAMIC_ALLOCATION 0`，并且
-`heap_4.c` 刻意不参与编译（`cmake/embark_freertos.cmake`）—— 于是 `pvPortMalloc/vPortFree` 在**符号层面
+`heap_4.c` 刻意不参与编译（`core/cmake/embark_freertos.cmake`）—— 于是 `pvPortMalloc/vPortFree` 在**符号层面
 就不存在**，"内核与 App 零动态分配"是结构保证而不是纪律。
 
 这样定的理由：静态把"内存够不够"从运行期问题挪成链接期问题 —— 账目能在 map 文件 / 真机
 `check_sizes.py` 里核对，没有碎片，没有堆锁，唯一的失败点是 boot 时的容量不足（返回
-`Error::no_space`，容量是 `config/embark_limits.h` 里可调的常量）。要注意 FreeRTOS 的"动态"
+`Error::no_space`，容量是 `core/config/embark_limits.h` 里可调的常量）。要注意 FreeRTOS 的"动态"
 （heap_4/heap_5）本身也是编译期定死的静态数组 `ucHeap[configTOTAL_HEAP_SIZE]`，动态并不省掉预留，
 只是把切分推到运行期，并引入碎片与分配期间的 `vTaskSuspendAll()`。代价是预留即占用
 （默认 `max_own_tasks = 2` 个槽：一槽 = 登记项 + `StaticTask_t` + `own_task_stack_words` 字栈，
@@ -22,7 +22,7 @@
 
 **升级路径已落地（2026-10-04，issue 15）**："运行期创建、完成即回收"（第一个真实用例：WiFi 非阻塞连接 ——
 发起连接时创建任务，连接成功或超时后任务自行结束并归还资源，UI 线程全程不阻塞）按当初定的路线实现：
-`ITaskSpawner` 的实现从"二维静态槽"换成"固定块池 + 空闲链"，池复用 `platform/common/static_pool.h` 的
+`ITaskSpawner` 的实现从"二维静态槽"换成"固定块池 + 空闲链"，池复用 `core/common/static_pool.h` 的
 `StaticPool`（真机 LVGL 已在用它，`.bss` 里 48 KB arena），仍然调 `xTaskCreateStatic*`，接口增加
 `release_task(TaskToken)`（槽位下标 + 世代号，世代号让"重复释放"变成可判定的 `not_found`）。
 

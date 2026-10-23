@@ -5,14 +5,14 @@
 > `08-imu.md`、`09-audio.md`、`10-network.md`。
 > **2026-10-18 更新**：07 号票已落地骨架 —— `hal::Context` 从 8 个成员变成 11 个（末尾三个可空服务槽
 > `imu` / `audio` / `network`，三个装配点已补齐）。
-> **08 号票已落地 `IImu`**：`include/embark/hal/imu.h` 定义 `ImuSample` + `IImu`，
-> 宿主（`platform/host/host_imu.*`，可复现合成曲线）与真机（`platform/esp32/src/esp32_imu.*`，
+> **08 号票已落地 `IImu`**：`core/include/embark/hal/imu.h` 定义 `ImuSample` + `IImu`，
+> 宿主（`host/host_imu.*`，可复现合成曲线）与真机（`device/src/esp32_imu.*`，
 > 板载六轴、地址运行期探）两侧都已接进 `Context::imu`。
-> > **09 号票已落地 `IAudio`**：`include/embark/hal/audio.h` 定义 `AudioState` + `IAudio`
+> > **09 号票已落地 `IAudio`**：`core/include/embark/hal/audio.h` 定义 `AudioState` + `IAudio`
 > （`play(path)` / `pause` / `resume` / `stop` / `seek` / `position_ms` / `duration_ms` /
 > `set_volume`），**本层只认 PCM WAV**（MP3 要引解码器，另开一票）；音量是软件采样衰减
 > （板载 DAC 控制接口是 HW，没有寄存器）。宿主 SDL 与真机 I2S 两侧都已接进 `Context::audio`。
-> **10 号票已落地 `INetwork`**：`include/embark/hal/network.h` 定义 `NetState` + `INetwork`
+> **10 号票已落地 `INetwork`**：`core/include/embark/hal/network.h` 定义 `NetState` + `INetwork`
 > （`state` / `connect` / `disconnect` / `http_get` / `sntp_sync` / `last_http_status`），
 > **只做明文 HTTP**（https 返回 `unsupported`：要么引 TLS，要么走代理，另开一票）；凭据只存内存、
 > 不落 NVS。宿主 socket 后端与真机 esp_wifi 后端两侧都已接进 `Context::network`。
@@ -42,8 +42,8 @@ WiFi、屏幕、IMU、音频这些**每台设备都有的东西**，不该由每
     服务层（基建）      ← 设备服务 + 公共资源：IImu / IAudio / INetwork / IGpio
     HAL（基建）        ← 芯片能力：ITime / IPersistence / ILogSink / ISystem / IBus / IDisplay / IInput
 
-服务本身仍是**接口 + 平台实现**的同构形状（`include/embark/hal/<能力>.h` 给接口，
-`platform/host/` 与 `platform/esp32/src/` 各一份实现），只是它站在 HAL 之上、可以持有总线句柄。
+服务本身仍是**接口 + 平台实现**的同构形状（`core/include/embark/hal/<能力>.h` 给接口，
+`host/` 与 `device/src/` 各一份实现），只是它站在 HAL 之上、可以持有总线句柄。
 装配走同一个入口：`hal::Context` 加**可空指针槽**，语义与 `display` / `input` 同款
 （「没有这块硬件就是 nullptr」，而不是「给一个恒 not_ready 的实例」）。
 
@@ -62,8 +62,8 @@ WiFi、屏幕、IMU、音频这些**每台设备都有的东西**，不该由每
 - 服务层：接口描述「设备能提供什么能力」（读姿态、放音频、发 HTTP），**不提具体型号**。
 - 换芯片 → 换实现，接口与该接口的所有调用方零改动。
 
-芯片型号名出现在哪都行：实现文件、板级头（`platform/esp32/src/esp32_board.h` 里的引脚与型号）、
-注释、文档。**唯一禁止的地方是接口头**（`include/embark/hal/*.h`）。
+芯片型号名出现在哪都行：实现文件、板级头（`device/src/esp32_board.h` 里的引脚与型号）、
+注释、文档。**唯一禁止的地方是接口头**（`core/include/embark/hal/*.h`）。
 
 ### 3. 明确排除：业务服务不进基建
 
@@ -124,7 +124,7 @@ WiFi、屏幕、IMU、音频这些**每台设备都有的东西**，不该由每
   靠「接口头里没有芯片型号名」这条硬规则兜住。这条规则**没有编译器约束**，只能靠 review 与
   这条 ADR —— 所以要把它写进 `docs/agents/` 的约定里，让下一个 AI 也会查。
 - **池与栈的账要重算**：服务实现自己占栈/缓冲（I2S DMA、WiFi 的 lwIP 堆），
-  这些不进 LVGL 的两块池，得在板级的 `platform/esp32/src/esp32_board.h` 里单独列。issue 08/09/10 各自记账。
+  这些不进 LVGL 的两块池，得在板级的 `device/src/esp32_board.h` 里单独列。issue 08/09/10 各自记账。
 
 ## 验收（本文的，不是 issue 的）
 

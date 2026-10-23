@@ -307,7 +307,7 @@ void ClockApp::refresh_display(std::uint32_t now_ms) {
 
   const auto epoch = fw_->hal().time.epoch_ms();
   if (!epoch.has_value()) {
-    // 契约（include/embark/hal/time.h）：没有 RTC / 没对时返回 unsupported，不是致命
+    // 契约（core/include/embark/hal/time.h）：没有 RTC / 没对时返回 unsupported，不是致命
     // 错误，调用方必须自己处理。占位文案幂等 —— 值没变时 push 会自己跳过。
     if (clock_ready_)
       ELOG_INFO("clock 墙钟不可用（{}），界面转占位文案", epoch.error());

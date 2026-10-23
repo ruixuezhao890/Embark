@@ -6,7 +6,7 @@
 > 后台策略怎么选见同篇；"状态表达不绑任何范式"的定调见
 > [adr/0004-background-tick-and-state-policy.md](../adr/0004-background-tick-and-state-policy.md)。
 > 本文的示例代码已实测**编译 + 运行通过**：`g++ -std=c++17 -Wall -Wextra -Wpedantic -fno-exceptions
-> -fno-rtti -include config/embark_config.h`（含 `-Iinclude -isystem third_party -isystem build/include`），
+> -fno-rtti -include core/config/embark_config.h`（含 `-Iinclude -isystem third_party -isystem build/include`），
 > 两个探针 EXIT=0，零告警。
 
 ## 0. 先判断：要不要状态机
@@ -117,7 +117,7 @@ etl::fsm_state_id_t StateOn::on_enter_state() { return No_State_Change; }
 
 ## 3. 接进 App：三条接线
 
-状态机是 App 的**成员**，App 契约本身不变（`include/embark/app.h:95-119` 的八个钩子照旧）。
+状态机是 App 的**成员**，App 契约本身不变（`core/include/embark/app.h:95-119` 的八个钩子照旧）。
 
 ```cpp
 class LampApp final : public embark::App {
@@ -150,9 +150,9 @@ class LampApp final : public embark::App {
 
 ### 3.1 为什么不能直接 `fw.bus().subscribe(fsm_)`
 
-`Framework::bus()` 返回 **`const Bus&`**（`include/embark/framework.h:131`），订阅权在框架手里：
-装配期由框架给每个 App 挂一个常驻适配器（`src/embark/framework.cpp:44-54`），
-适配器把**所有**广播都投给该 App 的 `onMessage`（`include/embark/framework.h:253-271`，`accepts()` 恒真）。
+`Framework::bus()` 返回 **`const Bus&`**（`core/include/embark/framework.h:131`），订阅权在框架手里：
+装配期由框架给每个 App 挂一个常驻适配器（`core/src/embark/framework.cpp:44-54`），
+适配器把**所有**广播都投给该 App 的 `onMessage`（`core/include/embark/framework.h:253-271`，`accepts()` 恒真）。
 所以 App 侧唯一入口就是 `onMessage`，转投一行即可。
 
 > 这条与 `.scratch/embark-v1/spec.md` 第 312 行"可直接挂 `message_bus`"的说法有落差：
@@ -186,10 +186,10 @@ class LampApp final : public embark::App {
 4. **数据放 context，别放状态类** —— 状态在 `fsm_state_pack` 里默认构造一次，
    是跨切换共享的实例；放进状态类的成员不会随状态切换重置。
 5. **`start()` 之前 `receive()` 是静默空操作** —— 走 `ETL_ASSERT_FAIL(fsm_not_started)`（`fsm.h:546`），
-   而本仓库 `ETL_LOG_ERRORS 1`（`config/embark_config.h:64-66`）下断言**只回调、不中断**，
+   而本仓库 `ETL_LOG_ERRORS 1`（`core/config/embark_config.h:64-66`）下断言**只回调、不中断**，
    且仓库目前没有注册任何错误回调 ⇒ 什么都不打印、也不会停机。别指望它提醒你。
 6. **`onMessage` 会收到自己 `publish` 的消息** —— 总线是广播，发送方的适配器也在订阅表里
-   （`src/embark/bus.cpp:55-75`）。转投给状态机前先按消息 id 过滤，否则自回环。
+   （`core/src/embark/bus.cpp:55-75`）。转投给状态机前先按消息 id 过滤，否则自回环。
 7. **`etl::fsm` 的构造参数是 router id** —— 只有真把它挂到 `etl::message_bus` 上时才必须唯一；
    走 `onMessage` 转投时给 `0` 即可。
 8. **别在 `on_event` / `on_enter_state` 里做耗时活** —— `receive()` 在调用它的那条路径上同步跑；

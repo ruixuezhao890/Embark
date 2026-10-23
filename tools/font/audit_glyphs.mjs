@@ -9,7 +9,7 @@
  * app/aidogui_ui/assets/font/ui_heiti.ttf，也就是真机 SD 卡 fonts/ 那份的源头。
  * 不在 cmap 里的字符 → 打印字符 + 文件:行号，退出码 1（CI 里就是红的）。
  *
- * 覆盖范围：app/、src/、platform/ 三个根目录（third_party / build* / .scratch 不看），
+ * 覆盖范围：app/、core/src/、core/common/、host/、device/（third_party / build* / .scratch 不看），
  * 只看**会输出到界面上的**调用点（lv_label_set_text 这一类 setter 的实参里的字符串字面量），
  * 不看日志、断言、路径名 —— 那些不上屏。
  *
@@ -23,7 +23,7 @@
  *   node tools/font/audit_glyphs.mjs --selftest       # 自检：造含缺字的夹具，验证能报出来
  *   node tools/font/audit_glyphs.mjs --json           # 机器可读输出
  *   node tools/font/audit_glyphs.mjs --ttf 路径        # 换一份字体审计（默认见 DEFAULT_TTF）
- *   node tools/font/audit_glyphs.mjs --roots app,src  # 只扫指定根目录
+ *   node tools/font/audit_glyphs.mjs --roots app,core/src  # 只扫指定根目录
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -34,7 +34,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..');
 
 /** 扫描根目录（仓库相对）。 */
-const DEFAULT_ROOTS = ['app', 'src', 'platform'];
+const DEFAULT_ROOTS = ['app', 'core/src', 'core/common', 'host', 'device'];
 /** 不进扫描的目录名 / 前缀。 */
 const SKIP_DIR_NAMES = new Set(['third_party', '.git', '.scratch', 'node_modules', 'build', 'build-esp32', 'managed_components']);
 /** 参与扫描的源码扩展名。 */
@@ -483,7 +483,7 @@ function parseArgs(argv) {
     } else if (arg.startsWith('--roots=')) {
       options.roots = arg.slice('--roots='.length).split(',').filter(Boolean);
     } else if (arg === '--help' || arg === '-h') {
-      console.log('用法：node tools/font/audit_glyphs.mjs [--print-required] [--selftest] [--json] [--include-symbols] [--ttf 路径] [--roots app,src,platform]');
+      console.log('用法：node tools/font/audit_glyphs.mjs [--print-required] [--selftest] [--json] [--include-symbols] [--ttf 路径] [--roots app,core/src,host,device]');
       process.exit(0);
     } else {
       console.error('未知参数：' + arg);

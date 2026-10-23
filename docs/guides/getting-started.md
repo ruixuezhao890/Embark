@@ -35,7 +35,7 @@ cmake --build build            # 全量一次（宿主约几十秒）
 ## 3. 跑起来看
 
 ```sh
-cd build/platform/host
+cd build/host
 ./embark_host_ui.exe           # Windows；其他平台去掉 .exe。不带参数 = 一直跑到你关窗
 ```
 
@@ -43,7 +43,7 @@ cd build/platform/host
 
 - **界面不是手绘代码**：全部来自 `app/aidogui_ui/export/` 里的生成代码，App 只是薄壳（业务逻辑），不碰 LVGL。
 - **无头环境也能看**：`./embark_host_ui.exe --frames 60 --screenshot probe.bmp`（写出 240×320 的 BMP）。
-- **想自己写 main**：用 `embark_host_user`，骨架讲解在 [../../platform/host/user_main.cpp](../../platform/host/user_main.cpp) 头部注释。
+- **想自己写 main**：用 `embark_host_user`，骨架讲解在 [../../host/user_main.cpp](../../host/user_main.cpp) 头部注释。
 
 ## 4. 最短验收：三条命令
 
@@ -53,7 +53,7 @@ cd build/platform/host
 ./embark_host_tour.exe                    # 一条用例看完整系统（17 项自检）
 ```
 
-都在 `build/platform/host/` 里。**合成输入必须带 `--delay 40`**，否则点击会在窗口就绪前发出、白丢。
+都在 `build/host/` 里。**合成输入必须带 `--delay 40`**，否则点击会在窗口就绪前发出、白丢。
 
 ## 5. 改一行就想看见
 

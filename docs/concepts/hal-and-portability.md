@@ -12,7 +12,7 @@
 | 机制 | 做法 | 破了会怎样 |
 | --- | --- | --- |
 | **接口在链接期选择** | 没有"后端注册表"：宿主可执行文件链宿主后端、测试链假后端、真机链 ESP32 后端。内核不查表、不动态选择 | 一旦有运行期选择，就需要堆与虚表管理，"零堆"与"换后端不动 app/"两条验收同时不成立 |
-| **App 不 include platform** | `app/` 下不出现任何 `platform/` 头（spec §14.5 的验收项） | 后端一换 App 就得改，可移植性只剩口号 |
+| **App 不 include platform** | `app/` 下不出现任何 `host/`、`device/` 头（spec §14.5 的验收项） | 后端一换 App 就得改，可移植性只剩口号 |
 | **能力粒度只到芯片** | HAL 只抽象"这块芯片能做什么"，**不做设备驱动**；外设能力放在 HAL 之上的服务层 | 一抽象具体外设，接口就被某颗芯片的细节绑死，可移植性反而下降 |
 
 第三条是**有意的取舍**，不是遗漏——见 [ADR 0002](../adr/0002-hal-capability-granularity.md)：
@@ -73,33 +73,33 @@ struct Context {
 ## 4. 三个后端，一份源码
 
 ```
-                include/embark/hal/*.h      ← 接口（七个纯虚）
+                core/include/embark/hal/*.h      ← 接口（七个纯虚）
                         │
         ┌───────────────┼───────────────┐
-   platform/host/   tests/fakes/   platform/esp32/src/
+   host/   core/tests/fakes/   device/src/
    （PC 仿真）      （单元测试）    （ESP32-S3 真机）
         │               │               │
-   platform/common/  ← 三边共用：lvgl_port / lvgl_ui_port / static_pool / pooled_task_spawner
+   core/common/  ← 三边共用：lvgl_port / lvgl_ui_port / static_pool / pooled_task_spawner
         │
    app/  ← 一行都不用改
 ```
 
 | 后端 | 目录 | 特点 |
 | --- | --- | --- |
-| **宿主** | `platform/host/` | 一个能力一对 `host_<cap>.{h,cpp}`；SDL2 显示与输入；持久化落文件；`IBus` 一律返回 `unsupported` |
-| **测试替身** | `tests/fakes/` | 记录调用、可注入故障、不碰硬件；与宿主后端**共用同一套数据格式**（`detail/kv_slot.h`） |
-| **真机** | `platform/esp32/src/` | ST7789 + `esp_lcd`、CST328 触摸、NVS、`esp_timer`；板级常量集中在 `esp32_board.h` |
+| **宿主** | `host/` | 一个能力一对 `host_<cap>.{h,cpp}`；SDL2 显示与输入；持久化落文件；`IBus` 一律返回 `unsupported` |
+| **测试替身** | `core/tests/fakes/` | 记录调用、可注入故障、不碰硬件；与宿主后端**共用同一套数据格式**（`detail/kv_slot.h`） |
+| **真机** | `device/src/` | ST7789 + `esp_lcd`、CST328 触摸、NVS、`esp_timer`；板级常量集中在 `esp32_board.h` |
 
 **宿主的总线为什么一律返回 `unsupported`**：这不是"没实现"，而是"这台机器本来就没有物理总线"。
 好处是**上层写好的错误分支在宿主机上会被真跑一遍**——而不是等到上板才发现某条分支从没执行过。
-宿主的无头自检程序（`platform/host/main.cpp`，目标 `embark_host`）就把这条当断言查：
+宿主的无头自检程序（`host/main.cpp`，目标 `embark_host`）就把这条当断言查：
 `i2c_write(0x3C, ...)` 必须返回 `unsupported`，否则计一次失败。
 
 ---
 
 ## 5. 共用层：什么该提上来，什么不该
 
-`platform/common/` 放的是**平台无关**、被宿主与真机同时使用的部分：
+`core/common/` 放的是**平台无关**、被宿主与真机同时使用的部分：
 
 | 文件 | 作用 | 为什么是共用 |
 | --- | --- | --- |
@@ -139,6 +139,6 @@ struct Context {
 ## 7. 从这里往哪走
 
 - **写一个新后端**：[../guides/hal-backend-guide.md](../guides/hal-backend-guide.md)（骨架 + 七条 IDF 坑）
-- **真机端口细节**：[`platform/esp32/README.md`](../../platform/esp32/README.md)（板级参数、烧录、bring-up 清单）
+- **真机端口细节**：[`device/README.md`](../../device/README.md)（板级参数、烧录、bring-up 清单）
 - **HAL 的 API 签名**：[../reference/hooks-and-api.md](../reference/hooks-and-api.md) §6
 - **为什么不做设备抽象**：[../adr/0002-hal-capability-granularity.md](../adr/0002-hal-capability-granularity.md)

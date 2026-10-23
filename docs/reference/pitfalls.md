@@ -4,7 +4,7 @@
 
 ## ETL 定容：容量是编译期的，行为是"满了怎么办"写死的
 
-- 容器只用 ETL 固定容量版，容量全在 `config/embark_limits.h`（单一事实来源）：
+- 容器只用 ETL 固定容量版，容量全在 `core/config/embark_limits.h`（单一事实来源）：
   `max_apps` / `max_bus_subscribers` / `max_background_timers` /
   `message_queue_depth` 等。改容量 = 改那里，不要散落在各处。
 - 满了的行为各容器不同、且**不都报错**：
@@ -38,19 +38,19 @@ struct BrightnessMessage : public embark::MessageT<0x21> {  // 有基类！
 
 - 内核与 App 默认 `-fno-exceptions -fno-rtti`、零堆分配：`throw` **真的编不过**
   （`-fno-exceptions`），但 `new` 没有链接期/运行期拦截——拦住它的是
-  零堆纪律与零分配审计测试（`tests/kernel/test_zero_alloc.cpp`），不是编译器。
+  零堆纪律与零分配审计测试（`core/tests/kernel/test_zero_alloc.cpp`），不是编译器。
   换句话说：违反这一点不会当场报错，只会在别的地方坏。
   失败用 `embark::Error` / `etl::expected`（`unexpected(...)` 便捷函数）。
 - `tests` 目标没有这些限制（才能装全局 new 计数钩子做零分配审计，
-  见 `tests/detail/zero_alloc_hooks.cpp`）；那是测试专用，不要照抄进内核。
-- 宿主 LVGL 的堆由 `platform/host/host_lvgl_mem.cpp` 显式配置；
+  见 `core/tests/detail/zero_alloc_hooks.cpp`）；那是测试专用，不要照抄进内核。
+- 宿主 LVGL 的堆由 `host/host_lvgl_mem.cpp` 显式配置；
   真机侧同样要显式给（静态池或 NVS 外的专用区）。
 
 ## MinGW 没有 std::aligned_alloc
 
 `<cstdlib>` 的 `std::aligned_alloc` 在 MinGW libstdc++ **不存在**（编译错误，
 不是运行错）。对齐分配用 CRT 的 `_aligned_malloc` / `_aligned_free`
-（`tests/detail/zero_alloc_hooks.cpp` 是例子）。
+（`core/tests/detail/zero_alloc_hooks.cpp` 是例子）。
 
 ## 宿主 Context 的成员是引用，不是函数
 
@@ -71,7 +71,7 @@ struct BrightnessMessage : public embark::MessageT<0x21> {  // 有基类！
 派生打印会显著拉长日志行（一个结构体就能上百字节），所以：
 
 - 一条日志只放一个整对象；多个对象拆两条 —— 宿主演示的收尾统计就是这么拆的
-  （`platform/host/ui_demo.cpp:319-330`，"显示与前台"一条、"启动器"一条、"后台/消息"一条）。
+  （`host/ui_demo.cpp:319-330`，"显示与前台"一条、"启动器"一条、"后台/消息"一条）。
   拆完发现少了半行、或者某条日志凭空不见，先量长度。
 - 这块缓冲是 `log_at` 里的局部数组 `char record[384 + 1]`（`elog.hpp:203`）：
   每打一行，调用者栈上就占 385 字节。但它只是**零头**，大头是下面这条（issue 22 实测）。
@@ -90,11 +90,11 @@ struct BrightnessMessage : public embark::MessageT<0x21> {  // 有基类！
   - 想彻底堵住：真机关掉 `EFMT_ENABLE_HOSTED`，没有原生格式化器就编译报错，
     运行期不会再有这条路径（取舍见 issue 22）。
 - 栈预算的单位：框架的 `*_stack_words` 一律按**宿主字长**算（x86-64 1 字 = 8 字节，
-  512 字 = 4 KB），真机在 `platform/esp32/src/esp32_board.h` 里用
+  512 字 = 4 KB），真机在 `device/src/esp32_board.h` 里用
   `stack_word_bytes = 8` 换算成字节再交给 IDF —— 因为 IDF 的 `ulStackDepth` 是**字节**，
   而 xtensa 的 `StackType_t` 是 `uint8_t`，直接照搬字数只剩 1/8（issue 21 就是这么把
   16 KB 的 UI 任务变成 2 KB 的）。所以同一个常量在宿主和真机上都是同样的字节数。
-- 想调大就改 `ELOG_MAX_RECORD_SIZE`（`config/embark_config.h` 里登记了这件事），
+- 想调大就改 `ELOG_MAX_RECORD_SIZE`（`core/config/embark_config.h` 里登记了这件事），
   但栈成本同步上涨。
 
 ## 派生打印（E_FMT_DERIVE）：类型的名字只有一份
@@ -105,7 +105,7 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
   结构体用 `E_FMT_DERIVE(struct Rect { ... });`；调用处补分号，
   **声明里一行只写一个字段**（宏按逗号切宏参数）。类里有基类/构造函数、
   声明里带 `#if` 或字段超过 16 个时，改成在类型体内写
-  `E_FMT_FIELDS(from_app, seq);`（`include/embark/message.h` 的
+  `E_FMT_FIELDS(from_app, seq);`（`core/include/embark/message.h` 的
   `CrossTaskMessage` 是例子）。
 - 用法就是整对象填空：`ELOG_INFO("HAL 就绪：显示 {}", display_info);`，
   输出是带类型的 Rust Debug 风格：`embark::hal::Rect { x = 0, y = 0, width = 240, height = 320 }`。
@@ -113,7 +113,7 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
   `std::uint8_t` / `std::int8_t` / `unsigned char` 成员走字符通道，值为 0 时写出
   NUL，会把整行日志**截断**。所以框架里会进日志的字段一律 2 字节起：`AppId`、
   `AppSettings::task_priority`、`InputEvent::key` 都是 `std::uint16_t`
-  （原因写在 `include/embark/message.h` 的 `AppId` 处）。顶层 `std::uint8_t`
+  （原因写在 `core/include/embark/message.h` 的 `AppId` 处）。顶层 `std::uint8_t`
   参数打印是正常的（`key = 113` 就来自这里），别把这条推广过头。
 - 只吃 `const char*` 的出口（`fprintf`、`embark::fatal`）用
   `char text[24]; embark::error_text(text, error);`。
@@ -127,23 +127,23 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
 没有注册默认 logger 时 `ELOG_WARN` 什么都不做（`log_at` 无后端）。
 内核在测试里因此"静默"是预期行为；宿主里接了 `host_log_sink` 就正常打。
 
-## 宏前置条件（config/embark_config.h 是唯一开关）
+## 宏前置条件（core/config/embark_config.h 是唯一开关）
 
 - `EMBARK_PLATFORM_HAS_FREERTOS`：顶层默认 ON；真机与宿主都靠它。
 - `ETL_TARGET_OS_FREERTOS`：ETL 据此选 `mutex_freertos.h` 等（需要 FreeRTOS
   queue 符号，链路已通过 `embark_freertos` 静态库满足）。
 - `ETL_CALLBACK_TIMER_USE_ATOMIC_LOCK`：callback_timer 的锁二选一宏
   （ATOMIC / INTERRUPT），**已定义 ATOMIC**；不要两个都开，也不要都关。
-- `lv_conf.h` 在 `config/` 是单一事实来源，LVGL 构建视图从那里取；
+- `lv_conf.h` 在 `core/config/` 是单一事实来源，LVGL 构建视图从那里取；
   改 `LV_COLOR_DEPTH`（16 = RGB565，spec 定的）或开关要在那一份上改。
 
 ## ESP32-S3 真机（IDF）特有
 
-- **配置文件必须纯 ASCII**：`platform/esp32/project/sdkconfig.defaults` 与
+- **配置文件必须纯 ASCII**：`device/project/sdkconfig.defaults` 与
   `partitions.csv` 由 IDF 的 `kconfgen` / `gen_esp32part.py` 按**宿主本地编码**
   读取（中文 Windows = GBK）。UTF-8 中文注释会让 `set-target` 直接失败：
   `UnicodeDecodeError: 'gbk' codec can't decode byte ...`。中文说明写在
-  `platform/esp32/README.md`，那两个文件里只留英文注释。
+  `device/README.md`，那两个文件里只留英文注释。
 - **`CONFIG_FREERTOS_HZ` 必须 ≥ 1000**：UI 循环是 5 ms，100 Hz 下
   `pdMS_TO_TICKS(5) == 0` ⇒ `vTaskDelay(0)` 只让出一次调度 ⇒ UI 任务忙等、
   拖住空闲任务、触发任务看门狗。后端另有"0 tick 退化成 1 tick"兜底，
@@ -151,7 +151,7 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
 - **栈深的单位**：IDF 的 `xTaskCreate*` 收**字节**（`xTaskCreateStaticPinnedToCore`
   也一样），`uxTaskGetStackHighWaterMark()` 返回**字**（xtensa 上 1 字 = 1 字节，
   所以数值上等于字节）。框架的 `*_stack_words` 按宿主字长（8 字节）算，唯一的换算点是
-  `platform/esp32/src/esp32_board.h` 的 `stack_word_bytes`：UI 任务走
+  `device/src/esp32_board.h` 的 `stack_word_bytes`：UI 任务走
   `ui_task_stack_bytes`（`esp32_ui_task.cpp` 直接收字节），`own_task` 的栈数组
   `Esp32Task::stack[own_task_stack_bytes]` 与 `xTaskCreate` 的深度都从那里取。
   别在别处再乘一次 `sizeof(StackType_t)` —— issue 21 的原始 bug 就是它等于乘 1。
@@ -166,33 +166,33 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
   `invalid conversion from 'int' to 'gpio_num_t'`。
 - **中间件视图要在 `project()` 之前建**：IDF 的组件配置发生在 `project()` 里，
   `<middleware/...>` 的 junction 必须先存在；而且 `embark_create_middleware_view`
-  要显式传仓库根（IDF 工程的 `PROJECT_SOURCE_DIR` 是 `platform/esp32/project`，
+  要显式传仓库根（IDF 工程的 `PROJECT_SOURCE_DIR` 是 `device/project`，
   不是仓库根）。
 - **`esp_lcd` 的像素发送是异步的**：`tx_color` / `draw_bitmap` 只是入队，缓冲区要等
   `on_color_trans_done` 才能复用；而且**一次调用只回调一次**（驱动只在最后一块
   chunk 上置 `en_trans_done_cb`）⇒ 后端的 `flush()` 用静态二值信号量等它，
   等到了才算 HAL 要的"同步语义"成立。
-- **组件要自己补宿主 CMake 给过的东西**：`-include config/embark_config.h`、
+- **组件要自己补宿主 CMake 给过的东西**：`-include core/config/embark_config.h`、
   `third_party/etl/include`（ETL 是 header-only，宿主靠 `etl::etl` 的 INTERFACE
   目录）、`EMBARK_PLATFORM_NAME` / `EMBARK_VERSION_STRING`。
-- **源清单只有一份：`cmake/embark_sources.cmake`（issue 20 的结构性收口）**：宿主与真机
+- **源清单只有一份：`core/cmake/embark_sources.cmake`（issue 20 的结构性收口）**：宿主与真机
   都 `include` 它取 SRCS / INCLUDE_DIRS，加/删 TU 只改这一处。以前是四份手抄名单
-  （`src/CMakeLists.txt`、`app/CMakeLists.txt`、`platform/common/CMakeLists.txt`、真机组件的
+  （`src/CMakeLists.txt`、`app/CMakeLists.txt`、`core/common/CMakeLists.txt`、真机组件的
   `EMBARK_KERNEL_SOURCES` 等），一份源码树、多条构建路径（spec §11）：删
-  `src/embark/error.cpp` 时只改了宿主那份 ⇒ 宿主全绿、真机 configure 期直接失败
-  `Cannot find source file: .../src/embark/error.cpp`（显式列出的源文件不存在时 CMake
+  `core/src/embark/error.cpp` 时只改了宿主那份 ⇒ 宿主全绿、真机 configure 期直接失败
+  `Cannot find source file: .../core/src/embark/error.cpp`（显式列出的源文件不存在时 CMake
   不跳过，直接报错）；2026-10-16 又漏了真机三个 App 的 include 目录 ⇒ 编译期
   `clock_app.h: No such file or directory`。清单自带**配置期审计**（每次 cmake 配置跑一次）：
   登记的路径不存在、归口目录里有 `.cpp` 没登记、真机 App 子集不在全量里、真机 main.cpp
   的裸头名找不到 include 目录 —— 四条都在配置期 `FATAL_ERROR`，不再拖到真机链接期。
   **新加 App 不必手工登记**：`node tools/new_app.mjs <名> --apply` 一次改完 5 行 / 3 个文件
-  （两份源清单 + `platform/host/ui_demo.cpp` 的 include 与 App 表 + `aidogui_ui_hooks.h`）。
+  （两份源清单 + `host/ui_demo.cpp` 的 include 与 App 表 + `aidogui_ui_hooks.h`）。
   手工加就得自己补齐这 5 处：漏一份清单的表现是「宿主能跑、真机编不到」或反过来；
   漏 include 是编译期 `'XxxApp' is not a member of 'embark::demo'`。
   **加普通 `.cpp`（不是 App）仍必须手工登记**到 `EMBARK_APP_SOURCES` 或对应的源清单。
 - **组件的 `PUBLIC` 编译选项会漏到 IDF 生成的纯 C 文件上**：`PUBLIC` 选项会跟着
   组件传播给最终链接目标 `embark_esp32.elf`，而那个目标要编一个自动生成的
-  `project_elf_src_esp32s3.c`（**纯 C**）。于是 `-include config/embark_config.h`
+  `project_elf_src_esp32s3.c`（**纯 C**）。于是 `-include core/config/embark_config.h`
   这种 **C++ 专用**的选项一旦写成 `PUBLIC`，C 文件看见 ETL 头就是一片
   `error: unknown type name 'namespace'`。规矩：`-include` 留在组件 `PRIVATE`，
   依赖方（`project/main/CMakeLists.txt`）自己带一份；`EMBARK_*` 宏定义可以 `PUBLIC`
@@ -218,7 +218,7 @@ v1 的打印约定是"类型自己声明怎么打"，不再手写 `to_string`（
 - 写仓库外的绝对路径（`E:/…`、`C:/Users/…/Temp/…`）在本机实测会失败，报
   `截图失败：写不进 <路径>（Couldn't open <路径>）` —— 而同一个目录用 shell / node 写是好的，
   所以别怀疑权限；大概率是这台机器的沙箱/杀软对宿主进程的转手限制（未定论）。
-- 无论哪种失败，日志都会带上完整路径（`platform/host/ui_demo.cpp` 的 `save_screenshot`），
+- 无论哪种失败，日志都会带上完整路径（`host/ui_demo.cpp` 的 `save_screenshot`），
   照路径改就行 —— 这一条就是为了不再出现「`Couldn't open` 但不告诉你是哪个路径」。
 
 ## 宿主特有
@@ -248,13 +248,13 @@ exit 1 并给出行号。缺字的出路是换字体 / 改文案 / 给该 label 
 
 ## ESP-IDF 组件 CMakeLists 会被执行两遍（issue 25 踩到）
 
-`platform/esp32/project/components/*/CMakeLists.txt` 里的 `include(...)` **会在两种模式下各跑一遍**，
+`device/project/components/*/CMakeLists.txt` 里的 `include(...)` **会在两种模式下各跑一遍**，
 第二遍是**脚本模式**（`cmake -P tools/cmake/scripts/component_get_requirements.cmake` —— IDF 收组件
 REQUIRES 时用它跑一遍各组件 CMakeLists）：
 
 - 脚本模式里没有配置阶段，`file(GLOB ... CONFIGURE_DEPENDS)` 直接报
   `CONFIGURE_DEPENDS is invalid for script and find package modes`，整个配置断在这里。
-  所以 `cmake/embark_sources.cmake` 的审计段前面有一句 `if(CMAKE_SCRIPT_MODE_FILE) return() endif()`
+  所以 `core/cmake/embark_sources.cmake` 的审计段前面有一句 `if(CMAKE_SCRIPT_MODE_FILE) return() endif()`
   （变量定义要照常执行 —— 脚本模式还得能解析 `idf_component_register`）。
   **症状隐蔽**：issue 20 收口后一路正常，直到有人改了 REQUIRES（IDF 才重跑那个脚本）才炸。
 - `idf_component_register(... REQUIRES ...)` 的参数**写一行**：跨行或夹注释会被抄进生成的

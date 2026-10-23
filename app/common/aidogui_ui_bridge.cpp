@@ -1,7 +1,7 @@
 /**
  * AiDoGUI UI 薄桥实现（ADR 0011）：见 aidogui_ui_bridge.h 头注释。
  *
- * 表头是构建期生成的：cmake/embark_aidogui_tables.cmake 在配置期解析 app/aidogui_ui/export，
+ * 表头是构建期生成的：core/cmake/embark_aidogui_tables.cmake 在配置期解析 app/aidogui_ui/export，
  * 写出构建目录 include/embark_aidogui_ui_tables.h，由 embark::aidogui_ui 的 PUBLIC include 根
  * 带进来。它是自含的：自己 extern 用到的控件/字体符号，不 include 生成代码的 ui.h —— 两个
  * 目标也有一份 ui.h，两边同名必然打架（谁在 include 路径前面谁赢，非常隐蔽）。
@@ -25,7 +25,7 @@
 
 // 字体方案 = TTF 运行期栅格化（ADR 0017）：没有 LVGL 的 tiny_ttf 就编不出这条路径。
 #if !defined(LV_USE_TINY_TTF) || !LV_USE_TINY_TTF
-#error "AiDoGUI 桥需要 LV_USE_TINY_TTF=1（config/lv_conf.h；ADR 0017 的 TTF 字体方案）"
+#error "AiDoGUI 桥需要 LV_USE_TINY_TTF=1（core/config/lv_conf.h；ADR 0017 的 TTF 字体方案）"
 #endif
 
 namespace embark::demo {
@@ -100,7 +100,7 @@ lv_obj_t* blank_screen() {
 
 /// 装载（已装载则 no-op）。notify=true 时回调观察者，报告"屏刚建好"这个事实：观察者据此把
 /// 点击绑定重挂到新控件上。桥自己发起的装载也通知，不会成环 —— 观察者顺手请求切到同名 App
-/// 时，框架对"已是当前前台"的请求直接 return（src/embark/framework.cpp:352）。
+/// 时，框架对"已是当前前台"的请求直接 return（core/src/embark/framework.cpp:352）。
 bool load_entry(const aidogui_screen_entry_t* entry, bool notify) {
   if (entry == nullptr) {
     return false;

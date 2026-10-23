@@ -1,7 +1,7 @@
-# 固定容量上限（`config/embark_limits.h`）
+# 固定容量上限（`core/config/embark_limits.h`）
 
 > **为什么有这份表**：Embark 的内核**零堆**——不 new、不 malloc、不 std::vector。
-> 所有容量都是编译期常量，全部集中在 [`config/embark_limits.h`](../../config/embark_limits.h) 一处。
+> 所有容量都是编译期常量，全部集中在 [`core/config/embark_limits.h`](../../core/config/embark_limits.h) 一处。
 > 这份文档就是它的逐条解释：**每个数字是什么、为什么是这个值、改它会牵动什么**。
 >
 > 想改容量：改这一个头文件 → 重新构建。**不要**在别处再写一份数字。
@@ -21,7 +21,7 @@
 
 `tick` 策略的定时器是**按 App 逐个注册**的，`max_background_timers` 只是 ETL 那层的容量。
 真正的约束是：**每个声明了 `tick` 的 App 占一个定时器**，所以「8 个定时器」大致等于「最多 8 个 tick App」。
-超过时 `boot()` 的注册段拿不到 id，返回 `Error::no_space`（`src/embark/framework.cpp` boot 第 6 段）。
+超过时 `boot()` 的注册段拿不到 id，返回 `Error::no_space`（`core/src/embark/framework.cpp` boot 第 6 段）。
 
 ---
 
@@ -29,16 +29,16 @@
 
 | 常量 | 值 | 含义 | 改它意味着什么 |
 | --- | --- | --- | --- |
-| `display_width` | `240` | 面板宽（px） | 与 `config/lv_conf.h`、ST7789 原生方向、宿主窗口三者必须一致。改它要同时改 `lv_conf.h` 与 `platform/esp32/src/esp32_board.h` |
+| `display_width` | `240` | 面板宽（px） | 与 `core/config/lv_conf.h`、ST7789 原生方向、宿主窗口三者必须一致。改它要同时改 `lv_conf.h` 与 `device/src/esp32_board.h` |
 | `display_height` | `320` | 面板高（px） | 同上。**竖屏是面板原生方向**（真机 `ROT_NONE` 不旋转），宿主窗口同向 |
 | `display_bytes_per_pixel` | `2` | 每像素字节（RGB565） | 全仓库只认一种像素格式，中间不做格式转换。改成别的要动 `PixelFormat` 与所有 `flush` 路径 |
 | `display_stride_bytes` | `display_width * display_bytes_per_pixel` | 一行字节数 | 派生值，别单独改 |
 | `lvgl_draw_buf_lines` | `40` | 绘制缓冲行数 | 占用 = 行数 × 一行字节数 ≈ `40 × 240 × 2 ≈ 19 KB`。行数越多一次刷得越多、越省 SRAM 就调小 |
-| `lvgl_alloc_budget_bytes` | `256 * 1024` | LVGL 堆预算 | `lv_conf.h` 用 `LV_MEM_CUSTOM=1` 把 LVGL 的分配全指到 `platform/host/host_lvgl_mem.cpp`，**超出即 fatal**。这是宿主值，真机另配 |
+| `lvgl_alloc_budget_bytes` | `256 * 1024` | LVGL 堆预算 | `lv_conf.h` 用 `LV_MEM_CUSTOM=1` 把 LVGL 的分配全指到 `host/host_lvgl_mem.cpp`，**超出即 fatal**。这是宿主值，真机另配 |
 | `lvgl_input_queue_depth` | `16` | LVGL 端口的输入中转队列 | UI 循环每帧把 HAL 输入抽干塞进来，LVGL 的 `read_cb` 一个个取。满了丢最旧并计数 |
 
 > 宿主窗口默认 **1:1**（1 个面板像素 = 1 个屏幕像素，不放大不发糊），见
-> [`platform/host/host_display.h`](../../platform/host/host_display.h) 的 `window_scale`。
+> [`host/host_display.h`](../../host/host_display.h) 的 `window_scale`。
 > 想要放大看细节就传 `window_scale = 2/3/…`（整数倍最近邻，仍然不糊）。
 
 ---
@@ -47,7 +47,7 @@
 
 | 常量 | 值 | 含义 | 改它意味着什么 |
 | --- | --- | --- | --- |
-| `max_own_tasks` | `2` | own_task 策略的**并发**上限（每个 App 至多一个任务） | 槽位由平台任务池运行时分配/回收（[`platform/common/pooled_task_spawner.h`](../../platform/common/pooled_task_spawner.h)）。这里只定「同时最多几个」；**池的静态 arena 大小由它乘出来**，调大 = .bss 直接变大 |
+| `max_own_tasks` | `2` | own_task 策略的**并发**上限（每个 App 至多一个任务） | 槽位由平台任务池运行时分配/回收（[`core/common/pooled_task_spawner.h`](../../core/common/pooled_task_spawner.h)）。这里只定「同时最多几个」；**池的静态 arena 大小由它乘出来**，调大 = .bss 直接变大 |
 | `own_task_stack_words` | `512` | 后台任务槽的栈容量（单位：**按宿主字长算的字**） | 宿主 1 字 = 8 字节 → `512 字 = 4 KB`；真机用 `stack_word_bytes` 换算成同样字节数。App 的 `settings().task_stack_words` 为 0 时用它；**超过它 = 槽装不下**（`Error::no_space`） |
 | `ui_task_stack_words` | `2048` | 唯一 UI 任务的栈（单位同上） | 宿主 `2048 字 = 16 KB`。留给 LVGL 回调 + 前台 App 逻辑。实测占用看宿主演示的栈高水位输出（`uxTaskGetStackHighWaterMark`） |
 | `ui_task_priority` | `5` | UI 任务优先级 | 高于内核空闲任务与其它系统任务即可；真机按中断/任务布局重排 |
@@ -60,7 +60,7 @@
 - 宿主：`StackType_t = size_t` → 1 字 = 8 字节 → `512 字 = 4 KB`
 - 真机 xtensa：`StackType_t = uint8_t` → 照字面搬过去只剩 1/8
 
-所以真机端口必须用 `platform/esp32/src/esp32_board.h` 里的 `stack_word_bytes` **换算成字节**再交给 IDF
+所以真机端口必须用 `device/src/esp32_board.h` 里的 `stack_word_bytes` **换算成字节**再交给 IDF
 （IDF 的 `ulStackDepth` 收的是字节）。**别在别处再乘一次 `sizeof(StackType_t)`**——
 这是 issue 21 实际踩过的坑，详见 [pitfalls.md](../reference/pitfalls.md)。
 
@@ -75,13 +75,13 @@
 | `persistence_max_slots` | `32` | 槽位总数 | 写满后 `write` 返回 `Error::no_space`（**不静默覆盖**）。`capacity_bytes()` 可以运行时查 |
 
 > 持久化的错误语义是完整的：键不存在 → `not_found`（不做静默成功）、`erase` 不存在也 → `not_found`、
-> 整个区损坏 → `corrupt_data`（可用 `erase_all()` 重来）。见 [`include/embark/hal/persistence.h`](../../include/embark/hal/persistence.h)。
+> 整个区损坏 → `corrupt_data`（可用 `erase_all()` 重来）。见 [`core/include/embark/hal/persistence.h`](../../core/include/embark/hal/persistence.h)。
 
 ---
 
 ## 5. 测试替身
 
-这几个常量**只被 `tests/fakes/` 读**，真机后端不看。放在这里是为了「容量都查得到」这条规矩不破例。
+这几个常量**只被 `core/tests/fakes/` 读**，真机后端不看。放在这里是为了「容量都查得到」这条规矩不破例。
 
 | 常量 | 值 | 含义 |
 | --- | --- | --- |
@@ -102,11 +102,11 @@
 > 每个字号一份字形缓存，"留在内存里的是哪个文件"这个问题不存在了。
 >
 > 两个后端的根：宿主 = 环境变量 `EMBARK_HOST_FS_ROOT` 优先、否则可执行文件旁的 `embark_host_fs/`；
-> 真机 = SD 卡挂载点 `/sdcard`（[`platform/esp32/src/esp32_sd.{h,cpp}`](../../platform/esp32/src/esp32_sd.h)，
+> 真机 = SD 卡挂载点 `/sdcard`（[`device/src/esp32_sd.{h,cpp}`](../../device/src/esp32_sd.h)，
 > 板级开关 `EMBARK_SD_ENABLED` 默认 0）。没插卡 / 没配引脚时真机 `hal::Context::filesystem` 是 `nullptr`，
 > 桥读不到 TTF ⇒ 所有字号槽全指到内置 `embark_zh_14`（14 px），界面不空但字号不对。
 >
-> 真机的**字库缓冲不在这几个常量里**：它走 `platform/esp32/src/esp32_board.h` 的 `font_psram_bytes`
+> 真机的**字库缓冲不在这几个常量里**：它走 `device/src/esp32_board.h` 的 `font_psram_bytes`
 > （**192 KB** PSRAM 定容池，装整份 TTF + 每个字号一份字形缓存，与 `lvgl_pool_bytes` 分开记账），机制见
 > ADR 0007 的 issue 25 落地小节；ADR 0017 之后各字号额度按公式 `max(4 KB, 8 × px²)` 给、再由
 > `fit_cache_quotas()` 按池容量收敛（`app/common/font_quota.h`，见 GLOSSARY 的 Glyph cache budget）。
@@ -116,7 +116,7 @@
 ## 7. 想加一个常量
 
 1. 先问：**能不能复用一个已有的？** 多数情况能。
-2. 加在 `config/embark_limits.h`，**必须带一行注释说明它约束什么**（该文件的风格就是「每个数字都有理由」）。
+2. 加在 `core/config/embark_limits.h`，**必须带一行注释说明它约束什么**（该文件的风格就是「每个数字都有理由」）。
 3. 更新本文件对应表格。
 4. 若它进了公开头文件或影响二进制布局，在 commit 信息里点明。
 

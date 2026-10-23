@@ -36,8 +36,8 @@ add_subdirectory(doctest)  # 作为子项目引入时，它自己的测试默认
 # （那个视图只为满足上游写死的 <middleware/...> 路径而存在，见 cmake/embark_middleware.cmake）。
 # 没有 FORCE：命令行 -DLV_CONF_PATH=... 已经有值时这里不覆盖它。
 # ---------------------------------------------------------------------------
-set(LV_CONF_PATH "${PROJECT_SOURCE_DIR}/config/lv_conf.h"
-    CACHE PATH "LVGL 配置文件路径（本工程自持：config/lv_conf.h）")
+set(LV_CONF_PATH "${PROJECT_SOURCE_DIR}/core/config/lv_conf.h"
+    CACHE PATH "LVGL 配置文件路径（本工程自持：core/config/lv_conf.h）")
 
 # LVGL 自己的 install() 会触发 CMake 的开发者警告 CMP0177（安装路径归一化）。
 # 我们不用 install，但也不想让第三方在配置期刷警告：只对这个子目录把该策略设为 NEW。

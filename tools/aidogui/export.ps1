@@ -13,7 +13,7 @@
   字体不在产物里（ADR 0017）：字体是 SD 卡上的整份 TTF，由 app/common/aidogui_ui_bridge
   在运行时栅格化。设计器只会出 BIN|C 两种字体产物，两种都不是我们要的，所以脚本导完就
   删掉 font/ 并把生成代码里的字体初始化打桩（见文件末尾）。
-  屏表/控件表/字体表不在这里生成：cmake/embark_aidogui_tables.cmake 在配置期解析上面这些文件，
+  屏表/控件表/字体表不在这里生成：core/cmake/embark_aidogui_tables.cmake 在配置期解析上面这些文件，
   写出构建目录 include/embark_aidogui_ui_tables.h。
 
 .PARAMETER AiDoGuiHome

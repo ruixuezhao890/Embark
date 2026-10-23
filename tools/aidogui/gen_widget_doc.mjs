@@ -5,7 +5,7 @@
  *
  * 三份真相 join：
  *   设计真相   app/aidogui_ui/screen.aid 的 screens[].widgets[]
- *   使用真相   app/ 与 platform/host/ 里 aidogui_ui_bridge_widget(<屏>, <控件>) 等调用点
+ *   使用真相   app/、host/ 与 device/ 里 aidogui_ui_bridge_widget(<屏>, <控件>) 等调用点
  *   C 符号真相 app/aidogui_ui/export/screens/ui_*.h 的 extern（只用来查「导出目录过期了没」）
  *
  * 用法：
@@ -39,16 +39,19 @@ const USAGE = [
   "  --aid <文件>     设计器工程（默认 app/aidogui_ui/screen.aid）",
   "  --export <目录>  导出目录，只用来查「.aid 改了但没重新导出」（默认 app/aidogui_ui/export）",
   "  --out <文件>     输出（默认 docs/reference/ui-widgets.md）",
-  "  --src <目录>     扫哪些目录找调用点（默认 app 与 platform/host，可重复传）",
+  "  --src <目录>     扫哪些目录找调用点（默认 app、host 与 device，可重复传）",
   "  --help           这张表",
 ].join("\n");
+
+// 引用分两组：App 自己的代码（app/）与验收/后端（host/、device/）。
+const isAppFile = (rel) => rel.startsWith("app/");
 
 function parseArgs(argv) {
   const opts = {
     aid: "app/aidogui_ui/screen.aid",
     exportDir: "app/aidogui_ui/export",
     out: "docs/reference/ui-widgets.md",
-    src: ["app", "platform/host"],
+    src: ["app", "host", "device"],
     check: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
@@ -72,7 +75,8 @@ function parseArgs(argv) {
     } else if (arg === "--out") {
       opts.out = next();
     } else if (arg === "--src") {
-      if (opts.src.length === 2 && opts.src[0] === "app" && opts.src[1] === "platform/host") {
+      if (opts.src.length === 3 && opts.src[0] === "app" && opts.src[1] === "host" &&
+          opts.src[2] === "device") {
         opts.src = [];
       }
       opts.src.push(next());
@@ -447,7 +451,7 @@ function buildModel(opts) {
       const key = widgetKey(screen.id, widget.name);
       const known = refs.get(key) || [];
       // 已经有 App 代码的引用就不用兜底了；只有「仅验收脚本引用」才值得补一刀。
-      if (known.some((ref) => !ref.file.startsWith("platform/"))) continue;
+      if (known.some((ref) => isAppFile(ref.file))) continue;
       for (const rel of owners) {
         if (!rel.startsWith("app/")) continue;
         const file = parsed.find((item) => item.rel === rel);
@@ -463,8 +467,8 @@ function buildModel(opts) {
   // 引用排序：App 代码在前，验收脚本在后；同组按文件、行号。
   for (const list of refs.values()) {
     list.sort((a, b) => {
-      const aTest = a.file.startsWith("platform/") ? 1 : 0;
-      const bTest = b.file.startsWith("platform/") ? 1 : 0;
+      const aTest = isAppFile(a.file) ? 0 : 1;
+      const bTest = isAppFile(b.file) ? 0 : 1;
       if (aTest !== bTest) return aTest - bTest;
       if (a.file !== b.file) return a.file < b.file ? -1 : 1;
       return a.line - b.line;
@@ -514,7 +518,7 @@ function refList(refs, limit) {
   if (refs.length === 0) return "—";
   const shown = refs.slice(0, limit).map((ref) => {
     let text = ref.file + ":" + String(ref.line);
-    if (ref.file.startsWith("platform/")) text += "（验收）";
+    if (!isAppFile(ref.file)) text += "（验收）";
     else if (ref.tag !== "") text += "（" + ref.tag + "）";
     return text;
   });
@@ -619,7 +623,7 @@ function render(model, opts) {
       const refs = model.refs.get(model.widgetKey(screen.id, widget.name)) || [];
       if (refs.length === 0) continue;
       if (widget.events.length > 0) continue;  // 设计器里挂了动作，屏自己就会响应
-      if (refs.every((ref) => ref.file.startsWith("platform/"))) {
+      if (refs.every((ref) => !isAppFile(ref.file))) {
         onlyTests.push("| " + code(cell(screen.id)) + " | " + code(cell(widget.name)) + " | " +
           refList(refs, 2) + " |");
       }
@@ -628,7 +632,7 @@ function render(model, opts) {
   if (onlyTests.length === 0) {
     lines.push("没有。");
   } else {
-    lines.push("这些控件只有 " + code("platform/host/") + " 下的验收故事在读它们。" +
+    lines.push("这些控件只有 " + code("host/") + "、" + code("device/") + " 下的验收故事在读它们。" +
       "如果它该随业务变，那 App 里少了一段代码。");
     lines.push("");
     lines.push("| 屏 | 控件 | 谁在用 |");

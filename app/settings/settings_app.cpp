@@ -142,7 +142,7 @@ void SettingsApp::onCreate(Framework& fw) {
   const hal::Context& h = fw.hal();
   // 1) 读 KV：没存过 = 默认 70%。存的是「用户上次调成多少」，与 HAL 当前值无关。
   percent_ = load_bright(h.storage);
-  // 2) 立刻写进 HAL：onCreate 早于总线装配（src/embark/framework.cpp 有注释明写），
+  // 2) 立刻写进 HAL：onCreate 早于总线装配（core/src/embark/framework.cpp 有注释明写），
   //    publish 出去没人收，所以「开机亮度」只能靠直接调 HAL。
   if (h.display != nullptr) {
     (void)h.display->set_backlight(percent_);
